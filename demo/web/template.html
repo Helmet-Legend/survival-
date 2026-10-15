@@ -1,0 +1,386 @@
+<title>ResiliOS</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Mise en page : un téléphone noir OLED (l'app) et, à côté, la notice de démo.
+     Thème unique sombre, imposé par le cahier des charges (#000 pour les dalles OLED). */
+  :root {
+    --page: #08090a;
+    --oled: #000000;
+    --text: #ece8df;
+    --dim: #8d9296;
+    --faint: #50565b;
+    --line: #1d2124;
+    --raise: #0d0f10;
+    --amber: #ffb547;
+    --amber-ink: #1a1203;
+    --danger: #ff6a5c;
+    --warn: #f2cf4a;
+    --ok: #5fd39a;
+    --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--page); color: var(--text); }
+  body {
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.45;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 24px;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .stage {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-start;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  /* --- Le téléphone ------------------------------------------------------ */
+  .device {
+    flex: 0 1 400px;
+    min-width: 0;
+    height: min(800px, calc(100dvh - 48px));
+    min-height: 640px;
+    background: var(--oled);
+    border: 1px solid var(--line);
+    border-radius: 32px;
+    overflow: hidden;
+    display: flex;
+  }
+  #app { flex: 1; min-width: 0; display: flex; }
+
+  .brand {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .label {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .hint { color: var(--dim); font-size: 13px; margin: 0; }
+  .empty { color: var(--dim); list-style: none; padding: 12px 0; }
+  .error-box {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    color: var(--danger);
+    font-size: 14px;
+  }
+
+  .boot {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--dim);
+  }
+
+  /* Écran de verrouillage */
+  .lock {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 56px 28px 36px;
+    gap: 20px;
+  }
+  .lock-head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .lock-sub { color: var(--dim); }
+  .dots { display: flex; gap: 14px; min-height: 16px; }
+  .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid var(--faint);
+    transition: background-color 120ms, border-color 120ms;
+  }
+  .dot.on { background: var(--amber); border-color: var(--amber); }
+  .lock-msg { margin: 0; min-height: 1.4em; text-align: center; color: var(--dim); }
+  .lock-msg.error { color: var(--danger); }
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px 22px;
+    width: 100%;
+    max-width: 290px;
+  }
+  .key {
+    aspect-ratio: 1;
+    max-width: 100%;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--raise);
+    font-family: var(--f-display);
+    font-size: 30px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .key:active:not(:disabled) { background: var(--line); }
+  .key:disabled { opacity: 0.4; cursor: progress; }
+  .key-fn { background: transparent; border-color: transparent; color: var(--dim); font-size: 24px; }
+  .key-ok { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); font-size: 22px; font-weight: 700; letter-spacing: 0.08em; }
+
+  /* Application ouverte */
+  .shell { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .screen {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  /* Le contenu défile dans .screen : ses blocs gardent leur hauteur naturelle. */
+  .screen > * { flex-shrink: 0; }
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--line);
+  }
+  .tab {
+    background: none; border: 0; cursor: pointer;
+    padding: 14px 4px 18px;
+    font-family: var(--f-display); font-size: 15px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--dim);
+    border-top: 2px solid transparent;
+  }
+  .tab.active { color: var(--amber); border-top-color: var(--amber); }
+
+  .ghost, .primary, .danger, .filter, .step {
+    border-radius: 999px; cursor: pointer;
+    padding: 7px 14px; font-size: 14px; font-weight: 500;
+  }
+  .ghost { background: none; border: 1px solid var(--line); color: var(--text); }
+  .ghost:disabled, .step:disabled { opacity: 0.35; cursor: default; }
+  .primary { background: var(--amber); border: 1px solid var(--amber); color: var(--amber-ink); font-weight: 600; }
+  .danger { background: var(--danger); border: 1px solid var(--danger); color: var(--oled); font-weight: 600; }
+
+  .flash { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 14px; border: 1px solid var(--ok); color: var(--ok); }
+  .flash.error { border-color: var(--danger); color: var(--danger); }
+  .h { margin: 0 0 8px; font-family: var(--f-display); font-weight: 600; font-size: 20px; letter-spacing: 0.04em; text-wrap: balance; }
+
+  /* Autonomie */
+  .readout { display: flex; flex-direction: column; gap: 2px; }
+  .readout p { margin: 0; }
+  .big { display: flex; align-items: baseline; gap: 10px; }
+  .big-n {
+    font-family: var(--f-display); font-weight: 700;
+    font-size: 104px; line-height: 0.9; color: var(--amber);
+    font-variant-numeric: tabular-nums;
+  }
+  .big-u { font-family: var(--f-display); font-size: 28px; font-weight: 600; color: var(--text); }
+  .readout-sub { color: var(--dim); }
+  .household { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-block: 1px solid var(--line); }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .step { width: 36px; height: 36px; padding: 0; background: var(--raise); border: 1px solid var(--line); font-size: 20px; }
+  .step-v { min-width: 64px; text-align: center; font-family: var(--f-mono); }
+  .res { display: flex; flex-direction: column; gap: 8px; }
+  .res-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .res-days { font-family: var(--f-display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .gauge { position: relative; height: 8px; background: var(--raise); border-radius: 4px; overflow: hidden; }
+  .gauge span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+  .gauge-naive { background: var(--faint); }
+  .gauge-real { background: var(--amber); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0; }
+  .facts div { display: flex; flex-direction: column; min-width: 0; }
+  .facts dt { color: var(--dim); font-size: 12px; }
+  .facts dd { margin: 0; font-family: var(--f-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .legend { margin: 0; color: var(--dim); font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .sw { display: inline-block; width: 12px; height: 6px; border-radius: 3px; }
+  .sw-real { background: var(--amber); }
+  .sw-naive { background: var(--faint); margin-left: 8px; }
+  .alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .alert { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "chip name" "chip meta"; column-gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: center; }
+  .alert .chip { grid-area: chip; }
+  .alert-name { grid-area: name; min-width: 0; }
+  .alert-meta { grid-area: meta; color: var(--dim); font-size: 13px; }
+  .chip {
+    font-family: var(--f-display); font-size: 13px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 3px 8px; border-radius: 6px; border: 1px solid currentColor; white-space: nowrap;
+    text-align: center; min-width: 66px;
+  }
+  .chip.expired { color: var(--danger); }
+  .chip.within30 { color: var(--amber); }
+  .chip.within60 { color: var(--warn); }
+  .chip.within90 { color: var(--dim); }
+  .crit { color: var(--danger); font-size: 10px; vertical-align: middle; }
+
+  /* Stock */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .filter { background: none; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+  .filter.active { border-color: var(--amber); color: var(--amber); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--danger); border-radius: 10px; }
+  .confirm span { flex: 1 1 160px; }
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .row { border-bottom: 1px solid var(--line); }
+  .row-btn {
+    width: 100%; display: flex; justify-content: space-between; gap: 12px;
+    padding: 12px 0; background: none; border: 0; text-align: left; cursor: pointer;
+  }
+  .row-main, .row-side { display: flex; flex-direction: column; min-width: 0; }
+  .row-side { align-items: flex-end; flex-shrink: 0; }
+  .row-sub, .row-exp { color: var(--dim); font-size: 13px; }
+  .row-qty { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .row-qty small { color: var(--dim); }
+  .row.open .row-name { color: var(--amber); }
+  .detail { display: flex; flex-direction: column; gap: 10px; padding: 0 0 14px; }
+  .lots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .lot { display: flex; justify-content: space-between; gap: 12px; font-family: var(--f-mono); font-size: 13px; }
+  .lot.expired { color: var(--danger); }
+  .lot-exp { color: var(--dim); }
+  .lot.expired .lot-exp { color: var(--danger); }
+  .consume { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .consume label { width: 100%; }
+  .consume input { flex: 1 1 100px; min-width: 0; }
+  .unit { color: var(--dim); }
+  input, select {
+    background: var(--raise); border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 11px; width: 100%; min-width: 0;
+  }
+  .consume input { width: auto; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 13px; color: var(--dim); }
+  .add { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; }
+  .add .wide { grid-column: 1 / -1; }
+
+  /* Coordonnées */
+  .panel { display: flex; flex-direction: column; gap: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .readings { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+  .reading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .reading > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  .reading small { color: var(--dim); font-family: var(--f-body); }
+  .reading strong { color: var(--amber); font-weight: 500; }
+
+  /* Fiches */
+  .guide-list { list-style: none; margin: 0; padding: 0; }
+  .guide-btn {
+    width: 100%; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+    padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer;
+  }
+  .snippet { color: var(--dim); font-size: 13px; }
+  mark { background: none; color: var(--amber); font-weight: 600; }
+  .back { align-self: flex-start; }
+  .guide { max-width: 65ch; }
+  .guide-title { margin: 2px 0 10px; font-family: var(--f-display); font-size: 28px; font-weight: 700; line-height: 1.1; text-wrap: balance; }
+  .guide p { margin: 0 0 10px; }
+  .guide ul { margin: 0 0 10px; padding-left: 20px; }
+  .guide li { margin-bottom: 4px; }
+
+  /* --- Notice de démo ---------------------------------------------------- */
+  .notes { flex: 1 1 300px; max-width: 420px; min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+  .notes h1 { margin: 0; font-family: var(--f-display); font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: 0.02em; text-wrap: balance; }
+  .notes h2 { margin: 0 0 8px; }
+  .notes p { margin: 0; color: var(--dim); max-width: 60ch; }
+  .codes { display: flex; flex-direction: column; gap: 8px; }
+  .code {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+  }
+  .code-pin { font-family: var(--f-mono); font-size: 22px; letter-spacing: 0.12em; }
+  .code-what { grid-column: 1; color: var(--dim); font-size: 13px; }
+  .code button { grid-row: 1 / span 2; grid-column: 2; }
+  .try { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--text); }
+  .try li::marker { color: var(--amber); font-family: var(--f-mono); }
+  #backstage { font-family: var(--f-mono); font-size: 12.5px; color: var(--dim); }
+  .bs-state { margin: 0 0 6px; color: var(--text); }
+  .bs-log { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .sim { margin: 0; padding-left: 18px; color: var(--dim); display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+
+  @media (max-width: 480px) {
+    body { padding-block: 12px; }
+    .device { flex-basis: 100%; height: calc(100dvh - 24px); min-height: 600px; border-radius: 24px; }
+    .big-n { font-size: 88px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="stage">
+  <section class="device" aria-label="Application ResiliOS (démo)">
+    <div id="app"></div>
+  </section>
+
+  <aside class="notes">
+    <div>
+      <p class="label">Démo jouable</p>
+      <h1>Le coffre hors-ligne, dans votre navigateur</h1>
+    </div>
+    <p>Le coffre, le mode sous contrainte, l’inventaire, les calculs d’autonomie, les conversions MGRS et la recherche dans les fiches sont le code réel de l’application, compilé pour le navigateur. Seule l’interface est propre à la démo.</p>
+
+    <section>
+      <h2 class="label">Codes de démonstration</h2>
+      <div class="codes">
+        <div class="code">
+          <span class="code-pin">482915</span>
+          <span class="code-what">Code maître : ouvre le vrai coffre</span>
+          <button class="ghost" data-fill="482915">Saisir</button>
+        </div>
+        <div class="code">
+          <span class="code-pin">730264</span>
+          <span class="code-what">Code de contrainte : ouvre le leurre, sans aucun signe à l’écran</span>
+          <button class="ghost" data-fill="730264">Saisir</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="label">À essayer</h2>
+      <ol class="try">
+        <li>Ouvrez avec le code maître : 3 personnes, l’eau limite l’autonomie.</li>
+        <li>Dans Stock, retirez 10 L d’« Eau en bidons » : le lot qui périme le plus tôt part en premier.</li>
+        <li>Verrouillez, puis ouvrez avec le code de contrainte : un autre inventaire, la même interface.</li>
+        <li>Saisissez cinq faux codes : le coffre se bloque 30 secondes.</li>
+        <li>Cherchez « severe » dans les fiches : la recherche ignore les accents.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 class="label">Coulisses</h2>
+      <div id="backstage"></div>
+    </section>
+
+    <section>
+      <h2 class="label">Simulé dans la démo</h2>
+      <ul class="sim">
+        <li>Le chiffrement SQLCipher : les bases sont en mémoire, mais chacune ne s’ouvre qu’avec la clé dérivée du bon code.</li>
+        <li>Le Keychain du téléphone : l’état du coffre est gardé en mémoire.</li>
+        <li>Argon2id utilise 8 Mio au lieu de 64 Mio, car le JavaScript pur est plus lent que le module natif.</li>
+        <li>Rien n’est conservé : recharger la page recrée un coffre neuf.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<!--APP-->
