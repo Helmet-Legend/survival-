@@ -304,3 +304,18 @@ v1 contenant des données est testée.
 `npm run preview:build` compile la vraie interface (`src/ui`) pour le
 navigateur avec react-native-web et le SQLite WebAssembly de la démo. Cela
 permet de vérifier le rendu sans téléphone.
+
+## Mises à jour
+
+Cycle de développement : chaque changement passe par une pull request vers
+`main` (vérifications et compilation automatiques), puis est fusionné. La
+fusion publie une Release GitHub `v0.1.<n>` contenant l'APK.
+
+Au démarrage et au retour dans l'application (au plus une fois par heure),
+l'app interroge `releases/latest` sur GitHub. Si une version plus récente
+existe, un bandeau propose de l'installer : l'APK est téléchargé et
+l'installateur Android s'ouvre (une confirmation, données conservées).
+Sans réseau, la vérification échoue en silence.
+
+Le dépôt doit être public pour que l'application puisse lire les versions
+sans jeton.

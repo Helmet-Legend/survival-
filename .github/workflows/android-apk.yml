@@ -3,8 +3,8 @@
 #
 # Cycle de développement :
 # - chaque pull request vers `main` est vérifiée et compilée ;
-# - chaque fusion dans `main` publie une « Release » GitHub avec l'APK,
-#   qu'Obtainium détecte et installe sur le téléphone.
+# - chaque fusion dans `main` publie une « Release » GitHub avec l'APK ;
+#   l'application la détecte au démarrage et propose de s'y mettre à jour.
 name: APK Android
 
 on:
@@ -68,7 +68,7 @@ jobs:
           name: resilios-apk
           path: ResiliOS-*.apk
           retention-days: 30
-      - name: Publication de la version (Obtainium)
+      - name: Publication de la version
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}

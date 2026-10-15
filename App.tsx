@@ -11,9 +11,11 @@ import { createVaultKeyManager } from './src/crypto';
 import { seedDecoyInventory } from './src/inventory';
 import { AppRoot } from './src/ui/AppRoot';
 import { colors } from './src/ui/theme';
+import { createGithubUpdater } from './src/update/updater';
 import type { VaultContent } from './src/vault';
 
 const manager = createVaultKeyManager();
+const updater = createGithubUpdater();
 
 const content: VaultContent = {
   guides: BUNDLED_GUIDES,
@@ -24,7 +26,7 @@ export default function App() {
   return (
     <SafeAreaProvider style={{ backgroundColor: colors.bg }}>
       <StatusBar barStyle="light-content" />
-      <AppRoot manager={manager} content={content} />
+      <AppRoot manager={manager} content={content} updater={updater} />
     </SafeAreaProvider>
   );
 }
