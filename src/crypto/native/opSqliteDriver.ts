@@ -14,9 +14,16 @@ import type { EncryptedDatabaseDriver } from '../types';
  */
 const KEY_CHECK_SQL = 'SELECT count(*) FROM sqlite_master';
 
-function tryOpenExisting(name: string, encryptionKey?: string): DB | null {
+/**
+ * Ouvre un fichier existant sans le lire (aucune clé n'est nécessaire pour
+ * le supprimer ou vérifier sa présence).
+ *
+ * Attention : op-sqlite lit `encryptionKey` dès que la propriété existe,
+ * même à `undefined`, et échoue alors. La propriété est donc omise.
+ */
+function tryOpenExisting(name: string): DB | null {
   try {
-    return open({ name, encryptionKey, failOnCreate: true });
+    return open({ name, failOnCreate: true });
   } catch {
     return null;
   }
