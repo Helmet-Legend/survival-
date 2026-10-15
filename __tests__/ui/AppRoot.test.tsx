@@ -86,7 +86,11 @@ function captureAppState() {
     handlers.push(handler as (state: AppStateStatus) => void);
     return { remove: jest.fn() } as never;
   });
-  return (state: AppStateStatus) => act(() => handlers.forEach(h => h(state)));
+  const emit = (state: AppStateStatus) =>
+    act(() => handlers.forEach(h => h(state)));
+  /** Sans act(), pour un appel déjà englobé (ex. pendant un fireEvent). */
+  emit.raw = (state: AppStateStatus) => handlers.forEach(h => h(state));
+  return emit;
 }
 
 afterEach(() => {
@@ -624,8 +628,8 @@ describe('photos et documents', () => {
       // L'appareil photo passe l'application en arrière-plan.
       take: () =>
         whileAway(async () => {
-          await emit('background');
-          await emit('active');
+          emit.raw('background');
+          emit.raw('active');
           return JPEG;
         }),
       pick: async () => null,

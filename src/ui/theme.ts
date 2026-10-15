@@ -1,5 +1,5 @@
 /**
- * Thème « Tech Premium » (kit de design ResiliOS, design 2).
+ * Thème « Tech Premium » (kit de design, design 2).
  * Source unique des couleurs, espacements, rayons et tailles de l'interface.
  *
  * Sémantique stable : orange = action / sélection, cyan = navigation /

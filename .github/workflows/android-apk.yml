@@ -62,18 +62,18 @@ jobs:
           -PreactNativeArchitectures=arm64-v8a
           -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
       - name: Nommage de l'APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "ResiliOS-$VERSION_NAME.apk"
+        run: cp android/app/build/outputs/apk/release/app-release.apk "Fenrir-$VERSION_NAME.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: resilios-apk
-          path: ResiliOS-*.apk
+          name: fenrir-apk
+          path: Fenrir-*.apk
           retention-days: 30
       - name: Publication de la version
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh release create "v$VERSION_NAME" "ResiliOS-$VERSION_NAME.apk"
+          gh release create "v$VERSION_NAME" "Fenrir-$VERSION_NAME.apk"
           --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
-          --title "ResiliOS $VERSION_NAME"
+          --title "Fenrir $VERSION_NAME"
           --notes "$(git log -1 --pretty=%B | head -1)"

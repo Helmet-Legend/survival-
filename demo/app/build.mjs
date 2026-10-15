@@ -44,7 +44,7 @@ const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const wasm = readFileSync(resolve(wasmDir, 'sqlite3.wasm')).toString('base64');
 const html = `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ResiliOS</title>
+<title>Fenrir</title>
 <style>
   html, body, #root { height: 100%; margin: 0; background: #000; }
   #root { display: flex; max-width: 480px; margin: 0 auto; }

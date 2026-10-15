@@ -1,4 +1,4 @@
-# ResiliOS
+# Fenrir
 
 Application d'autonomie et de résilience, 100 % hors-ligne, avec chiffrement
 local (React Native 0.87, TypeScript strict).
