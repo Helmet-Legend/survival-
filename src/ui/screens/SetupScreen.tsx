@@ -8,7 +8,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { isCryptoError } from '../../crypto/errors';
 import { assertPinAcceptable, pinsAreEqual } from '../../crypto/pinPolicy';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
-import { Backdrop, Brand, Button } from '../components/controls';
+import { AppIcon } from '../components/AppIcon';
+import { Backdrop, Button } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
 import { colors, space, text } from '../theme';
 
@@ -90,7 +91,9 @@ export function SetupScreen(props: {
       <View style={styles.flex}>
         <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.35} />
         <ScrollView contentContainerStyle={styles.page}>
-          <Brand size={32} tagline />
+          <View style={styles.iconRow}>
+            <AppIcon size={112} />
+          </View>
           {step === 'intro' ? (
             <>
               <Text style={styles.heading}>Créer votre coffre</Text>
@@ -145,7 +148,7 @@ export function SetupScreen(props: {
     <View style={styles.pinPage}>
       <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.45} />
       <View style={styles.pinHead}>
-        <Brand size={32} tagline />
+        <AppIcon size={96} />
         <Text style={[text.body, styles.center]}>{PROMPTS[step]}</Text>
       </View>
       <PinDots length={pin.length} />
@@ -175,6 +178,7 @@ const styles = StyleSheet.create({
   },
   pinHead: { alignItems: 'center', gap: space.s },
   center: { textAlign: 'center' },
+  iconRow: { alignItems: 'center' },
   error: {
     color: colors.danger,
     fontSize: 14,

@@ -44,6 +44,7 @@ import {
   type VaultContent,
   type VaultDatabase,
 } from '../vault';
+import { AppIcon } from './components/AppIcon';
 import { BottomNav } from './components/BottomNav';
 import { Brand, Button, IconButton } from './components/controls';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -256,7 +257,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       {body}
       {covered && phase.kind === 'open' ? (
         <View style={styles.cover} testID="privacy-cover">
-          <Brand size={30} tagline />
+          <AppIcon size={140} />
         </View>
       ) : null}
     </View>
