@@ -4,7 +4,14 @@
  * enregistré par les dépôts existants. Les valeurs saisies sont conservées
  * en cas d'erreur ; chaque erreur s'affiche sous son champ.
  */
-import { ArrowLeft, Camera, Check, Trash2 } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Image,
@@ -29,9 +36,26 @@ import { useNavigation, type StockFormTarget } from '../navigation';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
-import { FORMS, type Field, type Values } from './config';
-import { DateRow, MeasureRow, SelectRow, TextRow } from './FormRows';
-import { CATEGORY_ILLUSTRATIONS, ILLUSTRATION_FADE } from './illustrations';
+import {
+  COMMON_CALIBERS,
+  ESSENTIAL,
+  fieldId,
+  FORMS,
+  QUICK_PICKS,
+  type Field,
+  type Values,
+} from './config';
+import {
+  ChoiceRow,
+  DateRow,
+  MeasureRow,
+  Suggestions,
+  TextRow,
+} from './FormRows';
+import {
+  CATEGORY_ILLUSTRATIONS,
+  ILLUSTRATION_FADE_SIDE,
+} from './illustrations';
 import {
   FormError,
   formFieldFor,
@@ -117,7 +141,34 @@ function StockForm(props: {
   };
   const unitLabel =
     config.units.find(x => x.value === values.unit)?.label ?? '';
-  const visible = config.fields.filter(f => !f.visible || f.visible(values));
+  const visible = config.fields
+    .filter(f => !f.visible || f.visible(values))
+    .filter(f => !(isEdit && f.type === 'date' && f.key === 'expiry'));
+  const essential = new Set(ESSENTIAL[category]);
+  const isEssential = (f: Field) =>
+    essential.has(fieldId(f)) || (f.type === 'text' && f.required === true);
+  const main = visible.filter(isEssential);
+  const details = visible.filter(f => !isEssential(f));
+  const detailKeys = new Set(
+    details.flatMap(f =>
+      f.type === 'quantity'
+        ? ['quantity', 'unit']
+        : f.type === 'threshold'
+        ? ['minStock']
+        : f.type === 'measure'
+        ? [f.key, f.unitKey]
+        : [f.key],
+    ),
+  );
+  const [showDetails, setShowDetails] = useState(
+    () =>
+      isEdit &&
+      [...detailKeys].some(k => k !== 'unit' && (values[k] ?? '') !== ''),
+  );
+  const filledDetails = [...detailKeys].filter(
+    k => k !== 'unit' && k !== 'energyBasis' && (values[k] ?? '') !== '',
+  ).length;
+  const picks = isEdit ? [] : QUICK_PICKS[category];
 
   const takePhoto = async () => {
     try {
@@ -163,8 +214,11 @@ function StockForm(props: {
       setSaving(false);
       if (e instanceof FormError) {
         setErrors({ [e.field]: e.message });
+        setShowDetails(open => open || detailKeys.has(e.field));
       } else if (e instanceof InventoryError && e.field) {
-        setErrors({ [formFieldFor(e.field)]: e.message });
+        const field = formFieldFor(e.field);
+        setErrors({ [field]: e.message });
+        setShowDetails(open => open || detailKeys.has(field));
       } else {
         setFormError(
           `Enregistrement impossible : ${
@@ -179,6 +233,29 @@ function StockForm(props: {
     const key = `${field.type}-${index}`;
     switch (field.type) {
       case 'text':
+        if (field.key === 'caliber') {
+          return (
+            <View key={key} style={styles.withSuggestions}>
+              <TextRow
+                icon={field.icon}
+                color={color}
+                label={field.required ? `${field.label} *` : field.label}
+                value={values.caliber ?? ''}
+                onChange={set('caliber')}
+                placeholder={field.placeholder}
+                maxLength={field.maxLength}
+                error={errors.caliber}
+              />
+              <Suggestions
+                label="Calibres courants"
+                color={color}
+                items={COMMON_CALIBERS}
+                current={values.caliber}
+                onPick={i => set('caliber')(COMMON_CALIBERS[i])}
+              />
+            </View>
+          );
+        }
         return (
           <TextRow
             key={key}
@@ -210,7 +287,7 @@ function StockForm(props: {
         );
       case 'select':
         return (
-          <SelectRow
+          <ChoiceRow
             key={key}
             icon={field.icon}
             color={color}
@@ -218,14 +295,10 @@ function StockForm(props: {
             value={values[field.key] ?? ''}
             options={field.options}
             onChange={set(field.key)}
-            placeholder={field.placeholder}
             error={errors[field.key]}
           />
         );
       case 'date':
-        if (isEdit && field.key === 'expiry') {
-          return null; // la date appartient aux lots : gérée sur la fiche
-        }
         return (
           <DateRow
             key={key}
@@ -266,7 +339,7 @@ function StockForm(props: {
               unit={values.unit}
               units={config.units}
               onUnit={set('unit')}
-              placeholder="Quantité gérée sur la fiche"
+              unitOnly
               error={errors.unit}
             />
           );
@@ -282,6 +355,7 @@ function StockForm(props: {
             unit={values.unit}
             units={config.units}
             onUnit={set('unit')}
+            stepper
             error={errors.quantity || errors.unit}
           />
         );
@@ -308,190 +382,241 @@ function StockForm(props: {
     props.weapon !== undefined ? 'weapon' : props.item ? 'item' : null;
   const photoOwnerId = props.weapon?.id ?? props.item?.id;
 
-  return (
-    <ScrollView
-      contentContainerStyle={styles.page}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.header}>
-        <IconButton
-          icon={ArrowLeft}
-          label="Retour"
-          onPress={() => navigation.goTo('stock', { category })}
-        />
-        <View style={styles.headerTitle}>
-          <Text style={styles.brand}>{APP_NAME.toUpperCase()}</Text>
-          <View
-            style={[styles.brandBar, { backgroundColor: colors.primary }]}
-          />
-          <Text style={text.muted}>
-            {isEdit ? 'Modifier un stock' : 'Ajouter un stock'}
-          </Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </View>
+  const photoButton =
+    photoOwner !== null && photoOwnerId ? (
+      <PhotoStrip
+        owner={photoOwner}
+        ownerId={photoOwnerId}
+        label={values.name ?? ''}
+      />
+    ) : photoSource.available ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajouter une photo (optionnel)"
+        onPress={() => {
+          void takePhoto();
+        }}
+        style={({ pressed }) => [styles.photo, pressed && styles.pressed]}
+      >
+        <Camera color={color} size={20} />
+        <Text style={[text.body, styles.grow]}>
+          Ajouter une photo <Text style={text.subtle}>(optionnel)</Text>
+        </Text>
+        {pendingPhotos.map((photo, i) => (
+          <Pressable
+            key={i}
+            accessibilityRole="button"
+            accessibilityLabel={`Retirer la photo ${i + 1}`}
+            onPress={() => setPendingPhotos(p => p.filter((_, j) => j !== i))}
+          >
+            <Image
+              source={{ uri: `data:image/jpeg;base64,${photo}` }}
+              style={styles.thumb}
+            />
+            <View style={styles.thumbRemove}>
+              <Trash2 color={colors.text} size={12} />
+            </View>
+          </Pressable>
+        ))}
+      </Pressable>
+    ) : null;
 
-      <View style={[styles.hero, { borderColor: tint(color, '40') }]}>
-        <View pointerEvents="none" style={styles.illustration}>
+  return (
+    <View style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <IconButton
+            icon={ArrowLeft}
+            label="Retour"
+            onPress={() => navigation.goTo('stock', { category })}
+          />
+          <View style={styles.headerTitle}>
+            <Text style={styles.brand}>{APP_NAME.toUpperCase()}</Text>
+            <View
+              style={[styles.brandBar, { backgroundColor: colors.primary }]}
+            />
+            <Text style={text.muted}>
+              {isEdit ? 'Modifier un stock' : 'Ajouter un stock'}
+            </Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={[styles.hero, { borderColor: tint(color, '55') }]}>
           <Image
             source={CATEGORY_ILLUSTRATIONS[category]}
             resizeMode="cover"
             accessibilityIgnoresInvertColors
-            style={styles.illustrationImage}
+            style={styles.heroImage}
           />
           <SvgXml
-            xml={ILLUSTRATION_FADE}
+            xml={ILLUSTRATION_FADE_SIDE}
             width="100%"
             height="100%"
             style={StyleSheet.absoluteFill}
           />
+          <View
+            style={[
+              styles.badge,
+              { borderColor: color, backgroundColor: tint(colors.bg, 'd9') },
+            ]}
+          >
+            <Icon color={color} size={26} strokeWidth={2.2} />
+          </View>
+          <View style={styles.grow}>
+            <Text accessibilityRole="header" style={styles.title}>
+              {isEdit ? config.editTitle : config.title}
+            </Text>
+            {isEdit ? (
+              <Text style={styles.subtitle}>{CATEGORY_TITLES[category]}</Text>
+            ) : null}
+          </View>
         </View>
-        <View
-          style={[
-            styles.badge,
-            { borderColor: color, backgroundColor: tint(colors.bg, 'd9') },
-          ]}
-        >
-          <Icon color={color} size={34} strokeWidth={2.2} />
-        </View>
-        <Text accessibilityRole="header" style={styles.title}>
-          {isEdit ? config.editTitle : config.title}
-        </Text>
-        <Text style={styles.subtitle}>
-          {isEdit ? CATEGORY_TITLES[category] : config.subtitle}
-        </Text>
-      </View>
 
-      {photoOwner !== null && photoOwnerId ? (
-        <PhotoStrip
-          owner={photoOwner}
-          ownerId={photoOwnerId}
-          label={values.name ?? ''}
-        />
-      ) : photoSource.available ? (
+        {category === 'weapon' && !isEdit ? (
+          <View style={styles.segments} accessibilityRole="tablist">
+            {RECORD_TYPES.map(t => {
+              const selected = recordType === t.value;
+              return (
+                <Pressable
+                  key={t.value}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    setValues(v => ({ ...v, recordType: t.value }));
+                    setErrors({});
+                  }}
+                  style={[
+                    styles.segment,
+                    selected && { backgroundColor: color, borderColor: color },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      selected && styles.segmentTextOn,
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {picks.length > 0 ? (
+          <View style={styles.quick}>
+            <Text style={styles.quickTitle}>Saisie rapide</Text>
+            <Suggestions
+              label="Saisie rapide"
+              color={color}
+              items={picks.map(p => p.label)}
+              current={values.name}
+              onPick={i => {
+                setValues(v => ({ ...v, ...picks[i].values }));
+                setErrors({});
+              }}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.fields}>{main.map(renderField)}</View>
+
+        {details.length > 0 ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showDetails }}
+              accessibilityLabel={
+                showDetails ? 'Masquer les détails' : 'Plus de détails'
+              }
+              onPress={() => setShowDetails(open => !open)}
+              style={({ pressed }) => [styles.more, pressed && styles.pressed]}
+            >
+              <View style={styles.grow}>
+                <Text style={styles.moreText}>
+                  {showDetails ? 'Masquer les détails' : 'Plus de détails'}
+                </Text>
+                <Text style={text.subtle}>
+                  {filledDetails > 0
+                    ? `${filledDetails} renseigné${
+                        filledDetails > 1 ? 's' : ''
+                      } sur ${details.length} · facultatif`
+                    : `${details.length} champs facultatifs : ${details
+                        .slice(0, 3)
+                        .map(f => (f.type === 'threshold' ? 'seuil' : f.label))
+                        .join(', ')
+                        .toLowerCase()}…`}
+                </Text>
+              </View>
+              {showDetails ? (
+                <ChevronUp color={colors.textMuted} size={22} />
+              ) : (
+                <ChevronDown color={colors.textMuted} size={22} />
+              )}
+            </Pressable>
+            {showDetails ? (
+              <View style={styles.fields}>{details.map(renderField)}</View>
+            ) : null}
+          </>
+        ) : null}
+
+        {photoButton}
+
+        {isEdit ? (
+          <Text style={text.subtle}>
+            Les quantités et les dates de péremption se gèrent par lots, sur la
+            fiche de l’article (ajout et retrait).
+          </Text>
+        ) : null}
+
+        {Object.values(errors).some(Boolean) ? (
+          <Notice
+            tone="error"
+            message="Vérifiez les champs signalés en rouge : rien n’a été enregistré."
+          />
+        ) : null}
+        {formError ? <Notice tone="error" message={formError} /> : null}
+      </ScrollView>
+
+      <View style={styles.footer}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Ajouter une photo (optionnel)"
+          accessibilityLabel="Enregistrer le stock"
+          accessibilityState={{ disabled: saving, busy: saving }}
+          disabled={saving}
           onPress={() => {
-            void takePhoto();
+            void save();
           }}
           style={({ pressed }) => [
-            styles.photo,
-            { borderColor: color },
+            styles.save,
+            { borderColor: color, backgroundColor: tint(color, '26') },
             pressed && styles.pressed,
+            saving && styles.disabled,
           ]}
         >
-          <View style={styles.photoIcon}>
-            <Camera color={colors.text} size={22} />
-          </View>
-          <Text style={text.body}>
-            Ajouter une photo{'\n'}
-            <Text style={text.subtle}>(optionnel)</Text>
+          <Check color={color} size={22} strokeWidth={2.6} />
+          <Text style={[styles.saveText, { color }]}>
+            {saving ? 'Enregistrement…' : 'Enregistrer le stock'}
           </Text>
-          {pendingPhotos.length > 0 ? (
-            <View style={styles.pending}>
-              {pendingPhotos.map((photo, i) => (
-                <Pressable
-                  key={i}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Retirer la photo ${i + 1}`}
-                  onPress={() =>
-                    setPendingPhotos(p => p.filter((_, j) => j !== i))
-                  }
-                >
-                  <Image
-                    source={{ uri: `data:image/jpeg;base64,${photo}` }}
-                    style={styles.thumb}
-                  />
-                  <View style={styles.thumbRemove}>
-                    <Trash2 color={colors.text} size={12} />
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
         </Pressable>
-      ) : null}
-
-      {category === 'weapon' && !isEdit ? (
-        <View style={styles.segments} accessibilityRole="tablist">
-          {RECORD_TYPES.map(t => {
-            const selected = recordType === t.value;
-            return (
-              <Pressable
-                key={t.value}
-                accessibilityRole="tab"
-                accessibilityState={{ selected }}
-                onPress={() => {
-                  setValues(v => ({ ...v, recordType: t.value }));
-                  setErrors({});
-                }}
-                style={[
-                  styles.segment,
-                  selected && { backgroundColor: color, borderColor: color },
-                ]}
-              >
-                <Text
-                  style={[styles.segmentText, selected && styles.segmentTextOn]}
-                >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <View style={styles.fields}>{visible.map(renderField)}</View>
-      {isEdit ? (
-        <Text style={text.subtle}>
-          Les quantités et les dates de péremption se gèrent par lots, sur la
-          fiche de l’article (ajout et retrait).
-        </Text>
-      ) : null}
-      <Text style={text.subtle}>* champ obligatoire</Text>
-
-      {Object.keys(errors).length > 0 ? (
-        <Notice
-          tone="error"
-          message="Vérifiez les champs signalés en rouge : rien n’a été enregistré."
-        />
-      ) : null}
-      {formError ? <Notice tone="error" message={formError} /> : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Enregistrer le stock"
-        accessibilityState={{ disabled: saving, busy: saving }}
-        disabled={saving}
-        onPress={() => {
-          void save();
-        }}
-        style={({ pressed }) => [
-          styles.save,
-          { borderColor: color, backgroundColor: tint(color, '26') },
-          pressed && styles.pressed,
-          saving && styles.disabled,
-        ]}
-      >
-        <Check color={color} size={22} strokeWidth={2.6} />
-        <Text style={[styles.saveText, { color }]}>
-          {saving ? 'Enregistrement…' : 'Enregistrer le stock'}
-        </Text>
-      </Pressable>
-    </ScrollView>
+      </View>
+    </View>
   );
 }
 
-/** Hauteur de l'illustration d'en-tête (le badge chevauche son bas). */
-const ILLUSTRATION_HEIGHT = 170;
-
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   page: {
     paddingHorizontal: 16,
-    paddingBottom: space.xxl,
-    gap: 16,
+    paddingBottom: space.xl,
+    gap: 14,
   },
+  grow: { flex: 1, minWidth: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -502,66 +627,74 @@ const styles = StyleSheet.create({
   brand: {
     color: colors.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     letterSpacing: 2,
   },
   brandBar: { width: 28, height: 3, borderRadius: 2 },
   hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: 84,
+    padding: space.l,
     borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
-    padding: space.l,
-    paddingTop: ILLUSTRATION_HEIGHT - 52,
-    gap: space.s,
     backgroundColor: colors.surface,
   },
-  illustration: {
+  heroImage: {
     position: 'absolute',
     top: 0,
-    left: 0,
     right: 0,
-    height: ILLUSTRATION_HEIGHT,
+    width: '70%',
+    height: '100%',
   },
-  illustrationImage: { width: '100%', height: '100%' },
   badge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: space.xs,
   },
   title: {
     color: colors.text,
     fontFamily: fonts.display,
-    fontSize: 26,
+    fontSize: 21,
     fontWeight: '800',
   },
-  subtitle: { color: colors.textMuted, fontSize: 15, lineHeight: 21 },
+  subtitle: { color: colors.textMuted, fontSize: 14, lineHeight: 19 },
+  quick: { gap: space.s },
+  quickTitle: { color: colors.textMuted, fontSize: 13 },
+  withSuggestions: { gap: space.s },
+  more: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: 56,
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+  },
+  moreText: { color: colors.text, fontSize: 16, fontWeight: '600' },
   photo: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: space.l,
-    minHeight: 64,
-    padding: space.m,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
-  },
-  photoIcon: {
-    width: 48,
-    height: 48,
+    gap: space.m,
+    minHeight: 54,
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
-  pending: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
-  thumb: { width: 56, height: 56, borderRadius: radius.s },
+  thumb: { width: 44, height: 44, borderRadius: radius.s },
   thumbRemove: {
     position: 'absolute',
     right: 2,
@@ -569,6 +702,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 2,
     backgroundColor: colors.dangerSurface,
+  },
+  footer: {
+    paddingHorizontal: 16,
+    paddingTop: space.s,
+    paddingBottom: space.s,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
   },
   segments: { flexDirection: 'row', gap: space.s },
   segment: {
@@ -592,7 +733,6 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 12,
     borderWidth: 1.5,
-    marginTop: space.s,
   },
   saveText: { fontSize: 17, fontWeight: '700' },
   pressed: { opacity: 0.85 },

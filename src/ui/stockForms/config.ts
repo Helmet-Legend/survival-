@@ -707,3 +707,95 @@ export function unitOptionFor(
     ? value
     : FORMS[category].units[0].value;
 }
+
+/** Identifiant d'un champ (sa clé, ou son type pour quantité et seuil). */
+export function fieldId(field: Field): string {
+  return field.type === 'quantity' || field.type === 'threshold'
+    ? field.type
+    : field.key;
+}
+
+/**
+ * Champs montrés d'emblée ; les autres restent sous « Plus de détails »
+ * (tous facultatifs) pour qu'une saisie rapide tienne sur un écran.
+ */
+export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
+  water: ['name', 'quantity', 'potability', 'expiry'],
+  food: ['name', 'quantity', 'expiry', 'energyValue'],
+  // Arme : nom, type, calibre, n° de série ; munitions : nom, calibre,
+  // quantité, contenance des boîtes ; accessoire : nom, type, quantité.
+  weapon: [
+    'name',
+    'kind',
+    'accessoryType',
+    'caliber',
+    'quantity',
+    'packageSize',
+    'serial',
+  ],
+  medical: ['name', 'quantity', 'dosage', 'expiry'],
+  tool: ['name', 'quantity', 'condition'],
+  energy: ['name', 'quantity', 'condition'],
+};
+
+/** Saisie rapide : un appui remplit le nom, le type et l'unité usuels. */
+export interface QuickPick {
+  label: string;
+  values: Values;
+}
+
+const pick = (label: string, values: Values): QuickPick => ({
+  label,
+  values: { name: label, ...values },
+});
+
+export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
+  water: [
+    pick('Bouteilles d’eau', { subtype: 'bottle', unit: 'L' }),
+    pick('Jerrican', { subtype: 'jerrycan', unit: 'L' }),
+    pick('Cuve', { subtype: 'tank', unit: 'L' }),
+    pick('Poche à eau', { subtype: 'pouch', unit: 'L' }),
+  ],
+  food: [
+    pick('Riz', { subtype: 'starch', unit: 'kg' }),
+    pick('Pâtes', { subtype: 'starch', unit: 'kg' }),
+    pick('Conserves', { subtype: 'canned', unit: 'box' }),
+    pick('Lentilles', { subtype: 'legume', unit: 'kg' }),
+    pick('Farine', { subtype: 'cereal', unit: 'kg' }),
+    pick('Ration lyophilisée', { subtype: 'freeze_dried', unit: 'portion' }),
+  ],
+  weapon: [],
+  medical: [
+    pick('Paracétamol', { subtype: 'medicine', unit: 'box' }),
+    pick('Pansements', { subtype: 'dressing', unit: 'box' }),
+    pick('Compresses', { subtype: 'dressing', unit: 'box' }),
+    pick('Désinfectant', { subtype: 'antiseptic', unit: 'bottle' }),
+    pick('Gants', { subtype: 'protection', unit: 'box' }),
+  ],
+  tool: [
+    pick('Couteau', { subtype: 'cutting', unit: 'piece' }),
+    pick('Hache', { subtype: 'cutting', unit: 'piece' }),
+    pick('Scie', { subtype: 'cutting', unit: 'piece' }),
+    pick('Multi-outil', { subtype: 'multitool', unit: 'piece' }),
+    pick('Pince', { subtype: 'clamping', unit: 'piece' }),
+  ],
+  energy: [
+    pick('Lampe frontale', { subtype: 'lighting', unit: 'piece' }),
+    pick('Piles', { subtype: 'energy', unit: 'lot' }),
+    pick('Batterie externe', { subtype: 'energy', unit: 'piece' }),
+    pick('Réchaud', { subtype: 'cooking', unit: 'piece' }),
+    pick('Tente', { subtype: 'shelter', unit: 'piece' }),
+    pick('Sac de couchage', { subtype: 'sleeping', unit: 'piece' }),
+    pick('Radio', { subtype: 'communication', unit: 'piece' }),
+  ],
+};
+
+/** Calibres courants proposés sous le champ « Calibre ». */
+export const COMMON_CALIBERS = [
+  '9 mm',
+  '12/70',
+  '.22 LR',
+  '.223 Rem',
+  '.308 Win',
+  '7,62×39',
+] as const;

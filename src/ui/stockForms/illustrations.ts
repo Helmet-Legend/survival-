@@ -27,3 +27,15 @@ export const ILLUSTRATION_FADE = `<svg xmlns="http://www.w3.org/2000/svg" viewBo
   </defs>
   <rect width="10" height="10" fill="url(#fade)"/>
 </svg>`;
+
+/** Fondu latéral (bandeau compact) : texte lisible à gauche, image à droite. */
+export const ILLUSTRATION_FADE_SIDE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="${colors.surface}" stop-opacity=".97"/>
+      <stop offset=".55" stop-color="${colors.surface}" stop-opacity=".7"/>
+      <stop offset="1" stop-color="${colors.surface}" stop-opacity=".1"/>
+    </linearGradient>
+  </defs>
+  <rect width="10" height="10" fill="url(#side)"/>
+</svg>`;

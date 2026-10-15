@@ -3,7 +3,13 @@
  * sur le vrai moteur SQLite (node:sqlite) ; seuls les modules natifs
  * (SQLCipher, Keychain, Argon2 natif) sont simulés.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react-native';
 import React from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -74,10 +80,27 @@ async function typePin(pin: string) {
   await fireEvent.press(screen.getByLabelText('Valider'));
 }
 
-/** Choisit une option d'une liste déroulante de fiche. */
+/** Ouvre la section « Plus de détails » d'une fiche, si elle est repliée. */
+async function openDetails() {
+  const more = screen.queryByLabelText('Plus de détails');
+  if (more) {
+    await fireEvent.press(more);
+  }
+}
+
+/** Choisit une pastille d'un champ à choix de fiche. */
 async function pick(field: string, option: string) {
-  await fireEvent.press(screen.getByLabelText(new RegExp(`^${field} : `)));
-  await fireEvent.press(await screen.findByRole('radio', { name: option }));
+  if (screen.queryByLabelText(field) === null) {
+    await openDetails();
+  }
+  await fireEvent.press(
+    within(screen.getByLabelText(field)).getByRole('radio', { name: option }),
+  );
+}
+
+/** Choisit l'unité de la quantité. */
+async function unit(option: string) {
+  await pick('Unité (Quantité)', option);
 }
 
 async function unlockWith(pin: string) {
@@ -452,8 +475,7 @@ describe('écrans', () => {
       screen.getByLabelText('Quantité, obligatoire'),
       '2',
     );
-    await fireEvent.press(screen.getByLabelText('Unité (Quantité) : pièce(s)'));
-    await fireEvent.press(await screen.findByRole('radio', { name: 'kg' }));
+    await unit('kg');
     await fireEvent.changeText(
       screen.getByLabelText('Date de péremption'),
       '30022027',
@@ -639,10 +661,7 @@ describe('écrans', () => {
       screen.getByLabelText('Quantité, obligatoire'),
       '10',
     );
-    await fireEvent.press(screen.getByLabelText('Unité (Quantité) : pièce(s)'));
-    await fireEvent.press(
-      await screen.findByRole('radio', { name: 'boîte(s)' }),
-    );
+    await unit('boîte(s)');
     await fireEvent.changeText(
       screen.getByLabelText('Cartouches par boîte'),
       '25',
@@ -832,6 +851,45 @@ describe('fiches par type de produit', () => {
     await fireEvent.press(screen.getByLabelText(`Ajouter : ${title}`));
   }
 
+  it('remplit une fiche en quelques appuis avec la saisie rapide', async () => {
+    await openForm('Nourriture');
+    // Seuls les champs essentiels sont affichés d'emblée.
+    expect(screen.queryByLabelText('Emplacement')).toBeNull();
+    await fireEvent.press(
+      within(await screen.findByLabelText('Saisie rapide')).getByRole(
+        'button',
+        { name: 'Lentilles' },
+      ),
+    );
+    expect(
+      screen.getByLabelText('Nom / Description, obligatoire').props.value,
+    ).toBe('Lentilles');
+    expect(
+      within(screen.getByLabelText('Unité (Quantité)')).getByRole('radio', {
+        name: 'kg',
+        selected: true,
+      }),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ajouter 1 (Quantité)'));
+    await fireEvent.press(screen.getByLabelText('Ajouter 1 (Quantité)'));
+    await fireEvent.press(screen.getByLabelText('Ajouter 1 (Quantité)'));
+    await fireEvent.press(screen.getByLabelText('Retirer 1 (Quantité)'));
+    expect(screen.getByLabelText('Quantité, obligatoire').props.value).toBe(
+      '2',
+    );
+    // Le type usuel est déjà choisi dans les détails.
+    await openDetails();
+    expect(
+      within(screen.getByLabelText('Type d’aliment')).getByRole('radio', {
+        name: 'Légumineuse',
+        selected: true,
+      }),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Lentilles » enregistré.')).toBeTruthy();
+    expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
+  });
+
   it('compte les calories seulement d’après la valeur saisie', async () => {
     await openForm('Nourriture');
     await fireEvent.changeText(
@@ -843,8 +901,7 @@ describe('fiches par type de produit', () => {
       screen.getByLabelText('Quantité, obligatoire'),
       '2',
     );
-    await fireEvent.press(screen.getByLabelText('Unité (Quantité) : pièce(s)'));
-    await fireEvent.press(await screen.findByRole('radio', { name: 'kg' }));
+    await unit('kg');
     await fireEvent.changeText(
       screen.getByLabelText('Valeur énergétique'),
       '350',
@@ -922,7 +979,12 @@ describe('fiches par type de produit', () => {
     await openForm('Eau');
     expect(await screen.findByText('Ajouter de l’eau')).toBeTruthy();
     await pick('Type de contenant', 'Jerrican / bidon');
-    expect(screen.getByLabelText('Potabilité : non renseigné')).toBeTruthy();
+    // Aucune potabilité cochée d'office.
+    expect(
+      within(screen.getByLabelText('Potabilité')).queryByRole('radio', {
+        selected: true,
+      }),
+    ).toBeNull();
     expect(screen.queryByLabelText('Date de traitement')).toBeNull();
     await pick('Traitement', 'Ébullition');
     expect(screen.getByLabelText('Date de traitement')).toBeTruthy();
@@ -934,7 +996,11 @@ describe('fiches par type de produit', () => {
       await screen.findByRole('tab', { name: 'Munition', selected: true }),
     ).toBeTruthy();
     expect(screen.queryByLabelText('Date de péremption')).toBeNull();
+    // Champs facultatifs repliés, à portée d'un appui.
+    expect(screen.queryByLabelText('Date de contrôle')).toBeNull();
+    await openDetails();
     expect(screen.getByLabelText('Date de contrôle')).toBeTruthy();
+    expect(screen.queryByLabelText('Date de péremption')).toBeNull();
     await fireEvent.press(screen.getByRole('tab', { name: 'Accessoire' }));
     expect(screen.queryByLabelText(/^Calibre/)).toBeNull();
   });
