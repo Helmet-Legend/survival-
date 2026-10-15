@@ -2,11 +2,12 @@
  * Bandeau « nouvelle version disponible ». La vérification a lieu au
  * démarrage puis, au plus une fois par heure, au retour dans l'application.
  */
+import { Download } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 
 import type { AvailableUpdate, Updater } from '../../update/updater';
-import { colors, radius, space, tint } from '../theme';
+import { colors, radius, sizes, space, tint } from '../theme';
 import { Button } from './controls';
 
 const RECHECK_MS = 60 * 60 * 1000;
@@ -55,6 +56,7 @@ export function UpdateBanner({ updater }: { updater: Updater }) {
 
   return (
     <View style={styles.banner} accessibilityLiveRegion="polite">
+      <Download color={colors.primary} size={22} />
       <View style={styles.grow}>
         <Text style={styles.title}>
           Version {update.versionName} disponible
@@ -86,15 +88,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.m,
-    marginHorizontal: space.l,
+    marginHorizontal: sizes.screenPadding,
     marginTop: space.s,
     padding: space.m,
-    borderRadius: radius.m,
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: colors.amber,
-    backgroundColor: tint(colors.amber, '14'),
+    borderColor: colors.primary,
+    backgroundColor: tint(colors.primary, '14'),
   },
   grow: { flex: 1, minWidth: 0 },
-  title: { color: colors.amber, fontSize: 15, fontWeight: '700' },
-  detail: { color: colors.dim, fontSize: 13, lineHeight: 18 },
+  title: { color: colors.primaryBright, fontSize: 15, fontWeight: '700' },
+  detail: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
 });

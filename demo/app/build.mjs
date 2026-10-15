@@ -26,6 +26,10 @@ const result = await build({
   mainFields: ['browser', 'module', 'main'],
   alias: {
     'react-native': 'react-native-web',
+    '@react-native/assets-registry/registry': resolve(
+      here,
+      'stubs/assets-registry.js',
+    ),
     '@sqlite.org/sqlite-wasm': resolve(wasmDir, 'sqlite3-bundler-friendly.mjs'),
   },
   define: {

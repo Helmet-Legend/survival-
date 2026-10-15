@@ -1,0 +1,138 @@
+/** Réglages : composition du foyer, objectif d'autonomie, verrouillage. */
+import { Lock, ShieldCheck, Users } from 'lucide-react-native';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import {
+  loadHousehold,
+  loadTargetDays,
+  saveHousehold,
+  saveTargetDays,
+} from '../../resilience/resilienceCalculator';
+import {
+  Button,
+  Notice,
+  Panel,
+  ScreenTitle,
+  Stepper,
+} from '../components/controls';
+import { formatNumber, nextTarget } from '../format';
+import { useNavigation } from '../navigation';
+import { useSession } from '../session';
+import { colors, sizes, space, text } from '../theme';
+import { useLoader } from '../useLoader';
+
+const MAX_MEMBERS = 12;
+
+export function SettingsScreen(props: { onLock: () => void }) {
+  const { db } = useSession();
+  const navigation = useNavigation();
+  const { data, error, reload } = useLoader(async () => {
+    const [household, targetDays] = await Promise.all([
+      loadHousehold(db),
+      loadTargetDays(db),
+    ]);
+    return { household, targetDays };
+  });
+
+  const title = <ScreenTitle title="Réglages" onBack={navigation.close} />;
+  if (error) {
+    return (
+      <View style={styles.page}>
+        {title}
+        <Notice tone="error" message={error} />
+      </View>
+    );
+  }
+  if (data === null) {
+    return <View style={styles.page}>{title}</View>;
+  }
+  const { household, targetDays } = data;
+
+  const changeMembers = async (delta: number) => {
+    await saveHousehold(db, {
+      ...household,
+      members: household.members + delta,
+    });
+    await reload();
+  };
+  const changeTarget = async (direction: 1 | -1) => {
+    await saveTargetDays(db, nextTarget(targetDays, direction));
+    await reload();
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.page}>
+      {title}
+      <Panel title="Foyer" right={<Users color={colors.cyan} size={20} />}>
+        <View style={styles.settingRow}>
+          <Text style={text.body}>Personnes</Text>
+          <Stepper
+            value={`${household.members} pers.`}
+            onDecrease={() => {
+              void changeMembers(-1);
+            }}
+            onIncrease={() => {
+              void changeMembers(1);
+            }}
+            canDecrease={household.members > 1}
+            canIncrease={household.members < MAX_MEMBERS}
+            decreaseLabel="Retirer une personne"
+            increaseLabel="Ajouter une personne"
+          />
+        </View>
+        <View style={styles.settingRow}>
+          <Text style={text.body}>Objectif</Text>
+          <Stepper
+            value={`${targetDays} j`}
+            onDecrease={() => {
+              void changeTarget(-1);
+            }}
+            onIncrease={() => {
+              void changeTarget(1);
+            }}
+            canDecrease={nextTarget(targetDays, -1) !== targetDays}
+            canIncrease={nextTarget(targetDays, 1) !== targetDays}
+            decreaseLabel="Réduire l’objectif"
+            increaseLabel="Augmenter l’objectif"
+          />
+        </View>
+        <Text style={text.muted}>
+          Besoins par personne :{' '}
+          {formatNumber(household.waterLitersPerPersonDay)} L d’eau et{' '}
+          {formatNumber(household.kcalPerPersonDay, 0)} kcal par jour.
+        </Text>
+      </Panel>
+
+      <Panel
+        title="Confidentialité"
+        right={<ShieldCheck color={colors.success} size={20} />}
+      >
+        <Text style={text.muted}>
+          Les données sont chiffrées sur ce téléphone et ne quittent jamais
+          l’appareil. Le coffre se verrouille dès que l’application passe en
+          arrière-plan.
+        </Text>
+        <Button
+          icon={Lock}
+          label="Verrouiller maintenant"
+          onPress={props.onLock}
+        />
+      </Panel>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: {
+    paddingHorizontal: sizes.screenPadding,
+    paddingBottom: space.xl,
+    gap: space.m,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.m,
+  },
+});

@@ -233,12 +233,16 @@ L'application s'ouvre sur l'un de trois écrans :
    message ni comportement ne trahit le code de contrainte. En cas de
    blocage, un compte à rebours s'affiche, y compris s'il était déjà en
    cours au démarrage.
-3. **Coffre ouvert** : quatre onglets.
-   - Autonomie : jours restants, ressource limitante, foyer réglable,
-     péremptions.
-   - Stock : filtres, lots, consommation, ajout, « jeter les périmés ».
-   - Coordonnées : MGRS, UTM, DMS, cap vers un point MGRS.
-   - Fiches : recherche et lecture.
+3. **Coffre ouvert** : en-tête (verrouiller, réglages) et quatre onglets
+   en bas d'écran, au design « Tech Premium » (`src/ui/theme.ts`).
+   - Accueil : jauge circulaire des jours d'autonomie, ressource
+     limitante, eau, vivres, péremptions ; accès au plan d'action
+     (objectif, liste de rachat, péremptions, détail du calcul).
+   - Stocks : catégories avec quantités réelles, recherche, lots,
+     consommation, réglages par article, ajout, « jeter les périmés ».
+   - Carte : coordonnées (MGRS, UTM, DMS) et azimut vers un point MGRS.
+   - Guides : catégories de fiches, recherche plein texte et lecture.
+   - Réglages : composition du foyer, objectif, verrouillage.
 
 Si l'état du coffre est illisible, un écran le signale et propose de tout
 effacer, après une seconde confirmation.

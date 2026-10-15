@@ -1,11 +1,13 @@
 /** Saisie du code. Le même écran sert au code maître et au code de contrainte. */
+import { LockKeyhole } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { isCryptoError } from '../../crypto/errors';
-import { Brand } from '../components/controls';
+import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
+import { Backdrop, Brand } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
-import { colors, space, text } from '../theme';
+import { colors, space, text, tint } from '../theme';
 
 export function LockScreen(props: {
   onUnlock: (pin: string) => Promise<void>;
@@ -92,9 +94,13 @@ export function LockScreen(props: {
 
   return (
     <View style={styles.page}>
+      <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.45} />
       <View style={styles.head}>
-        <Brand size={24} />
-        <Text style={text.dim}>Saisissez votre code</Text>
+        <Brand size={32} tagline />
+        <View style={styles.badge}>
+          <LockKeyhole color={colors.primary} size={26} />
+        </View>
+        <Text style={text.muted}>Saisissez votre code</Text>
       </View>
       <PinDots length={pin.length} />
       <Text
@@ -123,9 +129,20 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
     paddingHorizontal: space.xl,
   },
-  head: { alignItems: 'center', gap: space.s },
+  head: { alignItems: 'center', gap: space.m },
+  badge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: tint(colors.primary, '88'),
+    backgroundColor: tint(colors.primary, '14'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.l,
+  },
   message: {
-    color: colors.dim,
+    color: colors.textMuted,
     fontSize: 14,
     minHeight: 20,
     textAlign: 'center',
