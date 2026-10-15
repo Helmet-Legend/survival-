@@ -6,6 +6,7 @@ import type {
   InventoryRepository,
   PhotoRepository,
 } from '../inventory';
+import type { ScreenCaptureSetting } from '../device/screenCapture';
 import type { PhotoSource } from '../photo/photoSource';
 import type { VaultDatabase } from '../vault';
 
@@ -18,6 +19,8 @@ export interface Session {
   photos: PhotoRepository;
   /** Appareil photo et galerie (indisponibles hors Android). */
   photoSource: PhotoSource;
+  /** Autorisation des captures d'écran (indisponible hors Android). */
+  screenCapture: ScreenCaptureSetting;
 }
 
 export const SessionContext = createContext<Session | null>(null);

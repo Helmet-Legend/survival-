@@ -1,7 +1,7 @@
 /** Réglages : composition du foyer, objectif d'autonomie, verrouillage. */
 import { Lock, ShieldCheck, Users } from 'lucide-react-native';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import {
   loadHousehold,
@@ -25,14 +25,15 @@ import { useLoader } from '../useLoader';
 const MAX_MEMBERS = 12;
 
 export function SettingsScreen(props: { onLock: () => void }) {
-  const { db } = useSession();
+  const { db, screenCapture } = useSession();
   const navigation = useNavigation();
   const { data, error, reload } = useLoader(async () => {
-    const [household, targetDays] = await Promise.all([
+    const [household, targetDays, captureAllowed] = await Promise.all([
       loadHousehold(db),
       loadTargetDays(db),
+      screenCapture.isAllowed(),
     ]);
-    return { household, targetDays };
+    return { household, targetDays, captureAllowed };
   });
 
   const title = <ScreenTitle title="Réglages" onBack={navigation.close} />;
@@ -47,7 +48,11 @@ export function SettingsScreen(props: { onLock: () => void }) {
   if (data === null) {
     return <View style={styles.page}>{title}</View>;
   }
-  const { household, targetDays } = data;
+  const { household, targetDays, captureAllowed } = data;
+  const toggleCapture = async (allowed: boolean) => {
+    await screenCapture.setAllowed(allowed);
+    await reload();
+  };
 
   const changeMembers = async (delta: number) => {
     await saveHousehold(db, {
@@ -113,6 +118,29 @@ export function SettingsScreen(props: { onLock: () => void }) {
           l’appareil. Le coffre se verrouille dès que l’application passe en
           arrière-plan.
         </Text>
+        {screenCapture.available ? (
+          <>
+            <View style={styles.settingRow}>
+              <Text style={[text.body, styles.grow]}>
+                Autoriser les captures d’écran
+              </Text>
+              <Switch
+                accessibilityLabel="Autoriser les captures d’écran"
+                value={captureAllowed}
+                onValueChange={value => {
+                  void toggleCapture(value);
+                }}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={colors.text}
+              />
+            </View>
+            <Text style={text.subtle}>
+              {captureAllowed
+                ? 'Captures autorisées : vos stocks, armes et documents peuvent se retrouver dans la galerie. À désactiver après le développement.'
+                : 'Désactivé : l’écran apparaît noir sur les captures et dans les applications récentes.'}
+            </Text>
+          </>
+        ) : null}
         <Button
           icon={Lock}
           label="Verrouiller maintenant"
@@ -129,6 +157,7 @@ const styles = StyleSheet.create({
     paddingBottom: space.xl,
     gap: space.m,
   },
+  grow: { flex: 1, minWidth: 0 },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
