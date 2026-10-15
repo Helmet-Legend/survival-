@@ -82,8 +82,10 @@ android {
         applicationId "com.resilios"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Fournis par la compilation GitHub (numéro de build croissant), pour
+        // qu'Android et Obtainium reconnaissent chaque version comme une mise à jour.
+        versionCode((project.findProperty("versionCode") ?: "1") as Integer)
+        versionName((project.findProperty("versionName") ?: "0.1.0") as String)
     }
     signingConfigs {
         debug {
