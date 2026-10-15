@@ -34,10 +34,11 @@ import {
   toneColor,
   type StatusTone,
 } from '../theme';
+import { APP_NAME } from '../brand';
 
 // --- Marque -----------------------------------------------------------------
 
-/** « RESILI » blanc + « OS » orange, avec la devise en option. */
+/** Nom de l'application souligné d'orange, avec la devise en option. */
 export function Brand({
   size = 22,
   tagline = false,
@@ -50,11 +51,12 @@ export function Brand({
       style={styles.brand}
       accessible
       accessibilityRole="header"
-      accessibilityLabel="ResiliOS"
+      accessibilityLabel={APP_NAME}
     >
       <Text style={[styles.brandText, { fontSize: size }]}>
-        RESILI<Text style={styles.brandAccent}>OS</Text>
+        {APP_NAME.toUpperCase()}
       </Text>
+      <View style={[styles.brandAccent, { width: size * 1.4 }]} />
       {tagline ? (
         <Text style={styles.tagline}>AUTONOMIE · PRÉPARATION · SÉCURITÉ</Text>
       ) : null}
@@ -557,7 +559,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.5,
   },
-  brandAccent: { color: colors.primary },
+  brandAccent: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    marginTop: 2,
+    marginBottom: 2,
+  },
   tagline: {
     color: colors.textMuted,
     fontSize: 10,

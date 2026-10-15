@@ -26,7 +26,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { VaultKeyManager } from '../crypto/VaultKeyManager';
-import { ArmoryRepository, InventoryRepository } from '../inventory';
+import {
+  ArmoryRepository,
+  DocumentRepository,
+  InventoryRepository,
+  PhotoRepository,
+} from '../inventory';
+import {
+  isAwayForPhoto,
+  nativePhotoSource,
+  type PhotoSource,
+} from '../photo/photoSource';
 import type { Updater } from '../update/updater';
 import {
   createVault,
@@ -66,8 +76,13 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   content: VaultContent;
   /** Vérification des mises à jour (absente dans les tests et l'aperçu web). */
   updater?: Updater;
+  /** Appareil photo ; le module natif Android par défaut. */
+  photoSource?: PhotoSource;
 }) {
   const { manager, content, updater } = props;
+  const [photoSource] = useState(
+    () => props.photoSource ?? nativePhotoSource(),
+  );
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('home');
@@ -100,6 +115,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       db,
       repo: new InventoryRepository(db),
       armory: new ArmoryRepository(db),
+      documents: new DocumentRepository(db),
+      photos: new PhotoRepository(db),
+      photoSource,
     };
     sessionRef.current = session;
     setTab('home');
@@ -128,7 +146,12 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
       setCovered(next !== 'active');
-      if (next === 'background' && sessionRef.current !== null) {
+      // Sauf pendant une photo : l'appareil photo est une autre application.
+      if (
+        next === 'background' &&
+        sessionRef.current !== null &&
+        !isAwayForPhoto()
+      ) {
         lock('Coffre verrouillé à la sortie de l’application.');
       }
     });

@@ -10,6 +10,8 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { BUNDLED_GUIDES } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
 import { InventoryRepository, seedDecoyInventory } from '../../src/inventory';
+import { addDays, localToday } from '../../src/lib/dates';
+import { whileAway, type PhotoSource } from '../../src/photo/photoSource';
 import { AppRoot } from '../../src/ui/AppRoot';
 import { createVault, type VaultContent } from '../../src/vault';
 import {
@@ -84,7 +86,11 @@ function captureAppState() {
     handlers.push(handler as (state: AppStateStatus) => void);
     return { remove: jest.fn() } as never;
   });
-  return (state: AppStateStatus) => act(() => handlers.forEach(h => h(state)));
+  const emit = (state: AppStateStatus) =>
+    act(() => handlers.forEach(h => h(state)));
+  /** Sans act(), pour un appel déjà englobé (ex. pendant un fireEvent). */
+  emit.raw = (state: AppStateStatus) => handlers.forEach(h => h(state));
+  return emit;
 }
 
 afterEach(() => {
@@ -279,11 +285,17 @@ describe('écrans', () => {
 
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Réglages'));
-    await fireEvent.press(await screen.findByLabelText('Ajouter une personne'));
-    expect(await screen.findByText('2 pers.')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    // Directement depuis l'accueil.
+    await fireEvent.press(screen.getByLabelText('Ajouter une personne'));
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
+    expect(screen.getByText('2 pers.')).toBeTruthy();
+
+    // Et toujours depuis les réglages.
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
+    expect(await screen.findByText('1 pers.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(await screen.findByLabelText('10 jours')).toBeTruthy();
   });
 
   it('affiche l’état et la liste de réapprovisionnement', async () => {
@@ -373,7 +385,7 @@ describe('écrans', () => {
       screen.getByLabelText('Nom'),
       'Flocons d’avoine',
     );
-    await fireEvent.changeText(screen.getByLabelText('Quantité'), '2');
+    await fireEvent.changeText(screen.getByLabelText('Quantité (kg)'), '2');
     await fireEvent.changeText(
       screen.getByLabelText('À consommer avant le (AAAA-MM-JJ, facultatif)'),
       '2027-02-30',
@@ -451,6 +463,37 @@ describe('écrans', () => {
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
   });
 
+  it('saisit l’eau en bidons et la retire bidon par bidon', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Bidons garage');
+    await fireEvent.changeText(
+      screen.getByLabelText('Contenance d’un bidon (L)'),
+      '10',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '3');
+    expect(screen.getByText('= 30 L')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Bidons garage » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(screen.getByText('3 bidons de 10 L')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Retirer 1 bidon (10 L)'));
+    expect(
+      await screen.findByText('Retiré : 10 L du lot sans date. Reste 20 L.'),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '2');
+    await fireEvent.press(screen.getByText('Ajouter au stock existant'));
+    expect(
+      await screen.findByText('Stock de « Bidons garage » complété.'),
+    ).toBeTruthy();
+    expect(screen.getByText('4 bidons de 10 L')).toBeTruthy();
+  });
+
   it('enregistre une arme et compte ses munitions par calibre', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
@@ -487,7 +530,10 @@ describe('écrans', () => {
       screen.getByLabelText('Calibre des munitions'),
       '12 / 70',
     );
-    await fireEvent.changeText(screen.getByLabelText('Quantité'), '250');
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité (cartouches)'),
+      '250',
+    );
     await fireEvent.press(screen.getByText('Ajouter au stock'));
     expect(
       await screen.findByText('« Cartouches plomb 7 » ajouté au stock.'),
@@ -515,6 +561,139 @@ describe('écrans', () => {
       screen.getByText(
         'Mettre la victime à l’abri du vent et l’isoler du sol.',
       ),
+    ).toBeTruthy();
+  });
+});
+
+describe('photos et documents', () => {
+  const JPEG = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL';
+
+  async function openWithCamera(photoSource: PhotoSource) {
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        photoSource={photoSource}
+      />,
+    );
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+  }
+
+  async function addGlock() {
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armes et munitions' }),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter une arme'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Marque et modèle'),
+      'Glock 17',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Calibre'), '9x19');
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    await fireEvent.press(
+      await screen.findByLabelText('Glock 17, 9x19, 0 munition'),
+    );
+  }
+
+  it('photographie une arme, affiche et supprime la photo', async () => {
+    await openWithCamera({
+      available: true,
+      take: async () => JPEG,
+      pick: async () => null,
+    });
+    await addGlock();
+    expect(await screen.findByText(/Aucune photo/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Photographier'));
+    const thumb = await screen.findByLabelText('Photo 1 de Glock 17');
+    // Galerie annulée : rien n'est ajouté.
+    await fireEvent.press(
+      screen.getByLabelText('Choisir une image dans la galerie'),
+    );
+    expect(screen.queryByLabelText('Photo 2 de Glock 17')).toBeNull();
+
+    await fireEvent.press(thumb);
+    await fireEvent.press(await screen.findByText('Supprimer la photo'));
+    await fireEvent.press(await screen.findByText('Supprimer'));
+    expect(await screen.findByText(/Aucune photo/)).toBeTruthy();
+  });
+
+  it('ne verrouille pas le coffre pendant la prise de photo', async () => {
+    const emit = captureAppState();
+    await openWithCamera({
+      available: true,
+      // L'appareil photo passe l'application en arrière-plan.
+      take: () =>
+        whileAway(async () => {
+          emit.raw('background');
+          emit.raw('active');
+          return JPEG;
+        }),
+      pick: async () => null,
+    });
+    await addGlock();
+    await fireEvent.press(screen.getByText('Photographier'));
+    expect(await screen.findByLabelText('Photo 1 de Glock 17')).toBeTruthy();
+    expect(screen.queryByText('Saisissez votre code')).toBeNull();
+
+    // Hors photo, le verrouillage reste immédiat.
+    await emit('background');
+    await emit('active');
+    expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+  });
+
+  it('enregistre un document et signale son renouvellement', async () => {
+    await openWithCamera({
+      available: true,
+      take: async () => JPEG,
+      pick: async () => null,
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Documents : 0 document'),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter un document'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Passeport' }));
+    await fireEvent.changeText(
+      screen.getByLabelText('Titulaire (facultatif)'),
+      'Camille Martin',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Numéro (facultatif)'),
+      '18AB12345',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Date d’expiration (AAAA-MM-JJ, facultatif)'),
+      '2027-02-30',
+    );
+    await fireEvent.press(screen.getByText('Ajouter le document'));
+    expect(
+      await screen.findByText('Date invalide (format AAAA-MM-JJ attendu)'),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Date d’expiration (AAAA-MM-JJ, facultatif)'),
+      addDays(localToday(), 30),
+    );
+    await fireEvent.press(screen.getByText('Ajouter le document'));
+    expect(
+      await screen.findByText(
+        '« Passeport » ajouté. Vous pouvez maintenant le photographier.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText('Passeport, Passeport, À renouveler'),
+    ).toBeTruthy();
+    expect(screen.getByText('N° : 18AB12345')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Photographier'));
+    expect(await screen.findByLabelText('Photo 1 de Passeport')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Documents : 1 document, 1 à renouveler'),
     ).toBeTruthy();
   });
 });

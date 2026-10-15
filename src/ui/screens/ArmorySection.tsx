@@ -22,6 +22,7 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/controls';
+import { PhotoStrip } from '../components/PhotoStrip';
 import { formatNumber, WEAPON_KIND_LABELS } from '../format';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
@@ -140,6 +141,11 @@ export function ArmorySection(props: {
                 {weapon.notes ? (
                   <Text style={text.body}>{weapon.notes}</Text>
                 ) : null}
+                <PhotoStrip
+                  owner="weapon"
+                  ownerId={weapon.id}
+                  label={weapon.model}
+                />
                 <Text style={text.subtle}>
                   Munitions comptées : articles « Armes et munitions » en
                   pièces, au calibre {weapon.caliber}, lots non périmés.

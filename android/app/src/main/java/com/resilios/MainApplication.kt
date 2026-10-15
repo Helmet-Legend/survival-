@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.resilios.photo.PhotoPackage
 import com.resilios.update.UpdatePackage
 
 class MainApplication : Application(), ReactApplication {
@@ -17,6 +18,8 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Mise à jour depuis les versions publiées sur GitHub.
           add(UpdatePackage())
+          // Photos d'armes et de documents, stockées dans le coffre.
+          add(PhotoPackage())
         },
     )
   }

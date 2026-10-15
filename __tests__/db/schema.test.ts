@@ -334,6 +334,7 @@ describe('migration 3 (armes et munitions)', () => {
         min_stock: 5,
         alert_days: 120,
         caliber: null,
+        package_size: null,
       },
     ]);
     const lots = await db.execute('SELECT * FROM inventory_lots');
@@ -442,5 +443,34 @@ describe('migration 3 (armes et munitions)', () => {
         'trg_inventory_lots_touch',
       ]),
     );
+  });
+});
+
+describe('migration 4 (conditionnement)', () => {
+  it('ajoute la contenance sans toucher aux articles existants', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 3));
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit)
+       VALUES ('e1', 'Eau', 'water', 'L')`,
+    );
+    expect(await migrate(db)).toEqual({ from: 3, to: SCHEMA_VERSION });
+
+    const { rows } = await db.execute(
+      "SELECT name, package_size FROM inventory_items WHERE id = 'e1'",
+    );
+    expect(rows).toEqual([{ name: 'Eau', package_size: null }]);
+    await db.execute(
+      "UPDATE inventory_items SET package_size = 10 WHERE id = 'e1'",
+    );
+    for (const bad of [0, -5]) {
+      await expect(
+        db.execute(
+          "UPDATE inventory_items SET package_size = ? WHERE id = 'e1'",
+          [bad],
+        ),
+      ).rejects.toThrow(/constraint/i);
+    }
   });
 });

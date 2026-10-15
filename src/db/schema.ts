@@ -270,10 +270,66 @@ const migration3: Migration = {
   ],
 };
 
+const migration4: Migration = {
+  version: 4,
+  name: 'conditionnement des articles',
+  statements: [
+    // Contenance d'un contenant, dans l'unité de l'article (ex. bidon de
+    // 10 L, boîte de 25 cartouches). Sert à la saisie et à l'affichage.
+    `ALTER TABLE inventory_items ADD COLUMN package_size REAL
+       CHECK (package_size IS NULL OR package_size > 0)`,
+  ],
+};
+
+/**
+ * Documents importants et photos. Les photos (JPEG en base64) sont stockées
+ * dans la base chiffrée, jamais dans la galerie du téléphone ; elles sont
+ * effacées avec l'arme ou le document auquel elles appartiennent.
+ */
+const migration5: Migration = {
+  version: 5,
+  name: 'documents et photos',
+  statements: [
+    `CREATE TABLE documents (
+       id         TEXT PRIMARY KEY NOT NULL,
+       kind       TEXT NOT NULL
+                  CHECK (kind IN ('id_card', 'passport', 'driving_licence',
+                                  'health_card', 'insurance', 'other')),
+       title      TEXT NOT NULL CHECK (length(trim(title)) > 0),
+       holder     TEXT,
+       number     TEXT,
+       expires_at TEXT CHECK (expires_at IS NULL OR ${isIsoDate('expires_at')}),
+       notes      TEXT,
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('documents'),
+
+    `CREATE TABLE photos (
+       id          TEXT PRIMARY KEY NOT NULL,
+       owner_type  TEXT NOT NULL CHECK (owner_type IN ('weapon', 'document')),
+       owner_id    TEXT NOT NULL,
+       mime        TEXT NOT NULL DEFAULT 'image/jpeg'
+                   CHECK (mime IN ('image/jpeg', 'image/png')),
+       data_base64 TEXT NOT NULL CHECK (length(data_base64) > 0),
+       created_at  TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    'CREATE INDEX idx_photos_owner ON photos (owner_type, owner_id, created_at)',
+    `CREATE TRIGGER trg_weapons_photos_ad AFTER DELETE ON weapons BEGIN
+       DELETE FROM photos WHERE owner_type = 'weapon' AND owner_id = OLD.id;
+     END`,
+    `CREATE TRIGGER trg_documents_photos_ad AFTER DELETE ON documents BEGIN
+       DELETE FROM photos WHERE owner_type = 'document' AND owner_id = OLD.id;
+     END`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
   migration3,
+  migration4,
+  migration5,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
