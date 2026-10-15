@@ -2,6 +2,7 @@
 import {
   BatteryCharging,
   BriefcaseMedical,
+  Crosshair,
   Droplet,
   Wheat,
   Wrench,
@@ -18,6 +19,7 @@ export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   medical: 'Santé',
   energy: 'Énergie',
   tool: 'Outils',
+  weapon: 'Armes et munitions',
 };
 
 export const CATEGORY_ICONS: Record<ItemCategory, LucideIcon> = {
@@ -26,6 +28,7 @@ export const CATEGORY_ICONS: Record<ItemCategory, LucideIcon> = {
   medical: BriefcaseMedical,
   energy: BatteryCharging,
   tool: Wrench,
+  weapon: Crosshair,
 };
 
 export const CATEGORY_COLORS: Record<ItemCategory, string> = {
@@ -34,6 +37,7 @@ export const CATEGORY_COLORS: Record<ItemCategory, string> = {
   medical: colors.health,
   energy: colors.energy,
   tool: colors.cyanSoft,
+  weapon: colors.purple,
 };
 
 export const UNIT_LABELS: Record<ItemUnit, string> = {

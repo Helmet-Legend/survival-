@@ -82,7 +82,7 @@ describe('articles', () => {
   it.each<[string, Partial<ItemInput>, string]>([
     ['nom vide', { name: '   ' }, 'name'],
     ['nom trop long', { name: 'x'.repeat(121) }, 'name'],
-    ['catégorie inconnue', { category: 'weapon' as never }, 'category'],
+    ['catégorie inconnue', { category: 'vehicle' as never }, 'category'],
     ['unité inconnue', { unit: 'gallon' as never }, 'unit'],
     ['eau en kg', { category: 'water', unit: 'kg' }, 'unit'],
     ['calories décimales', { caloriesPerUnit: 3.5 }, 'caloriesPerUnit'],

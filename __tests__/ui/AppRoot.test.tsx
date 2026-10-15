@@ -403,6 +403,9 @@ describe('écrans', () => {
       screen.getByLabelText('Vivres : 36 000 kcal, 1 article'),
     ).toBeTruthy();
     expect(screen.getByLabelText('Outils : 0 article')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Armes et munitions : 0 article'),
+    ).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
     const firstAid = BUNDLED_GUIDES.filter(

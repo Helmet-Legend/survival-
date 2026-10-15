@@ -148,7 +148,7 @@ describe('contraintes du schéma', () => {
   });
 
   it.each([
-    ['catégorie inconnue', { category: 'weapon' }],
+    ['catégorie inconnue', { category: 'vehicle' }],
     ['unité inconnue', { unit: 'gallon' }],
     ['eau sans unité de volume', { unit: 'kg' }],
     ['booléen hors 0/1', { is_critical: 2 }],
@@ -291,5 +291,115 @@ describe('migration 2 (réapprovisionnement)', () => {
     await expect(insert(-1, null)).rejects.toThrow(/constraint/i);
     await expect(insert(null, 0)).rejects.toThrow(/constraint/i);
     await expect(insert(null, 4000)).rejects.toThrow(/constraint/i);
+  });
+});
+
+describe('migration 3 (armes et munitions)', () => {
+  async function v2WithStock() {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 2));
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit, calories_per_unit,
+         location, is_critical, notes, created_at, updated_at, min_stock, alert_days)
+       VALUES ('r1', 'Riz', 'food', 'kg', 3600, 'Cellier', 1, 'sac',
+         '2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z', 5, 120)`,
+    );
+    await db.execute(
+      `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at, expiration_date,
+         created_at, updated_at)
+       VALUES ('l1', 'r1', 10, '2026-01-02', '2027-06-30',
+         '2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z')`,
+    );
+    return db;
+  }
+
+  it('conserve les articles et leurs lots', async () => {
+    const db = await v2WithStock();
+    expect(await migrate(db)).toEqual({ from: 2, to: SCHEMA_VERSION });
+
+    const items = await db.execute('SELECT * FROM inventory_items');
+    expect(items.rows).toEqual([
+      {
+        id: 'r1',
+        name: 'Riz',
+        category: 'food',
+        unit: 'kg',
+        calories_per_unit: 3600,
+        location: 'Cellier',
+        is_critical: 1,
+        notes: 'sac',
+        created_at: '2026-01-02T03:04:05.000Z',
+        updated_at: '2026-01-02T03:04:05.000Z',
+        min_stock: 5,
+        alert_days: 120,
+      },
+    ]);
+    const lots = await db.execute('SELECT * FROM inventory_lots');
+    expect(lots.rows).toEqual([
+      {
+        id: 'l1',
+        item_id: 'r1',
+        quantity: 10,
+        acquired_at: '2026-01-02',
+        expiration_date: '2027-06-30',
+        created_at: '2026-01-02T03:04:05.000Z',
+        updated_at: '2026-01-02T03:04:05.000Z',
+      },
+    ]);
+    expect(await names(db, 'table')).not.toContain('inventory_lots_backup');
+    expect(await names(db, 'table')).not.toContain('inventory_items_new');
+  });
+
+  it('accepte la catégorie armes et garde toutes les contraintes', async () => {
+    const db = await v2WithStock();
+    await migrate(db);
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit)
+       VALUES ('m1', 'Cartouches 12/70', 'weapon', 'unit')`,
+    );
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit)
+         VALUES ('x1', 'x', 'vehicle', 'unit')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit)
+         VALUES ('x2', 'Eau', 'water', 'kg')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at)
+         VALUES ('x3', 'absent', 1, '2026-01-01')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+
+    // Suppression en cascade et horodatage automatique toujours actifs.
+    await db.execute(
+      "UPDATE inventory_items SET name = 'Riz long' WHERE id = 'r1'",
+    );
+    const touched = await db.execute(
+      "SELECT updated_at FROM inventory_items WHERE id = 'r1'",
+    );
+    expect(touched.rows[0].updated_at).not.toBe('2026-01-02T03:04:05.000Z');
+    await db.execute("DELETE FROM inventory_items WHERE id = 'r1'");
+    expect((await db.execute('SELECT * FROM inventory_lots')).rows).toEqual([]);
+
+    expect(await names(db, 'index')).toEqual(
+      expect.arrayContaining([
+        'idx_inventory_items_category',
+        'idx_inventory_lots_consumption',
+        'idx_inventory_lots_expiration',
+      ]),
+    );
+    expect(await names(db, 'trigger')).toEqual(
+      expect.arrayContaining([
+        'trg_inventory_items_touch',
+        'trg_inventory_lots_touch',
+      ]),
+    );
   });
 });
