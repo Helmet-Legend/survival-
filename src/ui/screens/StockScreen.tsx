@@ -5,6 +5,7 @@
 import {
   ChevronDown,
   ChevronRight,
+  FolderLock,
   Minus,
   PackageOpen,
   Plus,
@@ -23,6 +24,7 @@ import {
   type ItemCategory,
   type ItemSummary,
   type ItemUnit,
+  type DocumentSummary,
 } from '../../inventory';
 import { daysBetween, localToday } from '../../lib/dates';
 import {
@@ -60,6 +62,7 @@ import {
 import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
 import { useLoader } from '../useLoader';
 import { ArmorySection } from './ArmorySection';
+import { DocumentsSection, documentStatus } from './DocumentsSection';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
 
@@ -127,13 +130,20 @@ function categoryAmount(
   return null;
 }
 
+function renewCount(docs: readonly DocumentSummary[]): number {
+  return docs.filter(d => documentStatus(d) !== null).length;
+}
+
 function articles(count: number): string {
   return `${count} article${count > 1 ? 's' : ''}`;
 }
 
 export function StockScreen() {
-  const { repo, armory } = useSession();
-  const [filter, setFilter] = useState<ItemCategory | 'all'>('all');
+  const { repo, armory, documents } = useSession();
+  const [filter, setFilter] = useState<ItemCategory | 'all' | 'documents'>(
+    'all',
+  );
+  const isDocs = filter === 'documents';
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -142,15 +152,19 @@ export function StockScreen() {
 
   const { data, error, reload } = useLoader(async () => {
     const all = (await repo.listItems()) as ItemSummary[];
-    const items = (await repo.listItems({
-      category: filter === 'all' ? undefined : filter,
-      query,
-    })) as ItemSummary[];
+    const items = isDocs
+      ? []
+      : ((await repo.listItems({
+          category: filter === 'all' ? undefined : filter,
+          query,
+        })) as ItemSummary[]);
     const detail =
       expanded === null ? null : await repo.getItem(expanded).catch(() => null);
     const weapons = await armory.listWeapons();
+    const docs = await documents.list();
     return {
       weapons,
+      docs,
       all,
       items,
       detail,
@@ -198,232 +212,301 @@ export function StockScreen() {
             onPress={() => setFilter(c)}
           />
         ))}
+        <Chip
+          label="Documents"
+          selected={isDocs}
+          onPress={() => setFilter('documents')}
+        />
       </ScrollView>
 
-      <SearchField
-        label="Rechercher un article"
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Rechercher un article…"
-      />
-
-      {feedback ? <Notice {...feedback} /> : null}
-      {error ? <Notice tone="error" message={error} /> : null}
-
-      <View style={styles.row}>
-        <Button
-          compact
-          variant={adding ? 'ghost' : 'primary'}
-          icon={adding ? X : Plus}
-          label={adding ? 'Fermer' : 'Ajouter'}
-          accessibilityLabel={adding ? 'Fermer' : '+ Ajouter un article'}
-          onPress={() => {
-            setAdding(!adding);
-            setFeedback(null);
-          }}
-        />
-        <Button
-          compact
-          variant="danger"
-          icon={Trash2}
-          label="Jeter les périmés"
-          style={styles.grow}
-          disabled={!data?.hasExpired}
-          onPress={() => setConfirmDiscard(true)}
-        />
-      </View>
-
-      {confirmDiscard ? (
-        <Panel accent={colors.danger} style={styles.dialog}>
-          <Text style={text.body}>
-            Supprimer définitivement les lots périmés ?
-          </Text>
-          <View style={styles.row}>
-            <Button
-              variant="danger"
-              label="Jeter"
-              onPress={() => {
-                void discard();
-              }}
-            />
-            <Button
-              variant="ghost"
-              label="Annuler"
-              onPress={() => setConfirmDiscard(false)}
-            />
-          </View>
-        </Panel>
-      ) : null}
-
-      {adding ? (
-        <AddItemForm
-          initialCategory={filter === 'all' ? 'food' : filter}
-          calibers={[...new Set((data?.weapons ?? []).map(w => w.caliber))]}
-          onDone={async (item, message) => {
-            setAdding(false);
-            setFilter(item.category);
-            setQuery('');
-            setExpanded(item.id);
-            setFeedback({ message, tone: 'ok' });
-            await reload();
-          }}
-        />
-      ) : null}
-
-      {showCategories && data
-        ? ITEM_CATEGORIES.map(c => {
-            const inCategory = data.all.filter(i => i.category === c);
-            const amount = categoryAmount(c, inCategory);
-            const alerts = inCategory.filter(
-              i => itemState(i, today) !== null,
-            ).length;
-            return (
-              <Pressable
-                key={c}
-                accessibilityRole="button"
-                accessibilityLabel={`${CATEGORY_LABELS[c]} : ${
-                  amount ? `${amount}, ` : ''
-                }${
-                  c === 'weapon'
-                    ? `${data.weapons.length} arme${
-                        data.weapons.length > 1 ? 's' : ''
-                      }, `
-                    : ''
-                }${articles(inCategory.length)}${
-                  alerts > 0 ? `, ${alerts} à vérifier` : ''
-                }`}
-                onPress={() => setFilter(c)}
-                style={({ pressed }) => [
-                  styles.category,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <IconTile icon={CATEGORY_ICONS[c]} color={CATEGORY_COLORS[c]} />
-                <View style={styles.grow}>
-                  <Text style={text.h3}>{CATEGORY_LABELS[c]}</Text>
-                  {amount ? <Text style={styles.amount}>{amount}</Text> : null}
-                  <Text style={text.muted}>
-                    {c === 'weapon'
-                      ? `${data.weapons.length} arme${
-                          data.weapons.length > 1 ? 's' : ''
-                        } · `
-                      : ''}
-                    {articles(inCategory.length)}
-                    {alerts > 0 ? (
-                      <Text style={styles.warn}> · {alerts} à vérifier</Text>
-                    ) : null}
-                  </Text>
-                </View>
-                <ChevronRight color={colors.text} size={22} />
-              </Pressable>
-            );
-          })
-        : null}
-
-      {filter === 'weapon' && query.trim() === '' && data ? (
+      {isDocs && data ? (
         <>
-          <ArmorySection
-            weapons={data.weapons}
+          {feedback ? <Notice {...feedback} /> : null}
+          {error ? <Notice tone="error" message={error} /> : null}
+          <DocumentsSection
+            documents={data.docs}
             onChanged={async message => {
               setFeedback(message);
               await reload();
             }}
           />
-          <SectionTitle title="Munitions" />
         </>
       ) : null}
 
-      {!showCategories && data?.items.length === 0 ? (
-        <EmptyState
-          icon={query ? SearchX : PackageOpen}
-          title={
-            query
-              ? 'Aucun article ne correspond.'
-              : 'Aucun article dans cette catégorie.'
-          }
-          message={
-            query
-              ? 'Vérifiez l’orthographe ou changez de catégorie.'
-              : undefined
-          }
-        />
-      ) : null}
+      {isDocs ? null : (
+        <>
+          <SearchField
+            label="Rechercher un article"
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Rechercher un article…"
+          />
 
-      {!showCategories
-        ? data?.items.map(item => {
-            const open = expanded === item.id;
-            const state = itemState(item, today);
-            const stripe = state ? toneColor[state.tone] : colors.border;
-            const Chevron = open ? ChevronDown : ChevronRight;
-            return (
-              <View
-                key={item.id}
-                style={[styles.item, open && styles.itemOpen]}
-              >
-                <View style={[styles.stripe, { backgroundColor: stripe }]} />
-                <View style={styles.itemBody}>
+          {feedback ? <Notice {...feedback} /> : null}
+          {error ? <Notice tone="error" message={error} /> : null}
+
+          <View style={styles.row}>
+            <Button
+              compact
+              variant={adding ? 'ghost' : 'primary'}
+              icon={adding ? X : Plus}
+              label={adding ? 'Fermer' : 'Ajouter'}
+              accessibilityLabel={adding ? 'Fermer' : '+ Ajouter un article'}
+              onPress={() => {
+                setAdding(!adding);
+                setFeedback(null);
+              }}
+            />
+            <Button
+              compact
+              variant="danger"
+              icon={Trash2}
+              label="Jeter les périmés"
+              style={styles.grow}
+              disabled={!data?.hasExpired}
+              onPress={() => setConfirmDiscard(true)}
+            />
+          </View>
+
+          {confirmDiscard ? (
+            <Panel accent={colors.danger} style={styles.dialog}>
+              <Text style={text.body}>
+                Supprimer définitivement les lots périmés ?
+              </Text>
+              <View style={styles.row}>
+                <Button
+                  variant="danger"
+                  label="Jeter"
+                  onPress={() => {
+                    void discard();
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  label="Annuler"
+                  onPress={() => setConfirmDiscard(false)}
+                />
+              </View>
+            </Panel>
+          ) : null}
+
+          {adding ? (
+            <AddItemForm
+              initialCategory={filter === 'all' ? 'food' : filter}
+              calibers={[...new Set((data?.weapons ?? []).map(w => w.caliber))]}
+              onDone={async (item, message) => {
+                setAdding(false);
+                setFilter(item.category);
+                setQuery('');
+                setExpanded(item.id);
+                setFeedback({ message, tone: 'ok' });
+                await reload();
+              }}
+            />
+          ) : null}
+
+          {showCategories && data
+            ? ITEM_CATEGORIES.map(c => {
+                const inCategory = data.all.filter(i => i.category === c);
+                const amount = categoryAmount(c, inCategory);
+                const alerts = inCategory.filter(
+                  i => itemState(i, today) !== null,
+                ).length;
+                return (
                   <Pressable
+                    key={c}
                     accessibilityRole="button"
-                    accessibilityState={{ expanded: open }}
-                    accessibilityLabel={`${item.name}, ${formatNumber(
-                      item.usableQuantity,
-                    )} ${unitLabel(item.category, item.unit)}`}
-                    onPress={() => {
-                      setExpanded(open ? null : item.id);
-                      setFeedback(null);
-                    }}
-                    style={styles.itemHead}
+                    accessibilityLabel={`${CATEGORY_LABELS[c]} : ${
+                      amount ? `${amount}, ` : ''
+                    }${
+                      c === 'weapon'
+                        ? `${data.weapons.length} arme${
+                            data.weapons.length > 1 ? 's' : ''
+                          }, `
+                        : ''
+                    }${articles(inCategory.length)}${
+                      alerts > 0 ? `, ${alerts} à vérifier` : ''
+                    }`}
+                    onPress={() => setFilter(c)}
+                    style={({ pressed }) => [
+                      styles.category,
+                      pressed && styles.pressed,
+                    ]}
                   >
+                    <IconTile
+                      icon={CATEGORY_ICONS[c]}
+                      color={CATEGORY_COLORS[c]}
+                    />
                     <View style={styles.grow}>
-                      <Text style={[styles.itemName, open && styles.open]}>
-                        {item.name}
-                        {item.isCritical ? (
-                          <Text style={styles.critical}> ●</Text>
+                      <Text style={text.h3}>{CATEGORY_LABELS[c]}</Text>
+                      {amount ? (
+                        <Text style={styles.amount}>{amount}</Text>
+                      ) : null}
+                      <Text style={text.muted}>
+                        {c === 'weapon'
+                          ? `${data.weapons.length} arme${
+                              data.weapons.length > 1 ? 's' : ''
+                            } · `
+                          : ''}
+                        {articles(inCategory.length)}
+                        {alerts > 0 ? (
+                          <Text style={styles.warn}>
+                            {' '}
+                            · {alerts} à vérifier
+                          </Text>
                         ) : null}
                       </Text>
-                      <Text style={text.subtle}>
-                        {CATEGORY_LABELS[item.category]}
-                        {item.caliber ? ` · ${item.caliber}` : ''}
-                        {packageSummary(item, item.usableQuantity)
-                          ? ` · ${packageSummary(item, item.usableQuantity)}`
-                          : ''}
-                        {item.location ? ` · ${item.location}` : ''}
-                      </Text>
                     </View>
-                    <View style={styles.itemSide}>
-                      <Text style={styles.qty}>
-                        {formatNumber(item.usableQuantity)}{' '}
-                        <Text style={styles.qtyUnit}>
-                          {unitLabel(item.category, item.unit)}
-                        </Text>
-                      </Text>
-                      {state ? (
-                        <StatusChip tone={state.tone} label={state.label} />
-                      ) : item.nextExpiration ? (
-                        <Text style={text.subtle}>
-                          {formatRelativeDays(
-                            daysBetween(today, item.nextExpiration),
-                          )}
-                        </Text>
+                    <ChevronRight color={colors.text} size={22} />
+                  </Pressable>
+                );
+              })
+            : null}
+
+          {showCategories && data ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Documents : ${data.docs.length} document${
+                data.docs.length > 1 ? 's' : ''
+              }${
+                renewCount(data.docs) > 0
+                  ? `, ${renewCount(data.docs)} à renouveler`
+                  : ''
+              }`}
+              onPress={() => setFilter('documents')}
+              style={({ pressed }) => [
+                styles.category,
+                pressed && styles.pressed,
+              ]}
+            >
+              <IconTile icon={FolderLock} color={colors.cyan} />
+              <View style={styles.grow}>
+                <Text style={text.h3}>Documents</Text>
+                <Text style={text.muted}>
+                  {data.docs.length} document{data.docs.length > 1 ? 's' : ''}
+                  {renewCount(data.docs) > 0 ? (
+                    <Text style={styles.warn}>
+                      {' '}
+                      · {renewCount(data.docs)} à renouveler
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+              <ChevronRight color={colors.text} size={22} />
+            </Pressable>
+          ) : null}
+
+          {filter === 'weapon' && query.trim() === '' && data ? (
+            <>
+              <ArmorySection
+                weapons={data.weapons}
+                onChanged={async message => {
+                  setFeedback(message);
+                  await reload();
+                }}
+              />
+              <SectionTitle title="Munitions" />
+            </>
+          ) : null}
+
+          {!showCategories && data?.items.length === 0 ? (
+            <EmptyState
+              icon={query ? SearchX : PackageOpen}
+              title={
+                query
+                  ? 'Aucun article ne correspond.'
+                  : 'Aucun article dans cette catégorie.'
+              }
+              message={
+                query
+                  ? 'Vérifiez l’orthographe ou changez de catégorie.'
+                  : undefined
+              }
+            />
+          ) : null}
+
+          {!showCategories
+            ? data?.items.map(item => {
+                const open = expanded === item.id;
+                const state = itemState(item, today);
+                const stripe = state ? toneColor[state.tone] : colors.border;
+                const Chevron = open ? ChevronDown : ChevronRight;
+                return (
+                  <View
+                    key={item.id}
+                    style={[styles.item, open && styles.itemOpen]}
+                  >
+                    <View
+                      style={[styles.stripe, { backgroundColor: stripe }]}
+                    />
+                    <View style={styles.itemBody}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: open }}
+                        accessibilityLabel={`${item.name}, ${formatNumber(
+                          item.usableQuantity,
+                        )} ${unitLabel(item.category, item.unit)}`}
+                        onPress={() => {
+                          setExpanded(open ? null : item.id);
+                          setFeedback(null);
+                        }}
+                        style={styles.itemHead}
+                      >
+                        <View style={styles.grow}>
+                          <Text style={[styles.itemName, open && styles.open]}>
+                            {item.name}
+                            {item.isCritical ? (
+                              <Text style={styles.critical}> ●</Text>
+                            ) : null}
+                          </Text>
+                          <Text style={text.subtle}>
+                            {CATEGORY_LABELS[item.category]}
+                            {item.caliber ? ` · ${item.caliber}` : ''}
+                            {packageSummary(item, item.usableQuantity)
+                              ? ` · ${packageSummary(
+                                  item,
+                                  item.usableQuantity,
+                                )}`
+                              : ''}
+                            {item.location ? ` · ${item.location}` : ''}
+                          </Text>
+                        </View>
+                        <View style={styles.itemSide}>
+                          <Text style={styles.qty}>
+                            {formatNumber(item.usableQuantity)}{' '}
+                            <Text style={styles.qtyUnit}>
+                              {unitLabel(item.category, item.unit)}
+                            </Text>
+                          </Text>
+                          {state ? (
+                            <StatusChip tone={state.tone} label={state.label} />
+                          ) : item.nextExpiration ? (
+                            <Text style={text.subtle}>
+                              {formatRelativeDays(
+                                daysBetween(today, item.nextExpiration),
+                              )}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Chevron color={colors.textMuted} size={20} />
+                      </Pressable>
+                      {open && data.detail ? (
+                        <ItemDetail
+                          item={data.detail.item}
+                          lots={data.detail.lots}
+                          onChanged={async message => {
+                            setFeedback(message);
+                            await reload();
+                          }}
+                        />
                       ) : null}
                     </View>
-                    <Chevron color={colors.textMuted} size={20} />
-                  </Pressable>
-                  {open && data.detail ? (
-                    <ItemDetail
-                      item={data.detail.item}
-                      lots={data.detail.lots}
-                      onChanged={async message => {
-                        setFeedback(message);
-                        await reload();
-                      }}
-                    />
-                  ) : null}
-                </View>
-              </View>
-            );
-          })
-        : null}
+                  </View>
+                );
+              })
+            : null}
+        </>
+      )}
     </ScrollView>
   );
 }

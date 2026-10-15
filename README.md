@@ -243,6 +243,10 @@ L'application s'ouvre sur l'un de trois écrans :
      Dans « Armes et munitions » : armes enregistrées (marque et modèle,
      type, calibre, n° de série, notes) et, pour chacune, les munitions
      utilisables du même calibre (articles en pièces, lots non périmés).
+     Photos des armes (numéro de série…) stockées dans le coffre chiffré.
+   - Dossier Documents (dans Stocks) : carte d'identité, passeport,
+     permis, carte Vitale, mutuelle… avec titulaire, numéro, date
+     d'expiration (« À renouveler » 90 jours avant) et photos.
    - Carte : coordonnées (MGRS, UTM, DMS) et azimut vers un point MGRS.
    - Guides : catégories de fiches, recherche plein texte et lecture.
    - Réglages : composition du foyer, objectif, verrouillage.

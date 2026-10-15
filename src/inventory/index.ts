@@ -29,3 +29,20 @@ export {
   type ItemCategory,
   type ItemUnit,
 } from './types';
+export {
+  DOCUMENT_KINDS,
+  DOCUMENT_RENEW_DAYS,
+  DocumentRepository,
+  type DocumentInput,
+  type DocumentKind,
+  type DocumentSummary,
+  type StoredDocument,
+} from './documentRepository';
+export {
+  PHOTO_MAX_BASE64_LENGTH,
+  PHOTOS_PER_OWNER_MAX,
+  PhotoRepository,
+  type Photo,
+  type PhotoMime,
+  type PhotoOwner,
+} from './photoRepository';

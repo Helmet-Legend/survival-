@@ -10,6 +10,8 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { BUNDLED_GUIDES } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
 import { InventoryRepository, seedDecoyInventory } from '../../src/inventory';
+import { addDays, localToday } from '../../src/lib/dates';
+import { whileAway, type PhotoSource } from '../../src/photo/photoSource';
 import { AppRoot } from '../../src/ui/AppRoot';
 import { createVault, type VaultContent } from '../../src/vault';
 import {
@@ -555,6 +557,139 @@ describe('écrans', () => {
       screen.getByText(
         'Mettre la victime à l’abri du vent et l’isoler du sol.',
       ),
+    ).toBeTruthy();
+  });
+});
+
+describe('photos et documents', () => {
+  const JPEG = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL';
+
+  async function openWithCamera(photoSource: PhotoSource) {
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        photoSource={photoSource}
+      />,
+    );
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+  }
+
+  async function addGlock() {
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armes et munitions' }),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter une arme'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Marque et modèle'),
+      'Glock 17',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Calibre'), '9x19');
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    await fireEvent.press(
+      await screen.findByLabelText('Glock 17, 9x19, 0 munition'),
+    );
+  }
+
+  it('photographie une arme, affiche et supprime la photo', async () => {
+    await openWithCamera({
+      available: true,
+      take: async () => JPEG,
+      pick: async () => null,
+    });
+    await addGlock();
+    expect(await screen.findByText(/Aucune photo/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Photographier'));
+    const thumb = await screen.findByLabelText('Photo 1 de Glock 17');
+    // Galerie annulée : rien n'est ajouté.
+    await fireEvent.press(
+      screen.getByLabelText('Choisir une image dans la galerie'),
+    );
+    expect(screen.queryByLabelText('Photo 2 de Glock 17')).toBeNull();
+
+    await fireEvent.press(thumb);
+    await fireEvent.press(await screen.findByText('Supprimer la photo'));
+    await fireEvent.press(await screen.findByText('Supprimer'));
+    expect(await screen.findByText(/Aucune photo/)).toBeTruthy();
+  });
+
+  it('ne verrouille pas le coffre pendant la prise de photo', async () => {
+    const emit = captureAppState();
+    await openWithCamera({
+      available: true,
+      // L'appareil photo passe l'application en arrière-plan.
+      take: () =>
+        whileAway(async () => {
+          await emit('background');
+          await emit('active');
+          return JPEG;
+        }),
+      pick: async () => null,
+    });
+    await addGlock();
+    await fireEvent.press(screen.getByText('Photographier'));
+    expect(await screen.findByLabelText('Photo 1 de Glock 17')).toBeTruthy();
+    expect(screen.queryByText('Saisissez votre code')).toBeNull();
+
+    // Hors photo, le verrouillage reste immédiat.
+    await emit('background');
+    await emit('active');
+    expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+  });
+
+  it('enregistre un document et signale son renouvellement', async () => {
+    await openWithCamera({
+      available: true,
+      take: async () => JPEG,
+      pick: async () => null,
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Documents : 0 document'),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter un document'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Passeport' }));
+    await fireEvent.changeText(
+      screen.getByLabelText('Titulaire (facultatif)'),
+      'Camille Martin',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Numéro (facultatif)'),
+      '18AB12345',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Date d’expiration (AAAA-MM-JJ, facultatif)'),
+      '2027-02-30',
+    );
+    await fireEvent.press(screen.getByText('Ajouter le document'));
+    expect(
+      await screen.findByText('Date invalide (format AAAA-MM-JJ attendu)'),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Date d’expiration (AAAA-MM-JJ, facultatif)'),
+      addDays(localToday(), 30),
+    );
+    await fireEvent.press(screen.getByText('Ajouter le document'));
+    expect(
+      await screen.findByText(
+        '« Passeport » ajouté. Vous pouvez maintenant le photographier.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText('Passeport, Passeport, À renouveler'),
+    ).toBeTruthy();
+    expect(screen.getByText('N° : 18AB12345')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Photographier'));
+    expect(await screen.findByLabelText('Photo 1 de Passeport')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Documents : 1 document, 1 à renouveler'),
     ).toBeTruthy();
   });
 });

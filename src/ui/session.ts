@@ -1,6 +1,12 @@
 import { createContext, useContext } from 'react';
 
-import type { ArmoryRepository, InventoryRepository } from '../inventory';
+import type {
+  ArmoryRepository,
+  DocumentRepository,
+  InventoryRepository,
+  PhotoRepository,
+} from '../inventory';
+import type { PhotoSource } from '../photo/photoSource';
 import type { VaultDatabase } from '../vault';
 
 /** Coffre déverrouillé, accessible aux écrans de l'application. */
@@ -8,6 +14,10 @@ export interface Session {
   db: VaultDatabase;
   repo: InventoryRepository;
   armory: ArmoryRepository;
+  documents: DocumentRepository;
+  photos: PhotoRepository;
+  /** Appareil photo et galerie (indisponibles hors Android). */
+  photoSource: PhotoSource;
 }
 
 export const SessionContext = createContext<Session | null>(null);
