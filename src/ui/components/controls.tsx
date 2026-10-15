@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Search,
-  type LucideIcon,
 } from 'lucide-react-native';
 import React from 'react';
 import {
@@ -22,6 +21,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import type { Icon } from '../icons';
 
 import {
   colors,
@@ -72,7 +72,7 @@ export function Button(props: {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
-  icon?: LucideIcon;
+  icon?: Icon;
   /** Chevron à droite (bouton qui ouvre un écran). */
   chevron?: boolean;
   disabled?: boolean;
@@ -117,12 +117,12 @@ const FOREGROUND: Record<ButtonVariant, string> = {
   primary: colors.onPrimary,
   secondary: colors.text,
   ghost: colors.cyan,
-  danger: '#FF7B87',
+  danger: '#FF8A96',
 };
 
 /** Bouton icône seule, cible tactile de 48 × 48. */
 export function IconButton(props: {
-  icon: LucideIcon;
+  icon: Icon;
   label: string;
   onPress: () => void;
   color?: string;
@@ -232,7 +232,7 @@ export function Panel(props: {
 
 /** Carte de métrique : icône, libellé, valeur et légende. */
 export function MetricCard(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   label: string;
   value: string;
@@ -267,13 +267,7 @@ export function MetricCard(props: {
 }
 
 /** Tuile d'icône colorée (catégories). */
-export function IconTile({
-  icon: Icon,
-  color,
-}: {
-  icon: LucideIcon;
-  color: string;
-}) {
+export function IconTile({ icon: Icon, color }: { icon: Icon; color: string }) {
   return (
     <View
       style={[
@@ -302,7 +296,7 @@ export function SectionTitle(props: {
 
 /** État vide ou sans résultat : icône, titre, explication. */
 export function EmptyState(props: {
-  icon: LucideIcon;
+  icon: Icon;
   title: string;
   message?: string;
   action?: React.ReactNode;

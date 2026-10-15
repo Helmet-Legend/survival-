@@ -16,7 +16,7 @@ export const colors = {
   overlay: '#102531',
   border: '#183746',
   borderActive: '#247A96',
-  primary: '#FF9D1C',
+  primary: '#FF9F1C',
   primaryBright: '#FFC15A',
   primaryPressed: '#E98708',
   onPrimary: '#071018',
@@ -27,8 +27,8 @@ export const colors = {
   textSubtle: '#6F8795',
   success: '#39D98A',
   warning: '#FFBF47',
-  danger: '#FF5364',
-  dangerSurface: '#35151B',
+  danger: '#FB3C4B',
+  dangerSurface: '#2A0B12',
   purple: '#D879FF',
   // Catégories de stock (pack « fiches »)
   water: '#22D3EE',
@@ -82,7 +82,7 @@ export const space = {
 export const radius = {
   s: 8,
   m: 12,
-  button: 14,
+  button: 12,
   card: 16,
   panel: 20,
   pill: 999,

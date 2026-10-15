@@ -3,12 +3,7 @@
  * la catégorie, libellé au-dessus de la valeur, erreur sous la ligne.
  * Cibles tactiles ≥ 54 px ; chaque saisie porte un libellé accessible.
  */
-import {
-  CalendarDays,
-  Check,
-  ChevronDown,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { CalendarDays, Check, ChevronDown } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Modal,
@@ -20,12 +15,13 @@ import {
   View,
   type KeyboardTypeOptions,
 } from 'react-native';
+import type { Icon } from '../icons';
 
 import { colors, radius, space, text, tint } from '../theme';
 import type { Option } from './config';
 
 function Row(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   focused?: boolean;
   error?: string;
@@ -61,7 +57,7 @@ const spoken = (label: string) =>
   label.endsWith(' *') ? `${bare(label)}, obligatoire` : label;
 
 export function TextRow(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   label: string;
   value: string;
@@ -107,7 +103,7 @@ export function TextRow(props: {
 
 /** Saisie JJ/MM/AAAA : les barres s'ajoutent pendant la frappe. */
 export function DateRow(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   label: string;
   value: string;
@@ -155,7 +151,7 @@ export function DateRow(props: {
 
 /** Liste de choix dans une feuille modale. */
 export function SelectRow(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   label: string;
   value: string;
@@ -266,7 +262,7 @@ function OptionSheet(props: {
 
 /** Nombre + unité (quantité, poids, valeur énergétique, capacité). */
 export function MeasureRow(props: {
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   label: string;
   value: string;

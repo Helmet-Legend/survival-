@@ -1,17 +1,17 @@
 /** Formats d'affichage partagés par les écrans. */
-import {
-  Backpack,
-  Cross,
-  Crosshair,
-  Droplet,
-  Wheat,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react-native';
 
 import type { WeaponKind } from '../inventory/armoryRepository';
 import type { ItemCategory, ItemUnit } from '../inventory/types';
 import type { ExpiryBucket } from '../resilience/resilienceCalculator';
+import {
+  AmmoIcon,
+  EquipmentIcon,
+  FoodIcon,
+  MedicalIcon,
+  ToolIcon,
+  WaterIcon,
+  type Icon,
+} from './icons';
 import { colors, type StatusTone } from './theme';
 
 /**
@@ -48,13 +48,13 @@ export const STOCK_ORDER: readonly ItemCategory[] = [
   'energy',
 ];
 
-export const CATEGORY_ICONS: Record<ItemCategory, LucideIcon> = {
-  water: Droplet,
-  food: Wheat,
-  medical: Cross,
-  energy: Backpack,
-  tool: Wrench,
-  weapon: Crosshair,
+export const CATEGORY_ICONS: Record<ItemCategory, Icon> = {
+  water: WaterIcon,
+  food: FoodIcon,
+  medical: MedicalIcon,
+  energy: EquipmentIcon,
+  tool: ToolIcon,
+  weapon: AmmoIcon,
 };
 
 export const CATEGORY_COLORS: Record<ItemCategory, string> = {

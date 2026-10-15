@@ -4,31 +4,31 @@
  * `StockFormScreen` lit cette configuration, `mapping.ts` la traduit en
  * données.
  */
-import {
-  Activity,
-  Barcode,
-  CalendarDays,
-  Container,
-  FlaskConical,
-  Flame,
-  Gauge,
-  Hash,
-  MapPin,
-  Package,
-  Ruler,
-  Scale,
-  ShieldCheck,
-  StickyNote,
-  Tag,
-  Thermometer,
-  TriangleAlert,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react-native';
+import { FlaskConical, Hash, Ruler, Thermometer } from 'lucide-react-native';
 
 import type { ItemCategory, ItemUnit } from '../../inventory';
 import type { CountUnit } from '../../inventory/attributes';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../format';
+import {
+  AlertIcon,
+  AmmoIcon,
+  BarcodeIcon,
+  BatteryIcon,
+  BoxIcon,
+  CaloriesIcon,
+  DateIcon,
+  ExpiryIcon,
+  LocationIcon,
+  ModelIcon,
+  NotesIcon,
+  QuantityIcon,
+  StateIcon,
+  TagIcon,
+  ToolIcon,
+  VolumeIcon,
+  WeightIcon,
+  type Icon,
+} from '../icons';
 
 export type Values = Record<string, string>;
 
@@ -45,7 +45,7 @@ export interface UnitOption extends Option {
 
 interface Base {
   label: string;
-  icon: LucideIcon;
+  icon: Icon;
   /** Champ affiché seulement si la condition est remplie. */
   visible?: (values: Values) => boolean;
 }
@@ -88,7 +88,7 @@ export interface FormConfig {
   title: string;
   subtitle: string;
   editTitle: string;
-  icon: LucideIcon;
+  icon: Icon;
   color: string;
   units: readonly UnitOption[];
   fields: readonly Field[];
@@ -149,17 +149,21 @@ const name = (placeholder: string): Field => ({
   type: 'text',
   key: 'name',
   label: 'Nom / Description',
-  icon: Tag,
+  icon: TagIcon,
   placeholder,
   required: true,
   maxLength: 120,
 });
-const quantity: Field = { type: 'quantity', label: 'Quantité', icon: Package };
+const quantity: Field = {
+  type: 'quantity',
+  label: 'Quantité',
+  icon: QuantityIcon,
+};
 const location = (placeholder: string, label = 'Emplacement'): Field => ({
   type: 'text',
   key: 'location',
   label,
-  icon: MapPin,
+  icon: LocationIcon,
   placeholder,
   maxLength: 120,
   sensitive: label !== 'Emplacement',
@@ -167,13 +171,13 @@ const location = (placeholder: string, label = 'Emplacement'): Field => ({
 const threshold: Field = {
   type: 'threshold',
   label: 'Seuil d’alerte',
-  icon: TriangleAlert,
+  icon: AlertIcon,
 };
 const notes = (placeholder: string): Field => ({
   type: 'text',
   key: 'notes',
   label: 'Notes',
-  icon: StickyNote,
+  icon: NotesIcon,
   placeholder,
   multiline: true,
   maxLength: 500,
@@ -182,7 +186,7 @@ const brandModel = (placeholder: string): Field => ({
   type: 'text',
   key: 'brandModel',
   label: 'Marque / Modèle',
-  icon: Tag,
+  icon: ModelIcon,
   placeholder,
   maxLength: 120,
 });
@@ -213,7 +217,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type de contenant',
-        icon: Container,
+        icon: VolumeIcon,
         options: options('water.subtype', [
           o('bottle', 'Bouteille'),
           o('jerrycan', 'Jerrican / bidon'),
@@ -227,7 +231,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'potability',
         label: 'Potabilité',
-        icon: ShieldCheck,
+        icon: StateIcon,
         options: options('potability', [
           o('potable', 'Eau potable'),
           o('to_treat', 'À traiter'),
@@ -253,20 +257,20 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'date',
         key: 'treatedAt',
         label: 'Date de traitement',
-        icon: CalendarDays,
+        icon: DateIcon,
         visible: WATER_TREATED,
       },
       {
         type: 'date',
         key: 'checkedAt',
         label: 'Date de contrôle',
-        icon: CalendarDays,
+        icon: DateIcon,
       },
       {
         type: 'date',
         key: 'expiry',
         label: 'Date de péremption',
-        icon: CalendarDays,
+        icon: ExpiryIcon,
       },
       location('Ex : Cave'),
       threshold,
@@ -294,7 +298,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type d’aliment',
-        icon: Package,
+        icon: BoxIcon,
         options: options('food.subtype', [
           o('canned', 'Conserve'),
           o('starch', 'Féculent'),
@@ -310,7 +314,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         key: 'unitWeight',
         unitKey: 'unitWeightUnit',
         label: 'Poids unitaire',
-        icon: Scale,
+        icon: WeightIcon,
         units: options('unitWeightUnit', [o('g', 'g'), o('kg', 'kg')]),
         placeholder: 'Ex : 500',
       },
@@ -319,7 +323,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         key: 'energyValue',
         unitKey: 'energyBasis',
         label: 'Valeur énergétique',
-        icon: Flame,
+        icon: CaloriesIcon,
         units: options('energyBasis', [
           o('per100g', 'kcal / 100 g'),
           o('perPortion', 'kcal / portion'),
@@ -330,7 +334,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'date',
         key: 'expiry',
         label: 'Date de péremption',
-        icon: CalendarDays,
+        icon: ExpiryIcon,
       },
       {
         type: 'select',
@@ -363,7 +367,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'text',
         key: 'name',
         label: 'Nom / Modèle',
-        icon: Tag,
+        icon: TagIcon,
         placeholder: 'Ex : Glock 17, AR15, 9 mm…',
         required: true,
         maxLength: 120,
@@ -372,7 +376,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'kind',
         label: 'Type',
-        icon: Package,
+        icon: BoxIcon,
         visible: isWeapon,
         options: options('weapon.kind', [
           o('handgun', 'Arme de poing'),
@@ -385,7 +389,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type',
-        icon: Package,
+        icon: BoxIcon,
         visible: isAmmo,
         options: options('weapon.subtype', [
           o('bullet', 'Balles'),
@@ -398,7 +402,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'accessoryType',
         label: 'Type',
-        icon: Package,
+        icon: BoxIcon,
         visible: isAccessory,
         options: options('weapon.accessory', [
           o('optic', 'Optique'),
@@ -413,7 +417,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'text',
         key: 'caliber',
         label: 'Calibre',
-        icon: Gauge,
+        icon: AmmoIcon,
         placeholder: 'Ex : 9 mm, 12/70, .22 LR',
         maxLength: 40,
         required: true,
@@ -423,7 +427,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'text',
         key: 'caliber',
         label: 'Calibre',
-        icon: Gauge,
+        icon: AmmoIcon,
         placeholder: 'Ex : 9 mm, 12/70, .22 LR',
         maxLength: 40,
         visible: isAmmo,
@@ -441,7 +445,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'text',
         key: 'serial',
         label: 'Numéro de série',
-        icon: Barcode,
+        icon: BarcodeIcon,
         placeholder: 'Optionnel',
         maxLength: 60,
         sensitive: true,
@@ -451,14 +455,14 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'condition',
         label: 'État',
-        icon: ShieldCheck,
+        icon: StateIcon,
         options: options('weapon.condition', CONDITION_WEAPONS),
       },
       {
         type: 'date',
         key: 'checkedAt',
         label: 'Date de contrôle',
-        icon: CalendarDays,
+        icon: DateIcon,
       },
       location('Ex : Coffre-fort', 'Emplacement sécurisé'),
       { ...threshold, visible: notWeapon },
@@ -484,7 +488,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type',
-        icon: Package,
+        icon: BoxIcon,
         options: options('medical.subtype', [
           o('medicine', 'Médicament'),
           o('dressing', 'Pansement'),
@@ -508,13 +512,13 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'date',
         key: 'expiry',
         label: 'Date de péremption',
-        icon: CalendarDays,
+        icon: ExpiryIcon,
       },
       {
         type: 'number',
         key: 'alertDays',
         label: 'Prévenir avant péremption',
-        icon: TriangleAlert,
+        icon: AlertIcon,
         placeholder: '30 / 60 / 90',
         suffix: 'jours',
       },
@@ -556,7 +560,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type d’outil',
-        icon: Wrench,
+        icon: ToolIcon,
         options: options('tool.subtype', [
           o('cutting', 'Coupe'),
           o('clamping', 'Serrage'),
@@ -573,20 +577,20 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'condition',
         label: 'État',
-        icon: ShieldCheck,
+        icon: StateIcon,
         options: options('tool.condition', CONDITION_TOOLS),
       },
       {
         type: 'date',
         key: 'lastServiceAt',
         label: 'Dernier entretien',
-        icon: CalendarDays,
+        icon: DateIcon,
       },
       {
         type: 'date',
         key: 'nextServiceAt',
         label: 'Prochain entretien',
-        icon: CalendarDays,
+        icon: DateIcon,
       },
       location('Ex : Atelier / Véhicule'),
       threshold,
@@ -606,7 +610,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'subtype',
         label: 'Type de matériel',
-        icon: Package,
+        icon: BoxIcon,
         options: options('energy.subtype', [
           o('shelter', 'Abri'),
           o('sleeping', 'Couchage'),
@@ -626,7 +630,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'select',
         key: 'condition',
         label: 'État',
-        icon: ShieldCheck,
+        icon: StateIcon,
         options: options('energy.condition', CONDITION_GEAR),
       },
       {
@@ -634,7 +638,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         key: 'capacityValue',
         unitKey: 'capacityUnit',
         label: 'Autonomie / Capacité',
-        icon: Activity,
+        icon: BatteryIcon,
         units: options('capacityUnit', [
           o('Wh', 'Wh'),
           o('mAh', 'mAh'),
@@ -649,7 +653,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'date',
         key: 'lastServiceAt',
         label: 'Dernier contrôle / entretien',
-        icon: CalendarDays,
+        icon: DateIcon,
       },
       location('Ex : Garage'),
       threshold,

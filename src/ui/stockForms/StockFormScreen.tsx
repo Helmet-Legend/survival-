@@ -21,9 +21,8 @@ import {
   type InventoryItem,
   type Weapon,
 } from '../../inventory';
-import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import { APP_NAME } from '../brand';
-import { Backdrop, IconButton, Notice } from '../components/controls';
+import { IconButton, Notice } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
 import { CATEGORY_TITLES } from '../format';
 import { useNavigation, type StockFormTarget } from '../navigation';
@@ -32,7 +31,7 @@ import { colors, fonts, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
 import { FORMS, type Field, type Values } from './config';
 import { DateRow, MeasureRow, SelectRow, TextRow } from './FormRows';
-import { categoryIllustration } from './illustrations';
+import { CATEGORY_ILLUSTRATIONS, ILLUSTRATION_FADE } from './illustrations';
 import {
   FormError,
   formFieldFor,
@@ -333,18 +332,24 @@ function StockForm(props: {
       </View>
 
       <View style={[styles.hero, { borderColor: tint(color, '40') }]}>
-        <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.3} />
         <View pointerEvents="none" style={styles.illustration}>
+          <Image
+            source={CATEGORY_ILLUSTRATIONS[category]}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+            style={styles.illustrationImage}
+          />
           <SvgXml
-            xml={categoryIllustration(category, color)}
+            xml={ILLUSTRATION_FADE}
             width="100%"
             height="100%"
+            style={StyleSheet.absoluteFill}
           />
         </View>
         <View
           style={[
             styles.badge,
-            { borderColor: color, backgroundColor: tint(color, '1f') },
+            { borderColor: color, backgroundColor: tint(colors.bg, 'd9') },
           ]}
         >
           <Icon color={color} size={34} strokeWidth={2.2} />
@@ -479,7 +484,7 @@ function StockForm(props: {
 }
 
 /** Hauteur de l'illustration d'en-tête (le badge chevauche son bas). */
-const ILLUSTRATION_HEIGHT = 150;
+const ILLUSTRATION_HEIGHT = 170;
 
 const styles = StyleSheet.create({
   page: {
@@ -518,6 +523,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: ILLUSTRATION_HEIGHT,
   },
+  illustrationImage: { width: '100%', height: '100%' },
   badge: {
     width: 64,
     height: 64,

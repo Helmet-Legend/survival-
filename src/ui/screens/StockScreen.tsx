@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 import {
   caloriesPerUnit,
@@ -61,6 +63,10 @@ import {
 } from '../format';
 import { PhotoStrip } from '../components/PhotoStrip';
 import { useNavigation } from '../navigation';
+import {
+  CATEGORY_ILLUSTRATIONS,
+  ILLUSTRATION_FADE,
+} from '../stockForms/illustrations';
 import { itemFacts, itemTypeLabel, itemUnitLabel } from '../stockForms/details';
 import { useSession } from '../session';
 import {
@@ -584,7 +590,29 @@ function CategoryChooser(props: {
                   pressed && styles.pressed,
                 ]}
               >
-                <Icon color={color} size={28} strokeWidth={2} />
+                <Image
+                  source={CATEGORY_ILLUSTRATIONS[c]}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                  style={styles.tileImage}
+                />
+                <SvgXml
+                  xml={ILLUSTRATION_FADE}
+                  width="100%"
+                  height="100%"
+                  style={StyleSheet.absoluteFill}
+                />
+                <View
+                  style={[
+                    styles.tileBadge,
+                    {
+                      borderColor: color,
+                      backgroundColor: tint(colors.bg, 'd9'),
+                    },
+                  ]}
+                >
+                  <Icon color={color} size={22} strokeWidth={2} />
+                </View>
                 <Text style={styles.tileText}>{CATEGORY_TITLES[c]}</Text>
               </Pressable>
             );
@@ -1012,20 +1040,34 @@ const styles = StyleSheet.create({
   tile: {
     width: '48%',
     flexGrow: 1,
-    minHeight: 88,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.s,
+    minHeight: 112,
+    justifyContent: 'flex-end',
+    gap: space.xs,
     padding: space.m,
     borderRadius: 12,
     borderWidth: 1,
+    overflow: 'hidden',
     backgroundColor: colors.surface,
+  },
+  tileImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+  },
+  tileBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tileText: {
     color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '700',
   },
   fieldLabel: { color: colors.textMuted, fontSize: 14 },
   total: { color: colors.primaryBright, fontSize: 15, fontWeight: '700' },

@@ -6,10 +6,8 @@ import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
-  Droplet,
   MapPinned,
   Users,
-  Wheat,
 } from 'lucide-react-native';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -33,6 +31,7 @@ import {
 } from '../components/controls';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import { autonomyStatus, formatDate, formatNumber } from '../format';
+import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
@@ -131,9 +130,9 @@ export function HomeScreen() {
         style={({ pressed }) => [styles.limiting, pressed && styles.pressed]}
       >
         {report.limitingFactor === 'water' ? (
-          <Droplet color={colors.cyan} size={20} strokeWidth={2} />
+          <WaterIcon color={colors.cyan} size={20} strokeWidth={2} />
         ) : (
-          <Wheat color={colors.food} size={20} strokeWidth={2} />
+          <FoodIcon color={colors.food} size={20} strokeWidth={2} />
         )}
         <View style={styles.grow}>
           <Text style={styles.limitingText}>
@@ -152,7 +151,7 @@ export function HomeScreen() {
 
       <View style={styles.grid}>
         <MetricCard
-          icon={Droplet}
+          icon={WaterIcon}
           color={colors.water}
           label="Eau disponible"
           value={formatNumber(report.water.available)}
@@ -161,7 +160,7 @@ export function HomeScreen() {
           onPress={() => navigation.goTo('stock', { category: 'water' })}
         />
         <MetricCard
-          icon={Wheat}
+          icon={FoodIcon}
           color={colors.food}
           label="Réserves alimentaires"
           value={formatNumber(report.food.available, 0)}
@@ -182,7 +181,7 @@ export function HomeScreen() {
             pressed && styles.pressed,
           ]}
         >
-          <Wheat color={colors.food} size={18} strokeWidth={2} />
+          <FoodIcon color={colors.food} size={18} strokeWidth={2} />
           <View style={styles.grow}>
             <Text style={styles.limitingText}>Données incomplètes</Text>
             <Text style={text.subtle}>
