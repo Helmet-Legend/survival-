@@ -10,7 +10,8 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "demo:build": "node demo/web/build.mjs",
-    "demo:typecheck": "tsc -p demo/web --noEmit"
+    "demo:typecheck": "tsc -p demo/web --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",
@@ -44,6 +45,7 @@
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "mgrs": "^2.2.0",
+    "patch-package": "^8.0.0",
     "prettier": "2.8.8",
     "proj4": "^2.22.0",
     "react-test-renderer": "19.2.3",

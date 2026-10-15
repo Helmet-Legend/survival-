@@ -1,0 +1,56 @@
+# Vérifie le code puis compile un APK Android installable directement sur
+# un téléphone (version de test, signée avec la clé de débogage).
+# L'APK est à télécharger dans l'onglet Actions : artefact « resilios-apk ».
+name: APK Android
+
+on:
+  push:
+    branches: [main, ccr-68193128-o7em9g]
+  workflow_dispatch:
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typage et tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eslint .
+      - run: npx tsc --noEmit
+      - run: npx jest --ci
+
+  apk:
+    name: Compilation de l'APK
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - run: npm ci
+      - name: Compilation (arm64-v8a, la quasi-totalité des téléphones récents)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a
+      - name: Nommage de l'APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "ResiliOS-${GITHUB_SHA::7}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resilios-apk
+          path: ResiliOS-*.apk
+          retention-days: 30

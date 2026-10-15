@@ -1,0 +1,56 @@
+diff --git a/node_modules/react-native-argon2/android/build.gradle b/node_modules/react-native-argon2/android/build.gradle
+index 6a928cd..c4d2020 100644
+--- a/node_modules/react-native-argon2/android/build.gradle
++++ b/node_modules/react-native-argon2/android/build.gradle
+@@ -4,23 +4,15 @@ def safeExtGet(prop, fallback) {
+     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+ }
+ 
+-buildscript {
+-    repositories {
+-        google()
+-        mavenCentral()
+-    }
+-    dependencies {
+-        classpath 'com.android.tools.build:gradle:4.1.0'
+-    }
+-}
+-
++// Correctif ResiliOS : suppression de jcenter() (absent de Gradle 9) et du
++// buildscript AGP 4.1 qui entrait en conflit avec la version du projet.
+ android {
+-    compileSdkVersion safeExtGet('compileSdkVersion', 30)
+-    buildToolsVersion safeExtGet('buildToolsVersion', '30.0.3')
++    namespace 'com.poowf.argon2'
++    compileSdkVersion safeExtGet('compileSdkVersion', 35)
+ 
+     defaultConfig {
+-        minSdkVersion safeExtGet('minSdkVersion', 21)
+-        targetSdkVersion safeExtGet('targetSdkVersion', 30)
++        minSdkVersion safeExtGet('minSdkVersion', 24)
++        targetSdkVersion safeExtGet('targetSdkVersion', 35)
+         versionCode 1
+         versionName '1.0'
+     }
+@@ -28,10 +20,10 @@ android {
+ 
+ repositories {
+     google()
+-    jcenter()
++    mavenCentral()
+ }
+ 
+ dependencies {
+-    implementation 'com.facebook.react:react-native:+'
++    implementation 'com.facebook.react:react-android'
+     implementation 'com.lambdapioneer.argon2kt:argon2kt:1.6.0'
+ }
+diff --git a/node_modules/react-native-argon2/android/src/main/AndroidManifest.xml b/node_modules/react-native-argon2/android/src/main/AndroidManifest.xml
+index 7eb4fea..9a40236 100644
+--- a/node_modules/react-native-argon2/android/src/main/AndroidManifest.xml
++++ b/node_modules/react-native-argon2/android/src/main/AndroidManifest.xml
+@@ -1,3 +1,3 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.poowf.argon2" >
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ </manifest>
