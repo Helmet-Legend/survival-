@@ -56,9 +56,7 @@ async function initializeMarked(
     duressPin: duressPin ?? undefined,
   });
   primary.marker = 'REAL';
-  if (decoy) {
-    decoy.marker = 'DECOY';
-  }
+  decoy.marker = 'DECOY';
   return { primary, decoy };
 }
 
@@ -79,7 +77,8 @@ describe('VaultKeyManager — initialisation', () => {
     const ctx = setup();
     const { decoy } = await initializeMarked(ctx, null);
 
-    expect(decoy).toBeNull();
+    // Renvoyée ouverte pour recevoir le même schéma que la vraie base.
+    expect(decoy.closed).toBe(false);
     expect(ctx.driver.files.size).toBe(2);
     expect(new Set(ctx.driver.createdKeys).size).toBe(2);
   });

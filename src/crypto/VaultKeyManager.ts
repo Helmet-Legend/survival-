@@ -70,8 +70,13 @@ export interface InitializeResult<
 > {
   /** Base ouverte par le code maître. */
   primary: TDb;
-  /** Base ouverte par le code de contrainte, à remplir de données anodines. */
-  decoy: TDb | null;
+  /**
+   * Seconde base, TOUJOURS renvoyée ouverte : elle doit recevoir le même
+   * schéma et les mêmes fiches que la vraie (tailles de fichiers
+   * comparables), et des données anodines si un code de contrainte existe.
+   * Sans code de contrainte, elle devient inaccessible une fois fermée.
+   */
+  decoy: TDb;
 }
 
 const SLOTS: readonly SlotIndex[] = [0, 1];
@@ -195,12 +200,7 @@ export class VaultKeyManager<
         wipe(deviceSecret, ...salts, ...keys);
       }
 
-      let decoy: TDb | null = opened[decoySlot];
-      if (duressPin === undefined) {
-        decoy.close();
-        decoy = null;
-      }
-      return { primary: opened[primarySlot], decoy };
+      return { primary: opened[primarySlot], decoy: opened[decoySlot] };
     });
   }
 

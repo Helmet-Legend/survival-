@@ -1,4 +1,5 @@
 module.exports = {
   preset: '@react-native/jest-preset',
-  testPathIgnorePatterns: ['/node_modules/', '/__tests__/.*/fakes\\.ts$'],
+  // Les autres fichiers de __tests__ sont des utilitaires partagés.
+  testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
 };

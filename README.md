@@ -79,13 +79,50 @@ ou `ALREADY_INITIALIZED`. Les messages ne mentionnent jamais le leurre.
 ### Utilisation
 
 ```ts
-import { createVaultKeyManager, isCryptoError } from './src/crypto';
+import { createVaultKeyManager } from './src/crypto';
+import { createVault, openVault } from './src/vault';
 
-const vault = createVaultKeyManager();
-const { primary, decoy } = await vault.initialize({ masterPin, duressPin });
-// …
-const { db } = await vault.unlock(pin); // db : connexion op-sqlite déverrouillée
+const manager = createVaultKeyManager();
+const content = { guides: BUNDLED_GUIDES, seedDecoy };
+
+// Première ouverture : crée les deux bases, applique le schéma aux deux.
+const db = await createVault(manager, content, { masterPin, duressPin });
+
+// Ouvertures suivantes : déverrouille et met le schéma à niveau.
+const db2 = await openVault(manager, content, pin);
 ```
+
+## Schéma de base (`src/db`)
+
+Les migrations sont dans `src/db/schema.ts`. Leur version est suivie par
+`PRAGMA user_version`, et chacune s'applique dans sa propre transaction. Les
+**deux bases** (réelle et factice) reçoivent le même schéma et les mêmes
+fiches, pour que rien ne les distingue, pas même la taille des fichiers.
+
+| Table | Rôle |
+|---|---|
+| `settings` | Réglages du foyer : membres, L d'eau/pers./jour (3), kcal/pers./jour (2000) |
+| `inventory_items` | Article : catégorie, unité normalisée (`L`, `mL`, `kg`, `g`, `unit`), kcal par unité, critique |
+| `inventory_lots` | Lots d'un article : quantité, date d'entrée, péremption. Ordre de consommation FEFO puis FIFO |
+| `poi_locations` | Points d'intérêt : coordonnées bornées, MGRS, type |
+| `crisis_checklists` / `crisis_checklist_items` | Checklists, avec une ligne par élément |
+| `survival_guides` + `survival_guides_fts` | Fiches Markdown et index FTS5 (sans accents, préfixes) |
+
+Écarts par rapport au cahier des charges :
+
+- `inventory_items` est scindée en articles + lots, sans quoi le FIFO serait
+  impossible.
+- `items_json` est remplacé par une table d'éléments.
+- `unit` est une liste fermée, pour que les calculs d'autonomie soient fiables.
+
+Contraintes : toutes les tables sont `STRICT` (SQLite refuse un type
+incorrect), les dates de péremption sont des `AAAA-MM-JJ` valides, les
+booléens valent 0 ou 1, l'eau est exprimée en volume, et les clés étrangères
+sont activées à chaque ouverture. Les alertes de péremption s'appuient sur un
+index partiel.
+
+Les tests exécutent le vrai SQL sur le moteur SQLite de Node (`node:sqlite`,
+FTS5 inclus). Seul le chiffrement SQLCipher est simulé.
 
 ### Limites connues
 
