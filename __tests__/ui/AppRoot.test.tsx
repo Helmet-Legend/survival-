@@ -737,3 +737,117 @@ describe('photos et documents', () => {
     ).toBeTruthy();
   });
 });
+
+describe('fiches par type de produit', () => {
+  async function openStocks(category: string) {
+    const ctx = await existingVault();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: category }),
+    );
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+  }
+
+  it('estime les kcal d’un aliment d’après son nom', async () => {
+    await openStocks('Vivres');
+    expect(screen.getByText('Nouvel aliment')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Riz basmati');
+    expect(
+      screen.getByText(
+        'Sans saisie, estimation d’après « riz » : 3 550 kcal par kg.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Épicerie sèche' }),
+    );
+    await fireEvent.changeText(screen.getByLabelText('Quantité (kg)'), '2');
+    await fireEvent.changeText(
+      screen.getByLabelText('Emplacement (facultatif)'),
+      'Cellier',
+    );
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Riz basmati » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(screen.getByText('≈ 3 550 kcal par kg (estimé : riz)')).toBeTruthy();
+    expect(screen.getByText('Épicerie sèche')).toBeTruthy();
+    expect(screen.getByText('Cellier')).toBeTruthy();
+  });
+
+  it('propose une fiche santé avec péremption et posologie', async () => {
+    await openStocks('Santé');
+    expect(screen.getByText('Nouveau produit de santé')).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom'),
+      'Paracétamol 500 mg',
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Médicament' }));
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité (pièce(s))'),
+      '16',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Date de péremption (AAAA-MM-JJ, facultatif)'),
+      '2028-03-31',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Posologie, indication (facultatif)'),
+      '1 comprimé toutes les 6 h',
+    );
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Paracétamol 500 mg » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(screen.getByText('1 comprimé toutes les 6 h')).toBeTruthy();
+    expect(screen.queryByText(/Calories/)).toBeNull();
+  });
+
+  it('propose une date de renouvellement pour l’eau du robinet', async () => {
+    await openStocks('Eau');
+    expect(screen.getByText('Nouvelle réserve d’eau')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Eau du robinet stockée' }),
+    );
+    expect(
+      screen.getByLabelText('À renouveler avant le (AAAA-MM-JJ, facultatif)')
+        .props.value,
+    ).toBe(addDays(localToday(), 182));
+  });
+
+  it('ne demande pas de date pour les munitions', async () => {
+    await openStocks('Armes et munitions');
+    expect(screen.getByText('Nouvelles munitions')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Cartouches à plomb' }),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText(/avant le|péremption/)).toBeNull();
+    expect(screen.getByLabelText('Charge, marque (facultatif)')).toBeTruthy();
+  });
+});
+
+describe('accueil sans vivres', () => {
+  it('explique que les vivres manquent au lieu d’une date d’épuisement', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    await new InventoryRepository(db).createItem(
+      { name: 'Eau', category: 'water', unit: 'L' },
+      { quantity: 30 },
+    );
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    expect(await screen.findByText('Aucun vivre compté')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Ajoutez vos vivres dans Stocks › Vivres. L’eau seule couvre 10 j.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Aucun vivre compté. Ajouter des vivres'),
+    );
+    expect(await screen.findByLabelText('Rechercher un article')).toBeTruthy();
+  });
+});

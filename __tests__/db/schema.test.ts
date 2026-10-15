@@ -335,6 +335,7 @@ describe('migration 3 (armes et munitions)', () => {
         alert_days: 120,
         caliber: null,
         package_size: null,
+        subtype: null,
       },
     ]);
     const lots = await db.execute('SELECT * FROM inventory_lots');
@@ -472,5 +473,23 @@ describe('migration 4 (conditionnement)', () => {
         ),
       ).rejects.toThrow(/constraint/i);
     }
+  });
+});
+
+describe('migration 6 (type d’article)', () => {
+  it('ajoute un type facultatif borné', async () => {
+    const db = new NodeSqliteDb();
+    await migrate(db, MIGRATIONS.slice(0, 5));
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit)
+       VALUES ('c1', 'Cassoulet', 'food', 'unit')`,
+    );
+    expect(await migrate(db)).toEqual({ from: 5, to: SCHEMA_VERSION });
+    await db.execute(
+      "UPDATE inventory_items SET subtype = 'canned' WHERE id = 'c1'",
+    );
+    await expect(
+      db.execute("UPDATE inventory_items SET subtype = '' WHERE id = 'c1'"),
+    ).rejects.toThrow(/constraint/i);
   });
 });

@@ -324,12 +324,24 @@ const migration5: Migration = {
   ],
 };
 
+const migration6: Migration = {
+  version: 6,
+  name: 'type d’article',
+  statements: [
+    // Précise la catégorie : eau en bouteille ou du robinet, conserve,
+    // médicament, chevrotine… Sert à la saisie et à l'estimation des kcal.
+    `ALTER TABLE inventory_items ADD COLUMN subtype TEXT
+       CHECK (subtype IS NULL OR (length(subtype) BETWEEN 1 AND 30))`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
   migration3,
   migration4,
   migration5,
+  migration6,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
