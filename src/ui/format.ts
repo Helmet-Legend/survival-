@@ -1,7 +1,18 @@
 /** Formats d'affichage partagés par les écrans. */
+import {
+  BatteryCharging,
+  BriefcaseMedical,
+  Crosshair,
+  Droplet,
+  Wheat,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react-native';
+
+import type { WeaponKind } from '../inventory/armoryRepository';
 import type { ItemCategory, ItemUnit } from '../inventory/types';
 import type { ExpiryBucket } from '../resilience/resilienceCalculator';
-import type { StatusTone } from './theme';
+import { colors, type StatusTone } from './theme';
 
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   water: 'Eau',
@@ -9,6 +20,32 @@ export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   medical: 'Santé',
   energy: 'Énergie',
   tool: 'Outils',
+  weapon: 'Armes et munitions',
+};
+
+export const CATEGORY_ICONS: Record<ItemCategory, LucideIcon> = {
+  water: Droplet,
+  food: Wheat,
+  medical: BriefcaseMedical,
+  energy: BatteryCharging,
+  tool: Wrench,
+  weapon: Crosshair,
+};
+
+export const CATEGORY_COLORS: Record<ItemCategory, string> = {
+  water: colors.water,
+  food: colors.food,
+  medical: colors.health,
+  energy: colors.energy,
+  tool: colors.cyanSoft,
+  weapon: colors.purple,
+};
+
+export const WEAPON_KIND_LABELS: Record<WeaponKind, string> = {
+  rifle: 'Carabine',
+  shotgun: 'Fusil',
+  handgun: 'Arme de poing',
+  other: 'Autre',
 };
 
 export const UNIT_LABELS: Record<ItemUnit, string> = {

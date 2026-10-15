@@ -162,7 +162,8 @@ describe('déverrouillage', () => {
     await unlockWith(DURESS);
     await screen.findByText('Autonomie du foyer');
 
-    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
     expect(await screen.findByText('Eau minérale')).toBeTruthy();
     expect(screen.queryByText('Eau en bidons')).toBeNull();
     expect(screen.queryByText(/contrainte|leurre/i)).toBeNull();
@@ -218,7 +219,7 @@ describe('cycle de vie', () => {
     const { manager } = await existingVault();
     await render(<AppRoot manager={manager} content={content} />);
     await unlockWith(MASTER);
-    await fireEvent.press(await screen.findByText('Verrouiller'));
+    await fireEvent.press(await screen.findByLabelText('Verrouiller'));
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
   });
 
@@ -247,16 +248,20 @@ describe('écrans', () => {
 
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Ajouter une personne'));
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByLabelText('Ajouter une personne'));
+    expect(await screen.findByText('2 pers.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
-    expect(screen.getByText('2 pers.')).toBeTruthy();
   });
 
   it('affiche l’état et la liste de réapprovisionnement', async () => {
     await openApp();
     // 10 jours d'eau pour un objectif de 14 : 12 L à racheter, vivres suffisants.
     expect(screen.getByText('Sous l’objectif')).toBeTruthy();
-    expect(screen.getByText('À racheter pour 14 j')).toBeTruthy();
+    expect(screen.getByText('Ressource limitante : eau')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    expect(await screen.findByText('À racheter pour 14 j')).toBeTruthy();
     expect(screen.getByText('+12 L')).toBeTruthy();
     expect(screen.queryByText(/^\+.*kcal$/)).toBeNull();
 
@@ -268,7 +273,10 @@ describe('écrans', () => {
 
   it('ajoute un article sous son stock minimal à la liste de rachat', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Vivres' }),
+    );
     await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
     await fireEvent.changeText(
       await screen.findByLabelText('Stock minimal (kg)'),
@@ -295,13 +303,17 @@ describe('écrans', () => {
     ).toBeTruthy();
     expect(screen.getByText('Sous le minimum')).toBeTruthy();
 
-    await fireEvent.press(screen.getByRole('tab', { name: 'Autonomie' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Accéder aux plans d’action'),
+    );
     expect(await screen.findByText('+5 kg')).toBeTruthy();
   });
 
   it('consomme du stock et affiche le résultat', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
     await fireEvent.press(await screen.findByLabelText('Eau en bidons, 30 L'));
     await fireEvent.changeText(
       await screen.findByLabelText('Quantité à retirer (L)'),
@@ -324,8 +336,8 @@ describe('écrans', () => {
 
   it('ajoute un article et signale le champ invalide', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
-    await fireEvent.press(await screen.findByText('+ Ajouter un article'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
     await fireEvent.changeText(
       screen.getByLabelText('Nom'),
       'Flocons d’avoine',
@@ -352,11 +364,12 @@ describe('écrans', () => {
 
   it('convertit une position en MGRS et calcule un cap', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Coordonnées' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Carte' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '45,83265');
     await fireEvent.changeText(screen.getByLabelText('Longitude'), '6.86518');
     expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
 
+    await fireEvent.press(screen.getByRole('button', { name: 'Azimut' }));
     await fireEvent.changeText(
       screen.getByLabelText('Point d’arrivée (MGRS)'),
       '32T LR 34500 87800',
@@ -368,19 +381,105 @@ describe('écrans', () => {
     );
     expect(screen.queryByText('déclinaison requise')).toBeNull();
 
+    await fireEvent.press(screen.getByRole('button', { name: 'Coordonnées' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '85');
     expect(await screen.findByText(/Zone polaire/)).toBeTruthy();
   });
 
+  it('affiche les vraies quantités sur l’accueil, les stocks et les guides', async () => {
+    await openApp();
+    expect(
+      screen.getByLabelText('Eau disponible : 30 L, 10 j d’autonomie'),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        'Réserves alimentaires : 36 000 kcal, 18 j d’autonomie',
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    expect(await screen.findByLabelText('Eau : 30 L, 1 article')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Vivres : 36 000 kcal, 1 article'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Outils : 0 article')).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        'Armes et munitions : 0 munition, 0 arme, 0 article',
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    const firstAid = BUNDLED_GUIDES.filter(
+      g => g.category === 'Secourisme',
+    ).length;
+    await fireEvent.press(
+      await screen.findByLabelText(`Secourisme, ${firstAid} fiches`),
+    );
+    expect(await screen.findByText('Hypothermie')).toBeTruthy();
+    expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
+  });
+
+  it('enregistre une arme et compte ses munitions par calibre', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armes et munitions' }),
+    );
+    expect(await screen.findByText(/Aucune arme enregistrée/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Ajouter une arme'));
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    expect(await screen.findAllByText('Champ obligatoire')).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Marque et modèle'),
+      'Browning B525',
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Fusil' }));
+    await fireEvent.changeText(screen.getByLabelText('Calibre'), '12/70');
+    await fireEvent.changeText(
+      screen.getByLabelText('N° de série (facultatif)'),
+      'AB1234',
+    );
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    expect(await screen.findByText('« Browning B525 » ajoutée.')).toBeTruthy();
+    expect(screen.getByText('Aucune munition')).toBeTruthy();
+
+    // Munitions : article en pièces au même calibre, saisi autrement.
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom'),
+      'Cartouches plomb 7',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Calibre des munitions'),
+      '12 / 70',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Quantité'), '250');
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Cartouches plomb 7 » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(
+      await screen.findByLabelText('Browning B525, 12/70, 250 munitions'),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText('Browning B525, 12/70, 250 munitions'),
+    );
+    expect(await screen.findByText('N° de série : AB1234')).toBeTruthy();
+  });
+
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
     await fireEvent.changeText(
-      await screen.findByLabelText('Rechercher'),
+      await screen.findByLabelText('Rechercher un guide'),
       'severe',
     );
     await fireEvent.press(await screen.findByText('Hypothermie'));
-    expect(await screen.findByText('← Toutes les fiches')).toBeTruthy();
+    expect(await screen.findByText('Toutes les fiches')).toBeTruthy();
     expect(
       screen.getByText(
         'Mettre la victime à l’abri du vent et l’isoler du sol.',

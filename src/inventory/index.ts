@@ -1,3 +1,12 @@
+export {
+  ArmoryRepository,
+  caliberKey,
+  WEAPON_KINDS,
+  type Weapon,
+  type WeaponInput,
+  type WeaponKind,
+  type WeaponSummary,
+} from './armoryRepository';
 export { seedDecoyInventory } from './decoySeed';
 export {
   InventoryError,

@@ -1,54 +1,62 @@
 /**
- * Jetons visuels « instrument de terrain ».
+ * Thème « Tech Premium » (kit de design ResiliOS, design 2).
+ * Source unique des couleurs, espacements, rayons et tailles de l'interface.
  *
- * - Fond noir pur (#000000) : sur une dalle OLED, un pixel noir est éteint,
- *   ce qui économise la batterie (cahier des charges §2).
- * - Panneaux légèrement surélevés pour structurer l'écran sans l'éclairer.
- * - Couleurs d'état (vert / jaune / rouge) distinctes de l'accent ambré,
- *   réservé aux commandes : ce qui demande de l'attention se voit d'un coup
- *   d'œil, même en plein soleil.
- * - Une couleur par ressource : eau en cyan, vivres en orange.
+ * Sémantique stable : orange = action / sélection, cyan = navigation /
+ * mesure, vert = confirmé, jaune = attention, rouge = danger,
+ * violet = information secondaire.
  */
 import { Platform, StyleSheet } from 'react-native';
 
 export const colors = {
-  bg: '#000000',
-  panel: '#0b0d0e',
-  panelHi: '#13171a',
-  line: '#1f2427',
-  lineStrong: '#2c3338',
-  text: '#eef0ea',
-  dim: '#9aa3a7',
-  faint: '#5a6267',
-  amber: '#ffb238',
-  amberInk: '#1a1203',
-  water: '#4cc9f0',
-  food: '#f4a259',
-  ok: '#3ddc84',
-  warn: '#ffd23f',
-  danger: '#ff4d4d',
+  bg: '#05090D',
+  bgElevated: '#08121A',
+  surface: '#07131B',
+  surfaceRaised: '#0B1D28',
+  overlay: '#102531',
+  border: '#183747',
+  borderActive: '#247A96',
+  primary: '#FF9D1C',
+  primaryBright: '#FFC15A',
+  primaryPressed: '#E98708',
+  onPrimary: '#071018',
+  cyan: '#35D9FF',
+  cyanSoft: '#83E8FF',
+  text: '#F4F8FB',
+  textMuted: '#9CB0BD',
+  textSubtle: '#6F8795',
+  success: '#39D98A',
+  warning: '#FFBF47',
+  danger: '#FF5364',
+  dangerSurface: '#35151B',
+  purple: '#D879FF',
+  // Ressources
+  water: '#35D9FF',
+  food: '#FFB547',
+  health: '#FF647C',
+  energy: '#FF9D1C',
 } as const;
 
-export type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral';
+export type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info';
 
 export const toneColor: Record<StatusTone, string> = {
-  ok: colors.ok,
-  warn: colors.warn,
+  ok: colors.success,
+  warn: colors.warning,
   danger: colors.danger,
-  neutral: colors.dim,
+  neutral: colors.textMuted,
+  info: colors.cyan,
 };
 
-/** Couleur translucide pour les fonds de puces (alpha en hexadécimal). */
+/** Couleur translucide pour les fonds teintés (alpha en hexadécimal). */
 export function tint(color: string, alpha = '26'): string {
   return `${color}${alpha}`;
 }
 
 export const fonts = {
-  /** Condensée, pour les chiffres et les titres. */
+  /** Titres et chiffres : condensée si l'appareil en dispose. */
   display: Platform.select({
     ios: 'AvenirNextCondensed-Bold',
-    // Aperçu web uniquement (react-native-web).
-    web: '"Roboto Condensed", "Arial Narrow", "Helvetica Neue", sans-serif',
+    web: '"Rajdhani", "Roboto Condensed", "Arial Narrow", sans-serif',
     default: 'sans-serif-condensed',
   }),
   mono: Platform.select({
@@ -58,40 +66,75 @@ export const fonts = {
   }),
 } as const;
 
-export const space = { xs: 4, s: 8, m: 12, l: 16, xl: 24 } as const;
+export const space = {
+  xs: 4,
+  s: 8,
+  m: 12,
+  l: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+} as const;
 
-export const radius = { s: 8, m: 14, pill: 999 } as const;
+export const radius = {
+  s: 8,
+  m: 12,
+  button: 14,
+  card: 16,
+  panel: 20,
+  pill: 999,
+} as const;
+
+export const sizes = {
+  touch: 48,
+  screenPadding: 18,
+  buttonHeight: 52,
+  inputHeight: 48,
+  bottomNavHeight: 78,
+} as const;
 
 export const text = StyleSheet.create({
   body: { color: colors.text, fontSize: 16, lineHeight: 22 },
-  dim: { color: colors.dim, fontSize: 14, lineHeight: 19 },
+  muted: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
+  subtle: { color: colors.textSubtle, fontSize: 13, lineHeight: 18 },
   label: {
-    color: colors.dim,
-    fontFamily: fonts.display,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1.6,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  title: {
+  h1: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  h2: {
     color: colors.text,
     fontFamily: fonts.display,
     fontSize: 22,
     fontWeight: '700',
-    letterSpacing: 0.3,
+  },
+  h3: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 18,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  value: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 28,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   mono: {
     color: colors.text,
     fontFamily: fonts.mono,
     fontSize: 15,
     fontVariant: ['tabular-nums'],
-  },
-  brand: {
-    color: colors.amber,
-    fontFamily: fonts.display,
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
   },
 });

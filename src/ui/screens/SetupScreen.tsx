@@ -7,7 +7,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isCryptoError } from '../../crypto/errors';
 import { assertPinAcceptable, pinsAreEqual } from '../../crypto/pinPolicy';
-import { Brand, Button } from '../components/controls';
+import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
+import { Backdrop, Brand, Button } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
 import { colors, space, text } from '../theme';
 
@@ -86,60 +87,65 @@ export function SetupScreen(props: {
 
   if (step === 'intro' || step === 'duressAsk' || step === 'creating') {
     return (
-      <ScrollView contentContainerStyle={styles.page}>
-        <Brand size={24} />
-        {step === 'intro' ? (
-          <>
-            <Text style={styles.heading}>Créer votre coffre</Text>
-            <Text style={text.body}>
-              Vos stocks, points d’intérêt et checklists sont chiffrés sur ce
-              téléphone. Rien n’est envoyé en ligne.
+      <View style={styles.flex}>
+        <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.35} />
+        <ScrollView contentContainerStyle={styles.page}>
+          <Brand size={32} tagline />
+          {step === 'intro' ? (
+            <>
+              <Text style={styles.heading}>Créer votre coffre</Text>
+              <Text style={text.body}>
+                Vos stocks, points d’intérêt et checklists sont chiffrés sur ce
+                téléphone. Rien n’est envoyé en ligne.
+              </Text>
+              <Text style={text.body}>
+                Le code maître est la seule façon d’ouvrir le coffre. S’il est
+                oublié, les données sont perdues : aucune récupération n’est
+                possible.
+              </Text>
+              <Button
+                variant="primary"
+                label="Choisir mon code"
+                onPress={() => setStep('master')}
+              />
+            </>
+          ) : step === 'duressAsk' ? (
+            <>
+              <Text style={styles.heading}>Code de contrainte</Text>
+              <Text style={text.body}>
+                Si l’on vous force à ouvrir l’application, ce second code ouvre
+                un inventaire ordinaire et crédible, sans aucun signe à l’écran.
+                Vos vraies données restent invisibles.
+              </Text>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+              <Button
+                variant="primary"
+                label="Définir un code de contrainte"
+                onPress={() => setStep('duress')}
+              />
+              <Button
+                variant="ghost"
+                label="Plus tard"
+                onPress={() => {
+                  void create();
+                }}
+              />
+            </>
+          ) : (
+            <Text accessibilityLiveRegion="polite" style={text.body}>
+              Création du coffre…
             </Text>
-            <Text style={text.body}>
-              Le code maître est la seule façon d’ouvrir le coffre. S’il est
-              oublié, les données sont perdues : aucune récupération n’est
-              possible.
-            </Text>
-            <Button
-              variant="primary"
-              label="Choisir mon code"
-              onPress={() => setStep('master')}
-            />
-          </>
-        ) : step === 'duressAsk' ? (
-          <>
-            <Text style={styles.heading}>Code de contrainte</Text>
-            <Text style={text.body}>
-              Si l’on vous force à ouvrir l’application, ce second code ouvre un
-              inventaire ordinaire et crédible, sans aucun signe à l’écran. Vos
-              vraies données restent invisibles.
-            </Text>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button
-              variant="primary"
-              label="Définir un code de contrainte"
-              onPress={() => setStep('duress')}
-            />
-            <Button
-              label="Plus tard"
-              onPress={() => {
-                void create();
-              }}
-            />
-          </>
-        ) : (
-          <Text accessibilityLiveRegion="polite" style={text.body}>
-            Création du coffre…
-          </Text>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      </View>
     );
   }
 
   return (
     <View style={styles.pinPage}>
+      <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.45} />
       <View style={styles.pinHead}>
-        <Brand size={24} />
+        <Brand size={32} tagline />
         <Text style={[text.body, styles.center]}>{PROMPTS[step]}</Text>
       </View>
       <PinDots length={pin.length} />
@@ -152,16 +158,14 @@ export function SetupScreen(props: {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   page: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: space.xl,
     gap: space.l,
   },
-  heading: {
-    ...text.title,
-    fontSize: 32,
-  },
+  heading: { ...text.h1, fontSize: 30, marginTop: space.l },
   pinPage: {
     flex: 1,
     alignItems: 'center',

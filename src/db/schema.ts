@@ -182,6 +182,98 @@ const migration2: Migration = {
   ],
 };
 
-export const MIGRATIONS: readonly Migration[] = [migration1, migration2];
+/**
+ * Armes et munitions. Les munitions sont des articles de stock (catégorie
+ * `weapon`) portant un calibre ; les armes ont leur propre table et
+ * retrouvent leurs munitions par calibre.
+ *
+ * SQLite ne sait pas modifier une contrainte CHECK : la table des articles
+ * est reconstruite. Les lots sont mis de côté avant de supprimer l'ancienne
+ * table, sinon `ON DELETE CASCADE` les effacerait (foreign_keys est actif
+ * et ne peut pas être désactivé dans une transaction). Index et triggers
+ * disparaissent avec leur table et sont recréés à l'identique.
+ */
+const migration3: Migration = {
+  version: 3,
+  name: 'catégorie armes et munitions',
+  statements: [
+    'CREATE TABLE inventory_lots_backup AS SELECT * FROM inventory_lots',
+    'DROP TABLE inventory_lots',
+
+    `CREATE TABLE inventory_items_new (
+       id                TEXT PRIMARY KEY NOT NULL,
+       name              TEXT NOT NULL CHECK (length(trim(name)) > 0),
+       category          TEXT NOT NULL
+                         CHECK (category IN ('water', 'food', 'medical', 'energy', 'tool', 'weapon')),
+       unit              TEXT NOT NULL CHECK (unit IN ('L', 'mL', 'kg', 'g', 'unit')),
+       calories_per_unit INTEGER CHECK (calories_per_unit IS NULL OR calories_per_unit >= 0),
+       location          TEXT,
+       is_critical       INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean(
+         'is_critical',
+       )}),
+       notes             TEXT,
+       created_at        TEXT NOT NULL DEFAULT ${NOW},
+       updated_at        TEXT NOT NULL DEFAULT ${NOW},
+       min_stock         REAL CHECK (min_stock IS NULL OR min_stock >= 0),
+       alert_days        INTEGER CHECK (alert_days IS NULL OR alert_days BETWEEN 1 AND 3650),
+       -- Calibre des munitions (ex. « 12/70 »), réservé à la catégorie weapon.
+       caliber           TEXT CHECK (caliber IS NULL
+                                     OR (category = 'weapon' AND length(trim(caliber)) > 0)),
+       CHECK (category <> 'water' OR unit IN ('L', 'mL'))
+     ) STRICT`,
+    `INSERT INTO inventory_items_new (id, name, category, unit, calories_per_unit,
+       location, is_critical, notes, created_at, updated_at, min_stock, alert_days)
+     SELECT id, name, category, unit, calories_per_unit, location, is_critical,
+       notes, created_at, updated_at, min_stock, alert_days
+     FROM inventory_items`,
+    'DROP TABLE inventory_items',
+    'ALTER TABLE inventory_items_new RENAME TO inventory_items',
+    'CREATE INDEX idx_inventory_items_category ON inventory_items (category)',
+    touchTrigger('inventory_items'),
+
+    `CREATE TABLE inventory_lots (
+       id              TEXT PRIMARY KEY NOT NULL,
+       item_id         TEXT NOT NULL REFERENCES inventory_items (id) ON DELETE CASCADE,
+       quantity        REAL NOT NULL CHECK (quantity >= 0),
+       acquired_at     TEXT NOT NULL CHECK (${isIsoDate('acquired_at')}),
+       expiration_date TEXT CHECK (expiration_date IS NULL OR ${isIsoDate(
+         'expiration_date',
+       )}),
+       created_at      TEXT NOT NULL DEFAULT ${NOW},
+       updated_at      TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at,
+       expiration_date, created_at, updated_at)
+     SELECT id, item_id, quantity, acquired_at, expiration_date, created_at,
+       updated_at
+     FROM inventory_lots_backup`,
+    'DROP TABLE inventory_lots_backup',
+    `CREATE INDEX idx_inventory_lots_consumption
+       ON inventory_lots (item_id, expiration_date, acquired_at)`,
+    `CREATE INDEX idx_inventory_lots_expiration
+       ON inventory_lots (expiration_date)
+       WHERE expiration_date IS NOT NULL AND quantity > 0`,
+    touchTrigger('inventory_lots'),
+
+    `CREATE TABLE weapons (
+       id            TEXT PRIMARY KEY NOT NULL,
+       model         TEXT NOT NULL CHECK (length(trim(model)) > 0),
+       kind          TEXT NOT NULL
+                     CHECK (kind IN ('rifle', 'shotgun', 'handgun', 'other')),
+       caliber       TEXT NOT NULL CHECK (length(trim(caliber)) > 0),
+       serial_number TEXT,
+       notes         TEXT,
+       created_at    TEXT NOT NULL DEFAULT ${NOW},
+       updated_at    TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('weapons'),
+  ],
+};
+
+export const MIGRATIONS: readonly Migration[] = [
+  migration1,
+  migration2,
+  migration3,
+];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

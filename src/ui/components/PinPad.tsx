@@ -1,4 +1,5 @@
 /** Pavé numérique de saisie de code, avec indicateur de longueur. */
+import { Check, Delete } from 'lucide-react-native';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -47,7 +48,6 @@ export function PinPad(props: {
       {KEYS.map(key => {
         const isOk = key === 'ok';
         const isBack = key === 'back';
-        const label = isBack ? '⌫' : isOk ? props.submitLabel ?? 'OK' : key;
         const a11y = isBack ? 'Effacer' : isOk ? 'Valider' : `Chiffre ${key}`;
         return (
           <Pressable
@@ -64,15 +64,17 @@ export function PinPad(props: {
               props.disabled && styles.disabled,
             ]}
           >
-            <Text
-              style={[
-                styles.keyText,
-                isOk && styles.keyOkText,
-                isBack && styles.keyFnText,
-              ]}
-            >
-              {label}
-            </Text>
+            {isBack ? (
+              <Delete color={colors.textMuted} size={28} strokeWidth={1.8} />
+            ) : isOk ? (
+              props.submitLabel ? (
+                <Text style={styles.keyOkText}>{props.submitLabel}</Text>
+              ) : (
+                <Check color={colors.onPrimary} size={30} strokeWidth={2.6} />
+              )
+            ) : (
+              <Text style={styles.keyText}>{key}</Text>
+            )}
           </Pressable>
         );
       })}
@@ -85,13 +87,13 @@ const KEY_SIZE = 76;
 const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 14, minHeight: 16 },
   dot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: colors.faint,
+    borderColor: colors.borderActive,
   },
-  dotOn: { backgroundColor: colors.amber, borderColor: colors.amber },
+  dotOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   pad: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -104,16 +106,20 @@ const styles = StyleSheet.create({
     height: KEY_SIZE,
     borderRadius: KEY_SIZE / 2,
     borderWidth: 1,
-    borderColor: colors.lineStrong,
-    backgroundColor: colors.panelHi,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  keyOk: { backgroundColor: colors.amber, borderColor: colors.amber },
+  keyOk: { backgroundColor: colors.primary, borderColor: colors.primary },
   keyFn: { backgroundColor: 'transparent', borderColor: 'transparent' },
   pressed: { opacity: 0.6 },
-  disabled: { opacity: 0.4 },
-  keyText: { color: colors.text, fontFamily: fonts.display, fontSize: 30 },
-  keyOkText: { color: colors.amberInk, fontSize: 20, fontWeight: '700' },
-  keyFnText: { color: colors.dim, fontSize: 24 },
+  disabled: { opacity: 0.38 },
+  keyText: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 30,
+    fontWeight: '600',
+  },
+  keyOkText: { color: colors.onPrimary, fontSize: 20, fontWeight: '700' },
 });
