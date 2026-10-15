@@ -5,7 +5,7 @@
 import type { SqlDatabase } from '../db/types';
 import { InventoryError, randomUuid } from './inventoryRepository';
 
-export type PhotoOwner = 'weapon' | 'document';
+export type PhotoOwner = 'weapon' | 'document' | 'item';
 export type PhotoMime = 'image/jpeg' | 'image/png';
 
 export interface Photo {
@@ -74,7 +74,12 @@ export class PhotoRepository {
         field: 'photo',
       });
     }
-    const table = owner === 'weapon' ? 'weapons' : 'documents';
+    const table =
+      owner === 'weapon'
+        ? 'weapons'
+        : owner === 'document'
+        ? 'documents'
+        : 'inventory_items';
     const { rows } = await this.db.execute(
       `SELECT (SELECT COUNT(*) FROM ${table} WHERE id = ?) AS owner_exists,
               (SELECT COUNT(*) FROM photos
@@ -84,7 +89,11 @@ export class PhotoRepository {
     if (Number(rows[0].owner_exists) === 0) {
       throw new InventoryError(
         'NOT_FOUND',
-        owner === 'weapon' ? 'Arme introuvable' : 'Document introuvable',
+        owner === 'weapon'
+          ? 'Arme introuvable'
+          : owner === 'document'
+          ? 'Document introuvable'
+          : 'Article introuvable',
       );
     }
     if (Number(rows[0].photo_count) >= PHOTOS_PER_OWNER_MAX) {

@@ -1,6 +1,7 @@
 export {
   ArmoryRepository,
   caliberKey,
+  roundCount,
   WEAPON_KINDS,
   type Weapon,
   type WeaponInput,
@@ -46,3 +47,5 @@ export {
   type PhotoMime,
   type PhotoOwner,
 } from './photoRepository';
+export * from './attributes';
+export { caloriesPerUnit } from './nutrition';

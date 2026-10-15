@@ -16,6 +16,12 @@ import { withTransaction } from '../db/transaction';
 import type { SqlDatabase, SqlRow, SqlValue } from '../db/types';
 import { isIsoDate, localToday } from '../lib/dates';
 import {
+  parseAttributes,
+  serializeAttributes,
+  validateItemAttributes,
+  type ItemAttributes,
+} from './attributes';
+import {
   ITEM_CATEGORIES,
   ITEM_UNITS,
   type ItemCategory,
@@ -68,6 +74,8 @@ export interface ItemInput {
   packageSize?: number | null;
   /** Type au sein de la catégorie (ex. `canned`, `medicine`). */
   subtype?: string | null;
+  /** Champs propres à la catégorie (potabilité, dosage, état…). */
+  attributes?: ItemAttributes | null;
 }
 
 export interface LotInput {
@@ -92,6 +100,7 @@ export interface InventoryItem {
   caliber: string | null;
   packageSize: number | null;
   subtype: string | null;
+  attributes: ItemAttributes;
   createdAt: string;
   updatedAt: string;
 }
@@ -184,6 +193,7 @@ interface CleanItem {
   caliber: string | null;
   packageSize: number | null;
   subtype: string | null;
+  attributes: ItemAttributes;
 }
 
 const SUBTYPE_RE = /^[a-z_]{1,30}$/;
@@ -229,6 +239,7 @@ function validateItem(input: ItemInput): CleanItem {
       input.category === 'weapon' ? validateCaliber(input.caliber) : null,
     packageSize: validatePackageSize(input.packageSize),
     subtype: validateSubtype(input.subtype),
+    attributes: validateItemAttributes(input.attributes),
   };
 }
 
@@ -355,13 +366,14 @@ function toItem(row: SqlRow): InventoryItem {
       row.subtype === null || row.subtype === undefined
         ? null
         : String(row.subtype),
+    attributes: parseAttributes<ItemAttributes>(row.attributes),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
-  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size, i.subtype,
+  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size, i.subtype, i.attributes,
   i.created_at, i.updated_at`;
 
 /**
@@ -399,8 +411,9 @@ export class InventoryRepository {
       await this.db.execute(
         `INSERT INTO inventory_items
            (id, name, category, unit, calories_per_unit, location, is_critical,
-            notes, min_stock, alert_days, caliber, package_size, subtype)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            notes, min_stock, alert_days, caliber, package_size, subtype,
+            attributes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -415,6 +428,7 @@ export class InventoryRepository {
           item.caliber,
           item.packageSize,
           item.subtype,
+          serializeAttributes(item.attributes),
         ],
       );
       if (lot !== null) {
@@ -450,7 +464,7 @@ export class InventoryRepository {
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
                 location = ?, is_critical = ?, notes = ?,
                 min_stock = ?, alert_days = ?, caliber = ?,
-                package_size = ?, subtype = ?
+                package_size = ?, subtype = ?, attributes = ?
           WHERE id = ?`,
         [
           item.name,
@@ -465,6 +479,7 @@ export class InventoryRepository {
           item.caliber,
           item.packageSize,
           item.subtype,
+          serializeAttributes(item.attributes),
           id,
         ],
       );

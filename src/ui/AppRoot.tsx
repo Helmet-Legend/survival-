@@ -56,6 +56,8 @@ import {
   NavigationContext,
   type Navigation,
   type Overlay,
+  type StockFocus,
+  type StockFormTarget,
   type Tab,
 } from './navigation';
 import { GuidesScreen } from './screens/GuidesScreen';
@@ -66,6 +68,7 @@ import { PlanScreen } from './screens/PlanScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { StockScreen } from './screens/StockScreen';
+import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type Session } from './session';
 import { colors, sizes, space, text } from './theme';
 
@@ -97,6 +100,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [formTarget, setFormTarget] = useState<StockFormTarget | null>(null);
+  const [stockFocus, setStockFocus] = useState<StockFocus | undefined>();
   const [covered, setCovered] = useState(false);
   const sessionRef = useRef<Session | null>(null);
 
@@ -144,14 +149,20 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
 
   const navigation = useMemo<Navigation>(
     () => ({
-      goTo: next => {
+      goTo: (next, focus) => {
+        setStockFocus(focus);
         setTab(next);
         setOverlay(null);
       },
       open: setOverlay,
+      openStockForm: target => {
+        setFormTarget(target);
+        setOverlay('stockForm');
+      },
       close: () => setOverlay(null),
+      stockFocus,
     }),
-    [],
+    [stockFocus],
   );
 
   useEffect(() => {
@@ -206,22 +217,24 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     body = (
       <SessionContext.Provider value={phase.session}>
         <NavigationContext.Provider value={navigation}>
-          <View style={styles.bar}>
-            <IconButton
-              icon={Lock}
-              label="Verrouiller"
-              onPress={() => lock()}
-            />
-            <Brand size={26} tagline />
-            <IconButton
-              icon={Settings}
-              label="Réglages"
-              color={overlay === 'settings' ? colors.primary : colors.text}
-              onPress={() =>
-                setOverlay(overlay === 'settings' ? null : 'settings')
-              }
-            />
-          </View>
+          {overlay === 'stockForm' ? null : (
+            <View style={styles.bar}>
+              <IconButton
+                icon={Lock}
+                label="Verrouiller"
+                onPress={() => lock()}
+              />
+              <Brand size={26} tagline />
+              <IconButton
+                icon={Settings}
+                label="Réglages"
+                color={overlay === 'settings' ? colors.primary : colors.text}
+                onPress={() =>
+                  setOverlay(overlay === 'settings' ? null : 'settings')
+                }
+              />
+            </View>
+          )}
           <KeyboardAvoidingView
             style={styles.flex}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -230,6 +243,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               <SettingsScreen onLock={() => lock()} />
             ) : overlay === 'plan' ? (
               <PlanScreen />
+            ) : overlay === 'stockForm' && formTarget !== null ? (
+              <StockFormScreen target={formTarget} />
             ) : (
               <>
                 {tab === 'home' ? <HomeScreen /> : null}
@@ -239,11 +254,15 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               </>
             )}
           </KeyboardAvoidingView>
-          <BottomNav
-            current={overlay === null ? tab : null}
-            onSelect={navigation.goTo}
-            bottomInset={insets.bottom}
-          />
+          {overlay === 'stockForm' ? (
+            <View style={{ height: insets.bottom }} />
+          ) : (
+            <BottomNav
+              current={overlay === null ? tab : null}
+              onSelect={navigation.goTo}
+              bottomInset={insets.bottom}
+            />
+          )}
         </NavigationContext.Provider>
       </SessionContext.Provider>
     );

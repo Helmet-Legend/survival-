@@ -41,34 +41,67 @@ describe('estimateKcal', () => {
   });
 });
 
-describe('estimation dans le calcul d’autonomie', () => {
-  it('compte les vivres sans kcal saisies, sans écraser une étiquette', async () => {
+describe('calories dans le calcul d’autonomie', () => {
+  it('compte seulement les données saisies, jamais une estimation', async () => {
     const db = new NodeSqliteDb();
     await prepareDatabase(db);
     const repo = new InventoryRepository(db);
     await repo.createItem(
       { name: 'Riz basmati', category: 'food', unit: 'kg' },
       { quantity: 2 },
-    ); // estimé : 2 × 3 550
+    ); // reconnu par l'estimateur, mais rien n'est saisi : 0
     await repo.createItem(
       { name: 'Pâtes', category: 'food', unit: 'kg', caloriesPerUnit: 3000 },
       { quantity: 1 },
-    ); // étiquette saisie : 3 000
+    ); // kcal par kg saisies : 3 000
     await repo.createItem(
       {
-        name: 'Plat du chef',
+        name: 'Lentilles',
+        category: 'food',
+        unit: 'g',
+        attributes: { energyValue: 330, energyBasis: 'per100g' },
+      },
+      { quantity: 500 },
+    ); // 500 g à 330 kcal/100 g : 1 650
+    await repo.createItem(
+      {
+        name: 'Cassoulet',
         category: 'food',
         unit: 'unit',
-        subtype: 'canned',
+        attributes: {
+          countUnit: 'box',
+          unitWeight: 840,
+          unitWeightUnit: 'g',
+          energyValue: 125,
+          energyBasis: 'per100g',
+        },
+      },
+      { quantity: 2 },
+    ); // 2 boîtes de 840 g à 125 kcal/100 g : 2 100
+    await repo.createItem(
+      {
+        name: 'Ration',
+        category: 'food',
+        unit: 'unit',
+        attributes: {
+          countUnit: 'portion',
+          energyValue: 600,
+          energyBasis: 'perPortion',
+        },
       },
       { quantity: 3 },
-    ); // conserve : 3 × 400
+    ); // 3 portions à 600 kcal : 1 800
     await repo.createItem(
-      { name: 'Sac mystère', category: 'food', unit: 'kg' },
-      { quantity: 5 },
-    ); // inconnu : 0
+      {
+        name: 'Conserve',
+        category: 'food',
+        unit: 'unit',
+        attributes: { energyValue: 125, energyBasis: 'per100g' },
+      },
+      { quantity: 4 },
+    ); // poids inconnu : 0 (données incomplètes)
 
     const report = await getResilienceReport(db, '2026-10-15');
-    expect(report.food.available).toBe(7100 + 3000 + 1200);
+    expect(report.food.available).toBe(3000 + 1650 + 2100 + 1800);
   });
 });

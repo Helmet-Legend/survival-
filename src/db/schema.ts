@@ -335,6 +335,53 @@ const migration6: Migration = {
   ],
 };
 
+/**
+ * Fiches de stock détaillées (pack « fiches ») :
+ * - `attributes` (JSON) sur les articles et les armes : champs propres à
+ *   chaque catégorie (potabilité, conservation, dosage, état, entretien…),
+ *   facultatifs, les anciennes lignes restent valides (NULL) ;
+ * - photos possibles pour tout article : la table est reconstruite pour
+ *   élargir sa contrainte (SQLite ne modifie pas un CHECK).
+ */
+const migration7: Migration = {
+  version: 7,
+  name: 'fiches de stock détaillées',
+  statements: [
+    `ALTER TABLE inventory_items ADD COLUMN attributes TEXT
+       CHECK (attributes IS NULL OR json_valid(attributes))`,
+    `ALTER TABLE weapons ADD COLUMN attributes TEXT
+       CHECK (attributes IS NULL OR json_valid(attributes))`,
+    // Les triggers qui visent `photos` empêcheraient le renommage : ils
+    // sont supprimés puis recréés à l'identique.
+    'DROP TRIGGER trg_weapons_photos_ad',
+    'DROP TRIGGER trg_documents_photos_ad',
+    `CREATE TABLE photos_new (
+       id          TEXT PRIMARY KEY NOT NULL,
+       owner_type  TEXT NOT NULL
+                   CHECK (owner_type IN ('weapon', 'document', 'item')),
+       owner_id    TEXT NOT NULL,
+       mime        TEXT NOT NULL DEFAULT 'image/jpeg'
+                   CHECK (mime IN ('image/jpeg', 'image/png')),
+       data_base64 TEXT NOT NULL CHECK (length(data_base64) > 0),
+       created_at  TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    `INSERT INTO photos_new (id, owner_type, owner_id, mime, data_base64, created_at)
+     SELECT id, owner_type, owner_id, mime, data_base64, created_at FROM photos`,
+    'DROP TABLE photos',
+    'ALTER TABLE photos_new RENAME TO photos',
+    'CREATE INDEX idx_photos_owner ON photos (owner_type, owner_id, created_at)',
+    `CREATE TRIGGER trg_weapons_photos_ad AFTER DELETE ON weapons BEGIN
+       DELETE FROM photos WHERE owner_type = 'weapon' AND owner_id = OLD.id;
+     END`,
+    `CREATE TRIGGER trg_documents_photos_ad AFTER DELETE ON documents BEGIN
+       DELETE FROM photos WHERE owner_type = 'document' AND owner_id = OLD.id;
+     END`,
+    `CREATE TRIGGER trg_items_photos_ad AFTER DELETE ON inventory_items BEGIN
+       DELETE FROM photos WHERE owner_type = 'item' AND owner_id = OLD.id;
+     END`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -342,6 +389,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration4,
   migration5,
   migration6,
+  migration7,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

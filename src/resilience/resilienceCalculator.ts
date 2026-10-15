@@ -22,7 +22,8 @@ import { addDays, assertIsoDate, daysBetween, localToday } from '../lib/dates';
 
 // --- Types ------------------------------------------------------------------
 
-import { estimateKcal } from './kcalEstimate';
+import { parseAttributes, type ItemAttributes } from '../inventory/attributes';
+import { caloriesPerUnit } from '../inventory/nutrition';
 export type { ItemCategory, ItemUnit };
 
 export interface HouseholdSettings {
@@ -381,7 +382,7 @@ export async function saveHousehold(
 export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
   const { rows } = await db.execute(
     `SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
-            l.quantity, i.calories_per_unit, i.subtype, l.expiration_date
+            l.quantity, i.calories_per_unit, i.attributes, l.expiration_date
        FROM inventory_lots AS l
        JOIN inventory_items AS i ON i.id = l.item_id
       WHERE l.quantity > 0 AND i.category IN ('water', 'food')`,
@@ -393,20 +394,38 @@ export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
     category: r.category as ItemCategory,
     unit: r.unit as ItemUnit,
     quantity: Number(r.quantity),
-    // Sans étiquette saisie, estimation d'après le nom (riz, conserve…).
-    caloriesPerUnit:
-      r.calories_per_unit !== null
-        ? Number(r.calories_per_unit)
-        : r.category === 'food'
-        ? estimateKcal(
-            String(r.name),
-            r.unit as ItemUnit,
-            r.subtype === null ? null : String(r.subtype),
-          )?.kcalPerUnit ?? null
-        : null,
+    // kcal saisies, ou calculées depuis la valeur énergétique saisie ;
+    // rien n'est deviné (sinon : données incomplètes).
+    caloriesPerUnit: caloriesPerUnit(
+      r.unit as ItemUnit,
+      r.calories_per_unit === null ? null : Number(r.calories_per_unit),
+      parseAttributes<ItemAttributes>(r.attributes),
+    ),
     expirationDate:
       r.expiration_date === null ? null : String(r.expiration_date),
   }));
+}
+
+/**
+ * Vivres en stock (lots non périmés) dont les calories ne sont ni saisies
+ * ni calculables : « données incomplètes », non comptés dans l'autonomie.
+ */
+export async function countIncompleteFood(
+  db: SqlDatabase,
+  asOf: string = localToday(),
+): Promise<number> {
+  const lots = await loadConsumableLots(db);
+  const ids = new Set(
+    lots
+      .filter(
+        l =>
+          l.category === 'food' &&
+          l.caloriesPerUnit === null &&
+          (l.expirationDate === null || l.expirationDate >= asOf),
+      )
+      .map(l => l.itemId),
+  );
+  return ids.size;
 }
 
 export async function getResilienceReport(

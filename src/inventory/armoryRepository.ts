@@ -9,6 +9,13 @@
  */
 import type { SqlDatabase, SqlRow } from '../db/types';
 import { localToday } from '../lib/dates';
+import {
+  parseAttributes,
+  serializeAttributes,
+  validateWeaponAttributes,
+  type ItemAttributes,
+  type WeaponAttributes,
+} from './attributes';
 import { InventoryError, randomUuid } from './inventoryRepository';
 
 export const WEAPON_KINDS = ['rifle', 'shotgun', 'handgun', 'other'] as const;
@@ -20,6 +27,7 @@ export interface WeaponInput {
   caliber: string;
   serialNumber?: string | null;
   notes?: string | null;
+  attributes?: WeaponAttributes | null;
 }
 
 export interface Weapon {
@@ -29,6 +37,7 @@ export interface Weapon {
   caliber: string;
   serialNumber: string | null;
   notes: string | null;
+  attributes: WeaponAttributes;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +97,7 @@ function validate(input: WeaponInput) {
     caliber: text(input.caliber, 'caliber', CALIBER_MAX, true),
     serialNumber: text(input.serialNumber, 'serialNumber', SERIAL_MAX, false),
     notes: text(input.notes, 'notes', NOTES_MAX, false),
+    attributes: validateWeaponAttributes(input.attributes),
   };
 }
 
@@ -110,9 +120,32 @@ function toWeapon(row: SqlRow): Weapon {
     caliber: String(row.caliber),
     serialNumber: row.serial_number === null ? null : String(row.serial_number),
     notes: row.notes === null ? null : String(row.notes),
+    attributes: parseAttributes<WeaponAttributes>(row.attributes),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
+}
+
+/**
+ * Cartouches d'un article de munitions : en pièces, ou en boîtes dont la
+ * contenance est connue. Accessoires et lots non comptés (non comparables).
+ */
+export function roundCount(
+  quantity: number,
+  packageSize: number | null,
+  attrs: ItemAttributes,
+): number | null {
+  if (attrs.recordType === 'accessory') {
+    return null;
+  }
+  const unit = attrs.countUnit ?? 'piece';
+  if (unit === 'piece') {
+    return quantity;
+  }
+  if (unit === 'box' && packageSize !== null) {
+    return quantity * packageSize;
+  }
+  return null;
 }
 
 export class ArmoryRepository {
@@ -130,19 +163,28 @@ export class ArmoryRepository {
   /** Munitions utilisables par calibre (clé `caliberKey`). */
   async roundsByCaliber(): Promise<Map<string, number>> {
     const { rows } = await this.db.execute(
-      `SELECT i.caliber AS caliber, SUM(l.quantity) AS rounds
+      `SELECT i.caliber AS caliber, i.package_size, i.attributes,
+              SUM(l.quantity) AS quantity
          FROM inventory_items AS i
          JOIN inventory_lots AS l ON l.item_id = i.id
         WHERE i.category = 'weapon' AND i.unit = 'unit'
           AND i.caliber IS NOT NULL
           AND (l.expiration_date IS NULL OR l.expiration_date >= ?)
-        GROUP BY i.caliber`,
+        GROUP BY i.id`,
       [this.today()],
     );
     const totals = new Map<string, number>();
     for (const row of rows) {
+      const rounds = roundCount(
+        Number(row.quantity),
+        row.package_size === null ? null : Number(row.package_size),
+        parseAttributes<ItemAttributes>(row.attributes),
+      );
+      if (rounds === null) {
+        continue;
+      }
       const key = caliberKey(String(row.caliber));
-      totals.set(key, (totals.get(key) ?? 0) + Number(row.rounds));
+      totals.set(key, (totals.get(key) ?? 0) + rounds);
     }
     return totals;
   }
@@ -163,8 +205,9 @@ export class ArmoryRepository {
     const weapon = validate(input);
     const id = this.newId();
     await this.db.execute(
-      `INSERT INTO weapons (id, model, kind, caliber, serial_number, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO weapons (id, model, kind, caliber, serial_number, notes,
+         attributes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         weapon.model,
@@ -172,6 +215,7 @@ export class ArmoryRepository {
         weapon.caliber,
         weapon.serialNumber,
         weapon.notes,
+        serializeAttributes(weapon.attributes),
       ],
     );
     return this.requireWeapon(id);
@@ -182,7 +226,8 @@ export class ArmoryRepository {
     const weapon = validate(input);
     await this.db.execute(
       `UPDATE weapons
-          SET model = ?, kind = ?, caliber = ?, serial_number = ?, notes = ?
+          SET model = ?, kind = ?, caliber = ?, serial_number = ?, notes = ?,
+              attributes = ?
         WHERE id = ?`,
       [
         weapon.model,
@@ -190,6 +235,7 @@ export class ArmoryRepository {
         weapon.caliber,
         weapon.serialNumber,
         weapon.notes,
+        serializeAttributes(weapon.attributes),
         id,
       ],
     );

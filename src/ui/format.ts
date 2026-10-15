@@ -1,7 +1,7 @@
 /** Formats d'affichage partagés par les écrans. */
 import {
-  BatteryCharging,
-  BriefcaseMedical,
+  Backpack,
+  Cross,
   Crosshair,
   Droplet,
   Wheat,
@@ -14,20 +14,45 @@ import type { ItemCategory, ItemUnit } from '../inventory/types';
 import type { ExpiryBucket } from '../resilience/resilienceCalculator';
 import { colors, type StatusTone } from './theme';
 
+/**
+ * Libellés courts (puces, listes). La catégorie technique `energy` est
+ * présentée comme « Matériel & équipements » (énergie, éclairage, abri…) :
+ * les données existantes restent valides.
+ */
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   water: 'Eau',
-  food: 'Vivres',
-  medical: 'Santé',
-  energy: 'Énergie',
+  food: 'Nourriture',
+  medical: 'Médical',
+  energy: 'Matériel',
   tool: 'Outils',
-  weapon: 'Armes et munitions',
+  weapon: 'Armement',
 };
+
+/** Libellés complets (titres de fiches et de catégories). */
+export const CATEGORY_TITLES: Record<ItemCategory, string> = {
+  water: 'Eau',
+  food: 'Nourriture',
+  medical: 'Médical',
+  energy: 'Matériel & équipements',
+  tool: 'Outils',
+  weapon: 'Armement & munitions',
+};
+
+/** Ordre d'affichage des catégories (celui du pack de fiches). */
+export const STOCK_ORDER: readonly ItemCategory[] = [
+  'water',
+  'food',
+  'weapon',
+  'medical',
+  'tool',
+  'energy',
+];
 
 export const CATEGORY_ICONS: Record<ItemCategory, LucideIcon> = {
   water: Droplet,
   food: Wheat,
-  medical: BriefcaseMedical,
-  energy: BatteryCharging,
+  medical: Cross,
+  energy: Backpack,
   tool: Wrench,
   weapon: Crosshair,
 };
@@ -36,14 +61,14 @@ export const CATEGORY_COLORS: Record<ItemCategory, string> = {
   water: colors.water,
   food: colors.food,
   medical: colors.health,
-  energy: colors.energy,
-  tool: colors.cyanSoft,
-  weapon: colors.purple,
+  energy: colors.equipment,
+  tool: colors.tools,
+  weapon: colors.weapons,
 };
 
 export const WEAPON_KIND_LABELS: Record<WeaponKind, string> = {
-  rifle: 'Carabine',
-  shotgun: 'Fusil',
+  rifle: 'Arme d’épaule (carabine)',
+  shotgun: 'Fusil (canon lisse)',
   handgun: 'Arme de poing',
   other: 'Autre',
 };
@@ -64,25 +89,10 @@ export const BUCKET_LABELS: Record<ExpiryBucket, string> = {
   watch: 'Seuil perso',
 };
 
-const MONTHS = [
-  'janv.',
-  'févr.',
-  'mars',
-  'avr.',
-  'mai',
-  'juin',
-  'juil.',
-  'août',
-  'sept.',
-  'oct.',
-  'nov.',
-  'déc.',
-];
-
-/** « 21 oct. 2026 », sans dépendre de l'Intl de l'appareil. */
+/** Date affichée au format JJ/MM/AAAA. */
 export function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1]} ${y}`;
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 /** Nombre avec virgule décimale et espaces fines entre milliers. */

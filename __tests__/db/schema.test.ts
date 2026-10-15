@@ -336,6 +336,7 @@ describe('migration 3 (armes et munitions)', () => {
         caliber: null,
         package_size: null,
         subtype: null,
+        attributes: null,
       },
     ]);
     const lots = await db.execute('SELECT * FROM inventory_lots');
@@ -491,5 +492,40 @@ describe('migration 6 (type d’article)', () => {
     await expect(
       db.execute("UPDATE inventory_items SET subtype = '' WHERE id = 'c1'"),
     ).rejects.toThrow(/constraint/i);
+  });
+});
+
+describe('migration 7 (fiches détaillées)', () => {
+  it('garde les photos, autorise celles des articles et nettoie à la suppression', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 6));
+    await db.execute(
+      `INSERT INTO weapons (id, model, kind, caliber) VALUES ('w1', 'Glock', 'handgun', '9x19')`,
+    );
+    await db.execute(
+      `INSERT INTO photos (id, owner_type, owner_id, data_base64) VALUES ('p1', 'weapon', 'w1', 'AAAA')`,
+    );
+    expect(await migrate(db)).toEqual({ from: 6, to: SCHEMA_VERSION });
+
+    expect((await db.execute('SELECT id FROM photos')).rows).toEqual([
+      { id: 'p1' },
+    ]);
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit, attributes)
+       VALUES ('i1', 'Tente', 'energy', 'unit', '{"condition":"good"}')`,
+    );
+    await db.execute(
+      `INSERT INTO photos (id, owner_type, owner_id, data_base64) VALUES ('p2', 'item', 'i1', 'AAAA')`,
+    );
+    await expect(
+      db.execute(
+        "UPDATE inventory_items SET attributes = 'pas du json' WHERE id = 'i1'",
+      ),
+    ).rejects.toThrow(/constraint/i);
+
+    await db.execute("DELETE FROM inventory_items WHERE id = 'i1'");
+    await db.execute("DELETE FROM weapons WHERE id = 'w1'");
+    expect((await db.execute('SELECT id FROM photos')).rows).toEqual([]);
   });
 });

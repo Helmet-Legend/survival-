@@ -9,12 +9,12 @@
 import { Platform, StyleSheet } from 'react-native';
 
 export const colors = {
-  bg: '#05090D',
+  bg: '#03090D',
   bgElevated: '#08121A',
-  surface: '#07131B',
-  surfaceRaised: '#0B1D28',
+  surface: '#06141B',
+  surfaceRaised: '#081B24',
   overlay: '#102531',
-  border: '#183747',
+  border: '#183746',
   borderActive: '#247A96',
   primary: '#FF9D1C',
   primaryBright: '#FFC15A',
@@ -22,18 +22,21 @@ export const colors = {
   onPrimary: '#071018',
   cyan: '#35D9FF',
   cyanSoft: '#83E8FF',
-  text: '#F4F8FB',
-  textMuted: '#9CB0BD',
+  text: '#F1F7FA',
+  textMuted: '#9FB3BF',
   textSubtle: '#6F8795',
   success: '#39D98A',
   warning: '#FFBF47',
   danger: '#FF5364',
   dangerSurface: '#35151B',
   purple: '#D879FF',
-  // Ressources
-  water: '#35D9FF',
-  food: '#FFB547',
-  health: '#FF647C',
+  // Catégories de stock (pack « fiches »)
+  water: '#22D3EE',
+  food: '#FBBF24',
+  weapons: '#FB3C4B',
+  health: '#FF4D61',
+  tools: '#B7CBD7',
+  equipment: '#22D98B',
   energy: '#FF9D1C',
 } as const;
 

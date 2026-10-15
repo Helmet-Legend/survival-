@@ -60,3 +60,24 @@ export function localToday(now: Date = new Date()): string {
     now.getDate(),
   )}`;
 }
+
+const FR_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+/** `JJ/MM/AAAA` → `AAAA-MM-JJ`, ou null si la saisie n'est pas une date. */
+export function frToIso(text: string): string | null {
+  const match = FR_DATE.exec(text.trim());
+  if (match === null) {
+    return null;
+  }
+  const iso = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(
+    2,
+    '0',
+  )}`;
+  return isIsoDate(iso) ? iso : null;
+}
+
+/** `AAAA-MM-JJ` → `JJ/MM/AAAA`. */
+export function isoToFr(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
