@@ -139,7 +139,15 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   if (phase.kind === 'setup') {
     body = (
       <SetupScreen
-        onCreate={async pins => open(await createVault(manager, content, pins))}
+        onCreate={async pins => {
+          try {
+            open(await createVault(manager, content, pins));
+          } catch (error) {
+            // Coffre à moitié créé : on l'efface pour permettre de réessayer.
+            await manager.destroy().catch(() => undefined);
+            throw error;
+          }
+        }}
       />
     );
   } else if (phase.kind === 'locked') {

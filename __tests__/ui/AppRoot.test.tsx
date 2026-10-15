@@ -110,6 +110,37 @@ describe('premier lancement', () => {
     expect((await manager.getStatus()).kind).toBe('ready');
   });
 
+  it('permet de réessayer si la création du coffre échoue', async () => {
+    const { manager } = makeManager();
+    let failures = 1;
+    const flaky: VaultContent = {
+      ...content,
+      seedDecoy: async db => {
+        if (failures-- > 0) {
+          throw new Error('Échec simulé');
+        }
+        await content.seedDecoy?.(db);
+      },
+    };
+    await render(<AppRoot manager={manager} content={flaky} />);
+    await fireEvent.press(await screen.findByText('Choisir mon code'));
+    await typePin(MASTER);
+    await typePin(MASTER);
+    await fireEvent.press(
+      await screen.findByText('Définir un code de contrainte'),
+    );
+    await typePin(DURESS);
+    await typePin(DURESS);
+    expect(await screen.findByText('Échec simulé')).toBeTruthy();
+    expect((await manager.getStatus()).kind).toBe('uninitialized');
+
+    await fireEvent.press(screen.getByText('Définir un code de contrainte'));
+    await typePin(DURESS);
+    await typePin(DURESS);
+    expect(await screen.findByText('Autonomie du foyer')).toBeTruthy();
+    expect((await manager.getStatus()).kind).toBe('ready');
+  });
+
   it('recommence si la confirmation diffère', async () => {
     const { manager } = makeManager();
     await render(<AppRoot manager={manager} content={content} />);
