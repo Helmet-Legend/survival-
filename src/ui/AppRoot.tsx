@@ -29,6 +29,8 @@ import {
 } from '../vault';
 import { Brand, Button } from './components/controls';
 import { Icon, type IconName } from './components/Icon';
+import { UpdateBanner } from './components/UpdateBanner';
+import type { Updater } from '../update/updater';
 import { AutonomyScreen } from './screens/AutonomyScreen';
 import { CoordsScreen } from './screens/CoordsScreen';
 import { GuidesScreen } from './screens/GuidesScreen';
@@ -57,8 +59,10 @@ type Phase =
 export function AppRoot<TDb extends VaultDatabase>(props: {
   manager: VaultKeyManager<TDb>;
   content: VaultContent;
+  /** Vérification des mises à jour (absente dans les tests et l'aperçu web). */
+  updater?: Updater;
 }) {
-  const { manager, content } = props;
+  const { manager, content, updater } = props;
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('autonomy');
@@ -200,6 +204,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         phase.kind !== 'open' && { paddingBottom: insets.bottom },
       ]}
     >
+      {updater && phase.kind !== 'loading' ? (
+        <UpdateBanner updater={updater} />
+      ) : null}
       {body}
       {covered && phase.kind === 'open' ? (
         <View style={styles.cover} testID="privacy-cover">

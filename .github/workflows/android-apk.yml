@@ -1,12 +1,17 @@
 # Vérifie le code puis compile un APK Android installable directement sur
 # un téléphone (version de test, signée avec la clé de débogage).
-# Chaque compilation sur la branche principale de travail publie aussi une
-# « Release » GitHub : Obtainium la détecte et propose la mise à jour.
+#
+# Cycle de développement :
+# - chaque pull request vers `main` est vérifiée et compilée ;
+# - chaque fusion dans `main` publie une « Release » GitHub avec l'APK ;
+#   l'application la détecte au démarrage et propose de s'y mettre à jour.
 name: APK Android
 
 on:
   push:
-    branches: [main, ccr-68193128-o7em9g]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -63,8 +68,8 @@ jobs:
           name: resilios-apk
           path: ResiliOS-*.apk
           retention-days: 30
-      - name: Publication de la version (Obtainium)
-        if: github.event_name == 'push'
+      - name: Publication de la version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
