@@ -81,6 +81,7 @@ const BUCKET_LABELS: Record<ExpiryBucket, string> = {
   within30: '≤ 30 j',
   within60: '≤ 60 j',
   within90: '≤ 90 j',
+  watch: 'Seuil perso',
 };
 
 const num = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });

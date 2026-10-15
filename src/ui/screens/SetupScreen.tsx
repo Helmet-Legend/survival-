@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isCryptoError } from '../../crypto/errors';
 import { assertPinAcceptable, pinsAreEqual } from '../../crypto/pinPolicy';
-import { Button } from '../components/controls';
+import { Brand, Button } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
 import { colors, space, text } from '../theme';
 
@@ -87,7 +87,7 @@ export function SetupScreen(props: {
   if (step === 'intro' || step === 'duressAsk' || step === 'creating') {
     return (
       <ScrollView contentContainerStyle={styles.page}>
-        <Text style={text.brand}>ResiliOS</Text>
+        <Brand size={24} />
         {step === 'intro' ? (
           <>
             <Text style={styles.heading}>Créer votre coffre</Text>
@@ -139,7 +139,7 @@ export function SetupScreen(props: {
   return (
     <View style={styles.pinPage}>
       <View style={styles.pinHead}>
-        <Text style={text.brand}>ResiliOS</Text>
+        <Brand size={24} />
         <Text style={[text.body, styles.center]}>{PROMPTS[step]}</Text>
       </View>
       <PinDots length={pin.length} />

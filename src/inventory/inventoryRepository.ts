@@ -58,6 +58,10 @@ export interface ItemInput {
   location?: string | null;
   isCritical?: boolean;
   notes?: string | null;
+  /** Stock minimal souhaité, dans l'unité de l'article. */
+  minStock?: number | null;
+  /** Prévenir N jours avant la péremption (en plus des seuils 30/60/90). */
+  alertDays?: number | null;
 }
 
 export interface LotInput {
@@ -77,6 +81,8 @@ export interface InventoryItem {
   location: string | null;
   isCritical: boolean;
   notes: string | null;
+  minStock: number | null;
+  alertDays: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -164,6 +170,8 @@ interface CleanItem {
   location: string | null;
   isCritical: boolean;
   notes: string | null;
+  minStock: number | null;
+  alertDays: number | null;
 }
 
 function validateItem(input: ItemInput): CleanItem {
@@ -198,7 +206,34 @@ function validateItem(input: ItemInput): CleanItem {
     location: cleanText(input.location, 'location'),
     isCritical: input.isCritical === true,
     notes: cleanText(input.notes, 'notes'),
+    minStock: validateMinStock(input.minStock),
+    alertDays: validateAlertDays(input.alertDays),
   };
+}
+
+function validateMinStock(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Number.isFinite(value) || value < 0) {
+    throw invalid('minStock', 'Le stock minimal doit être un nombre positif');
+  }
+  return value === 0 ? null : roundQuantity(value);
+}
+
+export const ALERT_DAYS_MAX = 3650;
+
+function validateAlertDays(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Number.isInteger(value) || value < 1 || value > ALERT_DAYS_MAX) {
+    throw invalid(
+      'alertDays',
+      `Le délai d'alerte doit être un nombre de jours entre 1 et ${ALERT_DAYS_MAX}`,
+    );
+  }
+  return value;
 }
 
 function validateQuantity(value: number, field = 'quantity'): number {
@@ -257,13 +292,16 @@ function toItem(row: SqlRow): InventoryItem {
     location: row.location === null ? null : String(row.location),
     isCritical: Number(row.is_critical) === 1,
     notes: row.notes === null ? null : String(row.notes),
+    minStock: row.min_stock === null ? null : Number(row.min_stock),
+    alertDays: row.alert_days === null ? null : Number(row.alert_days),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
-  i.location, i.is_critical, i.notes, i.created_at, i.updated_at`;
+  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days,
+  i.created_at, i.updated_at`;
 
 /**
  * Ordre de consommation : péremption la plus proche d'abord, lots non
@@ -299,8 +337,9 @@ export class InventoryRepository {
     return withTransaction(this.db, async () => {
       await this.db.execute(
         `INSERT INTO inventory_items
-           (id, name, category, unit, calories_per_unit, location, is_critical, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, name, category, unit, calories_per_unit, location, is_critical,
+            notes, min_stock, alert_days)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -310,6 +349,8 @@ export class InventoryRepository {
           item.location,
           item.isCritical ? 1 : 0,
           item.notes,
+          item.minStock,
+          item.alertDays,
         ],
       );
       if (lot !== null) {
@@ -343,7 +384,8 @@ export class InventoryRepository {
       await this.db.execute(
         `UPDATE inventory_items
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
-                location = ?, is_critical = ?, notes = ?
+                location = ?, is_critical = ?, notes = ?,
+                min_stock = ?, alert_days = ?
           WHERE id = ?`,
         [
           item.name,
@@ -353,6 +395,8 @@ export class InventoryRepository {
           item.location,
           item.isCritical ? 1 : 0,
           item.notes,
+          item.minStock,
+          item.alertDays,
           id,
         ],
       );

@@ -69,7 +69,16 @@ export interface ResilienceReport {
   limitingFactor: 'water' | 'food';
 }
 
-export type ExpiryBucket = 'expired' | 'within30' | 'within60' | 'within90';
+/**
+ * `watch` : au-delà de 90 jours, mais dans le seuil d'alerte propre à
+ * l'article (ex. un filtre à eau à surveiller 180 jours avant).
+ */
+export type ExpiryBucket =
+  | 'expired'
+  | 'within30'
+  | 'within60'
+  | 'within90'
+  | 'watch';
 
 export interface ExpiryAlert {
   lotId: string;
@@ -83,6 +92,8 @@ export interface ExpiryAlert {
   /** Jours restants (négatif si déjà périmé, 0 = dernier jour). */
   daysLeft: number;
   bucket: ExpiryBucket;
+  /** Seuil d'alerte propre à l'article, s'il en a un. */
+  alertDays: number | null;
 }
 
 export class ResilienceError extends Error {
@@ -166,12 +177,11 @@ function simulate(
   return { days: Math.floor(elapsed + 1e-9), wasted };
 }
 
-function computeResource(
+function toPortions(
   lots: readonly StockLot[],
   amountOf: (lot: StockLot) => number,
-  dailyNeed: number,
   asOf: string,
-): ResourceAutonomy {
+): { portions: Portion[]; available: number; expiredAmount: number } {
   const portions: Portion[] = [];
   let available = 0;
   let expiredAmount = 0;
@@ -192,6 +202,48 @@ function computeResource(
     available += amount;
     portions.push({ amount, usableUntil });
   }
+  return { portions, available, expiredAmount };
+}
+
+/**
+ * Jours (décimaux) de besoin couverts par le stock pendant les `horizon`
+ * prochains jours, en consommant les lots par péremption croissante. Un lot
+ * qui périme avant d'être atteint ne couvre rien.
+ */
+export function coveredDaysWithin(
+  lots: readonly StockLot[],
+  amountOf: (lot: StockLot) => number,
+  dailyNeed: number,
+  asOf: string,
+  horizon: number,
+): number {
+  const { portions } = toPortions(lots, amountOf, asOf);
+  const ordered = [...portions].sort((a, b) => a.usableUntil - b.usableUntil);
+  let elapsed = 0;
+  for (const { amount, usableUntil } of ordered) {
+    const limit = Math.min(usableUntil, horizon);
+    if (elapsed >= horizon) {
+      break;
+    }
+    if (elapsed >= limit) {
+      continue;
+    }
+    elapsed = Math.min(elapsed + amount / dailyNeed, limit);
+  }
+  return elapsed;
+}
+
+function computeResource(
+  lots: readonly StockLot[],
+  amountOf: (lot: StockLot) => number,
+  dailyNeed: number,
+  asOf: string,
+): ResourceAutonomy {
+  const { portions, available, expiredAmount } = toPortions(
+    lots,
+    amountOf,
+    asOf,
+  );
   const { days, wasted } = simulate(portions, dailyNeed);
   return {
     available,
@@ -256,6 +308,36 @@ const SETTING_KEYS = {
   waterLitersPerPersonDay: 'water_liters_per_person_day',
   kcalPerPersonDay: 'kcal_per_person_day',
 } as const;
+
+export const TARGET_DAYS_DEFAULT = 14;
+export const TARGET_DAYS_MAX = 365;
+
+/** Objectif d'autonomie du foyer, en jours (réglage `target_days`). */
+export async function loadTargetDays(db: SqlDatabase): Promise<number> {
+  const { rows } = await db.execute(
+    "SELECT value FROM settings WHERE key = 'target_days'",
+  );
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 1 && value <= TARGET_DAYS_MAX
+    ? value
+    : TARGET_DAYS_DEFAULT;
+}
+
+export async function saveTargetDays(
+  db: SqlDatabase,
+  days: number,
+): Promise<void> {
+  if (!Number.isInteger(days) || days < 1 || days > TARGET_DAYS_MAX) {
+    throw new ResilienceError(
+      `L'objectif doit être compris entre 1 et ${TARGET_DAYS_MAX} jours`,
+    );
+  }
+  await db.execute(
+    `INSERT INTO settings (key, value) VALUES ('target_days', ?)
+     ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+    [String(days)],
+  );
+}
 
 export async function loadHousehold(
   db: SqlDatabase,
@@ -335,25 +417,41 @@ export async function getResilienceReport(
  */
 export const EXPIRY_ALERTS_SQL = `
   SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
-         i.is_critical, l.quantity, l.expiration_date
+         i.is_critical, i.alert_days, l.quantity, l.expiration_date
     FROM inventory_lots AS l
     JOIN inventory_items AS i ON i.id = l.item_id
    WHERE l.expiration_date IS NOT NULL AND l.quantity > 0
      AND l.expiration_date <= ?
    ORDER BY l.expiration_date, i.is_critical DESC, i.name`;
 
-/** Lots périmés ou périmant sous 30, 60 et 90 jours, du plus urgent au moins urgent. */
+/** Fenêtre standard des alertes, en jours. */
+const STANDARD_ALERT_WINDOW = 90;
+
+/**
+ * Lots périmés ou périmant sous 30, 60 et 90 jours, plus ceux qui entrent
+ * dans le seuil propre à leur article, du plus urgent au moins urgent.
+ */
 export async function getExpiryAlerts(
   db: SqlDatabase,
   asOf: string = localToday(),
 ): Promise<ExpiryAlert[]> {
-  const params: SqlValue[] = [addDays(asOf, 90)];
+  const { rows: maxRows } = await db.execute(
+    'SELECT MAX(alert_days) AS max_days FROM inventory_items',
+  );
+  const horizon = Math.max(
+    STANDARD_ALERT_WINDOW,
+    Number(maxRows[0]?.max_days ?? 0),
+  );
+  const params: SqlValue[] = [addDays(asOf, horizon)];
   const { rows } = await db.execute(EXPIRY_ALERTS_SQL, params);
   const alerts: ExpiryAlert[] = [];
   for (const r of rows) {
     const expirationDate = String(r.expiration_date);
     const daysLeft = daysBetween(asOf, expirationDate);
-    const bucket = expiryBucket(daysLeft);
+    const alertDays = r.alert_days === null ? null : Number(r.alert_days);
+    const bucket =
+      expiryBucket(daysLeft) ??
+      (alertDays !== null && daysLeft <= alertDays ? 'watch' : null);
     if (bucket === null) {
       continue;
     }
@@ -368,6 +466,7 @@ export async function getExpiryAlerts(
       expirationDate,
       daysLeft,
       bucket,
+      alertDays,
     });
   }
   return alerts;

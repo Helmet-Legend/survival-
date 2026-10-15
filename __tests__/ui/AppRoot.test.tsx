@@ -162,7 +162,7 @@ describe('déverrouillage', () => {
     await unlockWith(DURESS);
     await screen.findByText('Autonomie du foyer');
 
-    await fireEvent.press(screen.getByText('Stock'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
     expect(await screen.findByText('Eau minérale')).toBeTruthy();
     expect(screen.queryByText('Eau en bidons')).toBeNull();
     expect(screen.queryByText(/contrainte|leurre/i)).toBeNull();
@@ -252,9 +252,56 @@ describe('écrans', () => {
     expect(screen.getByText('2 pers.')).toBeTruthy();
   });
 
+  it('affiche l’état et la liste de réapprovisionnement', async () => {
+    await openApp();
+    // 10 jours d'eau pour un objectif de 14 : 12 L à racheter, vivres suffisants.
+    expect(screen.getByText('Sous l’objectif')).toBeTruthy();
+    expect(screen.getByText('À racheter pour 14 j')).toBeTruthy();
+    expect(screen.getByText('+12 L')).toBeTruthy();
+    expect(screen.queryByText(/^\+.*kcal$/)).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Augmenter l’objectif'));
+    expect(await screen.findByText('À racheter pour 30 j')).toBeTruthy();
+    expect(screen.getByText('+60 L')).toBeTruthy(); // 30 × 3 − 30
+    expect(screen.getByText('+24 000 kcal')).toBeTruthy(); // 60 000 − 36 000
+  });
+
+  it('ajoute un article sous son stock minimal à la liste de rachat', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    await fireEvent.changeText(
+      await screen.findByLabelText('Stock minimal (kg)'),
+      '15',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Prévenir (jours avant)'),
+      '0',
+    );
+    await fireEvent.press(screen.getByText('Enregistrer les réglages'));
+    expect(
+      await screen.findByText(
+        "Le délai d'alerte doit être un nombre de jours entre 1 et 3650",
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Prévenir (jours avant)'),
+      '',
+    );
+    await fireEvent.press(screen.getByText('Enregistrer les réglages'));
+    expect(
+      await screen.findByText('Réglages de « Riz » enregistrés.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Sous le minimum')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Autonomie' }));
+    expect(await screen.findByText('+5 kg')).toBeTruthy();
+  });
+
   it('consomme du stock et affiche le résultat', async () => {
     await openApp();
-    await fireEvent.press(screen.getByText('Stock'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
     await fireEvent.press(await screen.findByLabelText('Eau en bidons, 30 L'));
     await fireEvent.changeText(
       await screen.findByLabelText('Quantité à retirer (L)'),
@@ -277,7 +324,7 @@ describe('écrans', () => {
 
   it('ajoute un article et signale le champ invalide', async () => {
     await openApp();
-    await fireEvent.press(screen.getByText('Stock'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stock' }));
     await fireEvent.press(await screen.findByText('+ Ajouter un article'));
     await fireEvent.changeText(
       screen.getByLabelText('Nom'),
@@ -305,7 +352,7 @@ describe('écrans', () => {
 
   it('convertit une position en MGRS et calcule un cap', async () => {
     await openApp();
-    await fireEvent.press(screen.getByText('Coordonnées'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Coordonnées' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '45,83265');
     await fireEvent.changeText(screen.getByLabelText('Longitude'), '6.86518');
     expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
@@ -327,7 +374,7 @@ describe('écrans', () => {
 
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
-    await fireEvent.press(screen.getByText('Fiches'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await fireEvent.changeText(
       await screen.findByLabelText('Rechercher'),
       'severe',

@@ -142,6 +142,7 @@ describe('contraintes du schéma', () => {
     expect(rows).toEqual([
       { key: 'household_members', value: '1' },
       { key: 'kcal_per_person_day', value: '2000' },
+      { key: 'target_days', value: '14' },
       { key: 'water_liters_per_person_day', value: '3' },
     ]);
   });
@@ -246,5 +247,49 @@ describe('contraintes du schéma', () => {
       );
     await add('i1', 0);
     await expect(add('i2', 0)).rejects.toThrow(/UNIQUE/);
+  });
+});
+
+describe('migration 2 (réapprovisionnement)', () => {
+  it('met à niveau une base v1 existante sans perdre de données', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 1));
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit) VALUES ('f1', 'Filtre', 'tool', 'unit')`,
+    );
+    await db.execute(
+      "UPDATE settings SET value = '4' WHERE key = 'household_members'",
+    );
+
+    expect(await migrate(db)).toEqual({ from: 1, to: SCHEMA_VERSION });
+
+    const { rows } = await db.execute(
+      "SELECT name, min_stock, alert_days FROM inventory_items WHERE id = 'f1'",
+    );
+    expect(rows).toEqual([
+      { name: 'Filtre', min_stock: null, alert_days: null },
+    ]);
+    const settings = await db.execute(
+      "SELECT key, value FROM settings WHERE key IN ('household_members', 'target_days') ORDER BY key",
+    );
+    expect(settings.rows).toEqual([
+      { key: 'household_members', value: '4' },
+      { key: 'target_days', value: '14' },
+    ]);
+  });
+
+  it('borne les nouveaux champs', async () => {
+    const db = await freshDb();
+    const insert = (minStock: number | null, alertDays: number | null) =>
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, min_stock, alert_days)
+         VALUES (?, 'x', 'tool', 'unit', ?, ?)`,
+        [`i-${minStock}-${alertDays}`, minStock, alertDays],
+      );
+    await insert(2, 180);
+    await expect(insert(-1, null)).rejects.toThrow(/constraint/i);
+    await expect(insert(null, 0)).rejects.toThrow(/constraint/i);
+    await expect(insert(null, 4000)).rejects.toThrow(/constraint/i);
   });
 });

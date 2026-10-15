@@ -1,6 +1,7 @@
 /** Formats d'affichage partagés par les écrans. */
 import type { ItemCategory, ItemUnit } from '../inventory/types';
 import type { ExpiryBucket } from '../resilience/resilienceCalculator';
+import type { StatusTone } from './theme';
 
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   water: 'Eau',
@@ -23,6 +24,7 @@ export const BUCKET_LABELS: Record<ExpiryBucket, string> = {
   within30: '≤ 30 j',
   within60: '≤ 60 j',
   within90: '≤ 90 j',
+  watch: 'Seuil perso',
 };
 
 const MONTHS = [
@@ -69,4 +71,38 @@ export function formatRelativeDays(days: number): string {
 export function parseDecimal(text: string): number {
   const cleaned = text.trim().replace(/\s/g, '').replace(',', '.');
   return cleaned === '' ? NaN : Number(cleaned);
+}
+
+export const BUCKET_TONES: Record<ExpiryBucket, StatusTone> = {
+  expired: 'danger',
+  within30: 'danger',
+  within60: 'warn',
+  within90: 'neutral',
+  watch: 'neutral',
+};
+
+/** Seuil en jours sous lequel l'autonomie est critique. */
+export const CRITICAL_DAYS = 3;
+
+export function autonomyStatus(
+  days: number,
+  targetDays: number,
+): { tone: StatusTone; label: string } {
+  if (days < CRITICAL_DAYS) {
+    return { tone: 'danger', label: 'Critique' };
+  }
+  if (days < targetDays) {
+    return { tone: 'warn', label: 'Sous l’objectif' };
+  }
+  return { tone: 'ok', label: 'Objectif atteint' };
+}
+
+/** Paliers proposés pour l'objectif d'autonomie. */
+export const TARGET_STEPS = [3, 7, 14, 30, 60, 90, 180, 365] as const;
+
+export function nextTarget(current: number, direction: 1 | -1): number {
+  if (direction === 1) {
+    return TARGET_STEPS.find(step => step > current) ?? current;
+  }
+  return [...TARGET_STEPS].reverse().find(step => step < current) ?? current;
 }

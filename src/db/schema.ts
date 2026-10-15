@@ -167,6 +167,21 @@ const migration1: Migration = {
   ],
 };
 
-export const MIGRATIONS: readonly Migration[] = [migration1];
+const migration2: Migration = {
+  version: 2,
+  name: 'réapprovisionnement et seuils par article',
+  statements: [
+    // Stock minimal souhaité, dans l'unité de l'article (ex. 2 filtres).
+    `ALTER TABLE inventory_items ADD COLUMN min_stock REAL
+       CHECK (min_stock IS NULL OR min_stock >= 0)`,
+    // Prévenir N jours avant la péremption au lieu des seuils 30/60/90.
+    `ALTER TABLE inventory_items ADD COLUMN alert_days INTEGER
+       CHECK (alert_days IS NULL OR alert_days BETWEEN 1 AND 3650)`,
+    // Objectif d'autonomie du foyer, en jours.
+    "INSERT INTO settings (key, value) VALUES ('target_days', '14')",
+  ],
+};
+
+export const MIGRATIONS: readonly Migration[] = [migration1, migration2];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

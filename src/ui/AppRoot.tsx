@@ -27,7 +27,8 @@ import {
   type VaultContent,
   type VaultDatabase,
 } from '../vault';
-import { Button } from './components/controls';
+import { Brand, Button } from './components/controls';
+import { Icon, type IconName } from './components/Icon';
 import { AutonomyScreen } from './screens/AutonomyScreen';
 import { CoordsScreen } from './screens/CoordsScreen';
 import { GuidesScreen } from './screens/GuidesScreen';
@@ -39,11 +40,11 @@ import { colors, fonts, space, text } from './theme';
 
 type Tab = 'autonomy' | 'stock' | 'coords' | 'guides';
 
-const TABS: Array<[Tab, string]> = [
-  ['autonomy', 'Autonomie'],
-  ['stock', 'Stock'],
-  ['coords', 'Coordonnées'],
-  ['guides', 'Fiches'],
+const TABS: Array<[Tab, string, IconName]> = [
+  ['autonomy', 'Autonomie', 'gauge'],
+  ['stock', 'Stock', 'stock'],
+  ['coords', 'Coordonnées', 'nav'],
+  ['guides', 'Fiches', 'book'],
 ];
 
 type Phase =
@@ -136,8 +137,20 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     body = (
       <SessionContext.Provider value={phase.session}>
         <View style={styles.bar}>
-          <Text style={text.brand}>ResiliOS</Text>
-          <Button label="Verrouiller" onPress={() => lock()} />
+          <Brand />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Verrouiller"
+            onPress={() => lock()}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.lockButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="lock" color={colors.text} size={16} />
+            <Text style={styles.lockText}>Verrouiller</Text>
+          </Pressable>
         </View>
         <KeyboardAvoidingView
           style={styles.flex}
@@ -152,7 +165,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
           style={[styles.tabs, { paddingBottom: insets.bottom }]}
           accessibilityRole="tablist"
         >
-          {TABS.map(([id, label]) => (
+          {TABS.map(([id, label, icon]) => (
             <Pressable
               key={id}
               accessibilityRole="tab"
@@ -160,6 +173,11 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               onPress={() => setTab(id)}
               style={[styles.tab, tab === id && styles.tabOn]}
             >
+              <Icon
+                name={icon}
+                color={tab === id ? colors.amber : colors.faint}
+                size={20}
+              />
               <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>
                 {label}
               </Text>
@@ -185,7 +203,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       {body}
       {covered && phase.kind === 'open' ? (
         <View style={styles.cover} testID="privacy-cover">
-          <Text style={text.brand}>ResiliOS</Text>
+          <Brand />
         </View>
       ) : null}
     </View>
@@ -196,7 +214,7 @@ function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
   const [confirming, setConfirming] = useState(false);
   return (
     <View style={styles.fatal}>
-      <Text style={text.brand}>ResiliOS</Text>
+      <Brand />
       <Text style={text.title}>Le coffre ne peut pas être ouvert</Text>
       <Text style={text.body}>{props.message}</Text>
       {confirming ? (
@@ -231,28 +249,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: space.l,
-    paddingVertical: space.s,
+    paddingVertical: space.m,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
+  lockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.panelHi,
+  },
+  lockText: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  pressed: { opacity: 0.7 },
   tabs: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: colors.line,
+    backgroundColor: colors.bg,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: space.m,
+    gap: 5,
+    paddingTop: space.s,
     paddingBottom: space.m,
     borderTopWidth: 2,
     borderTopColor: 'transparent',
   },
   tabOn: { borderTopColor: colors.amber },
   tabText: {
-    color: colors.dim,
+    color: colors.faint,
     fontFamily: fonts.display,
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },

@@ -76,3 +76,4 @@ yarn-error.log
 
 # Démo web compilée
 demo/web/dist/
+demo/app/dist/

@@ -133,10 +133,12 @@ function GuideReader(props: { slug: string; onBack: () => void }) {
 const styles = StyleSheet.create({
   page: { padding: space.l, gap: space.m },
   guide: {
-    gap: 2,
-    paddingVertical: space.m,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    gap: 4,
+    padding: space.m,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 14,
   },
   hit: { color: colors.amber, fontWeight: '600' },
   back: { alignItems: 'flex-start' },

@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["es2022", "dom", "dom.iterable"],
-    "types": []
+    "types": [],
+    "jsx": "react-jsx"
   },
-  "include": ["./**/*.ts", "../../src/**/*.ts"],
+  "include": ["./**/*.ts", "../../src/**/*.ts", "../app/**/*.tsx"],
   "exclude": ["../../src/crypto/native/**", "../../src/crypto/index.ts"]
 }

@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { isCryptoError } from '../../crypto/errors';
+import { Brand } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
 import { colors, space, text } from '../theme';
 
@@ -92,7 +93,7 @@ export function LockScreen(props: {
   return (
     <View style={styles.page}>
       <View style={styles.head}>
-        <Text style={text.brand}>ResiliOS</Text>
+        <Brand size={24} />
         <Text style={text.dim}>Saisissez votre code</Text>
       </View>
       <PinDots length={pin.length} />

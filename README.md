@@ -282,3 +282,25 @@ Rien de natif n'a encore été exécuté. À vérifier en priorité sur appareil
 5. Verrouillage à la mise en arrière-plan et écran masqué dans le
    sélecteur d'applications.
 6. Capture d'écran bloquée sur Android.
+
+## Réapprovisionnement et seuils par article (`src/resilience/restock.ts`)
+
+- **Objectif d'autonomie** : réglage du foyer (7, 14, 30 jours…), 14 jours
+  par défaut.
+- **Liste « À racheter »** : manque en eau (L) et en vivres (kcal, aussi
+  exprimé en jours-personne) pour tenir l'objectif. Le stock qui périmera
+  avant d'être consommé n'est pas compté.
+- **Stock minimal par article** : sous ce seuil, l'article apparaît dans la
+  liste de rachat (filtres, piles, médicaments…).
+- **Délai d'alerte par article** : prévient N jours avant la péremption, en
+  plus des seuils 30/60/90 (statut « Seuil perso »).
+
+Le schéma passe en version 2 (migration automatique : deux colonnes sur
+`inventory_items` et le réglage `target_days`). La mise à niveau d'une base
+v1 contenant des données est testée.
+
+## Aperçu web de l'interface mobile (`demo/app`)
+
+`npm run preview:build` compile la vraie interface (`src/ui`) pour le
+navigateur avec react-native-web et le SQLite WebAssembly de la démo. Cela
+permet de vérifier le rendu sans téléphone.

@@ -85,9 +85,9 @@ const KEY_SIZE = 76;
 const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 14, minHeight: 16 },
   dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 1.5,
     borderColor: colors.faint,
   },
@@ -104,8 +104,8 @@ const styles = StyleSheet.create({
     height: KEY_SIZE,
     borderRadius: KEY_SIZE / 2,
     borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.raise,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.panelHi,
     alignItems: 'center',
     justifyContent: 'center',
   },

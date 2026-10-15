@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "demo:build": "node demo/web/build.mjs",
     "demo:typecheck": "tsc -p demo/web --noEmit",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "preview:build": "node demo/app/build.mjs"
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",
@@ -48,6 +49,8 @@
     "patch-package": "^8.0.0",
     "prettier": "2.8.8",
     "proj4": "^2.22.0",
+    "react-dom": "^19.2.3",
+    "react-native-web": "^0.21.2",
     "react-test-renderer": "19.2.3",
     "test-renderer": "^1.3.1",
     "typescript": "^6.0.3"

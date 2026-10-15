@@ -15,9 +15,9 @@ import {
   type LatLon,
   type MgrsDigits,
 } from '../../geo/geoConverter';
-import { Chip, Field, Notice, Reading } from '../components/controls';
+import { Chip, Field, Notice, Panel, Reading } from '../components/controls';
 import { formatNumber, parseDecimal } from '../format';
-import { space, text } from '../theme';
+import { colors, space, text } from '../theme';
 
 const PRECISIONS: Array<[MgrsDigits, string]> = [
   [5, '1 m'],
@@ -124,8 +124,8 @@ export function CoordsScreen() {
       ) : 'error' in position ? (
         <Notice tone="error" message={position.error ?? ''} />
       ) : (
-        <View>
-          <Reading label="MGRS" value={position.mgrs} />
+        <Panel title="Votre position">
+          <Reading label="MGRS" value={position.mgrs} color={colors.amber} />
           <Reading label="UTM" value={formatUtm(position.utm)} />
           <Reading label="DMS" value={formatLatLon(position.point, 'dms')} />
           <Reading
@@ -136,7 +136,7 @@ export function CoordsScreen() {
             label="Convergence"
             value={`${formatNumber(position.utm.convergence)}°`}
           />
-        </View>
+        </Panel>
       )}
 
       <Text style={[text.title, styles.section]}>Aller vers</Text>
@@ -158,7 +158,7 @@ export function CoordsScreen() {
       {navigation === null ? null : 'error' in navigation ? (
         <Notice tone="error" message={navigation.error ?? ''} />
       ) : (
-        <View>
+        <Panel title="Itinéraire" accent={colors.amber}>
           <Reading
             label="Arrivée"
             value={formatLatLon(navigation.destination, 'dms')}
@@ -187,7 +187,7 @@ export function CoordsScreen() {
                 : `${formatNumber(navigation.magnetic, 0)}°`
             }
           />
-        </View>
+        </Panel>
       )}
     </ScrollView>
   );
