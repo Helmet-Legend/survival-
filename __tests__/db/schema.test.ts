@@ -333,6 +333,7 @@ describe('migration 3 (armes et munitions)', () => {
         updated_at: '2026-01-02T03:04:05.000Z',
         min_stock: 5,
         alert_days: 120,
+        caliber: null,
       },
     ]);
     const lots = await db.execute('SELECT * FROM inventory_lots');
@@ -349,6 +350,46 @@ describe('migration 3 (armes et munitions)', () => {
     ]);
     expect(await names(db, 'table')).not.toContain('inventory_lots_backup');
     expect(await names(db, 'table')).not.toContain('inventory_items_new');
+    expect(await names(db, 'table')).toContain('weapons');
+  });
+
+  it('réserve le calibre aux munitions et valide les armes', async () => {
+    const db = await v2WithStock();
+    await migrate(db);
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit, caliber)
+       VALUES ('m1', 'Cartouches', 'weapon', 'unit', '12/70')`,
+    );
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, caliber)
+         VALUES ('x1', 'Riz', 'food', 'kg', '12/70')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, caliber)
+         VALUES ('x2', 'Cartouches', 'weapon', 'unit', '  ')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+
+    await db.execute(
+      `INSERT INTO weapons (id, model, kind, caliber)
+       VALUES ('w1', 'Browning B525', 'shotgun', '12/70')`,
+    );
+    await expect(
+      db.execute(
+        `INSERT INTO weapons (id, model, kind, caliber)
+         VALUES ('w2', 'X', 'cannon', '12/70')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await expect(
+      db.execute(
+        `INSERT INTO weapons (id, model, kind, caliber)
+         VALUES ('w3', 'X', 'rifle', '')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    expect(await names(db, 'trigger')).toContain('trg_weapons_touch');
   });
 
   it('accepte la catégorie armes et garde toutes les contraintes', async () => {

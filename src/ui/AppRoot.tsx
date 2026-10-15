@@ -26,7 +26,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { VaultKeyManager } from '../crypto/VaultKeyManager';
-import { InventoryRepository } from '../inventory';
+import { ArmoryRepository, InventoryRepository } from '../inventory';
 import type { Updater } from '../update/updater';
 import {
   createVault,
@@ -96,7 +96,11 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   }, [manager]);
 
   const open = (db: VaultDatabase) => {
-    const session = { db, repo: new InventoryRepository(db) };
+    const session = {
+      db,
+      repo: new InventoryRepository(db),
+      armory: new ArmoryRepository(db),
+    };
     sessionRef.current = session;
     setTab('home');
     setOverlay(null);

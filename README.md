@@ -240,6 +240,9 @@ L'application s'ouvre sur l'un de trois écrans :
      (objectif, liste de rachat, péremptions, détail du calcul).
    - Stocks : catégories avec quantités réelles, recherche, lots,
      consommation, réglages par article, ajout, « jeter les périmés ».
+     Dans « Armes et munitions » : armes enregistrées (marque et modèle,
+     type, calibre, n° de série, notes) et, pour chacune, les munitions
+     utilisables du même calibre (articles en pièces, lots non périmés).
    - Carte : coordonnées (MGRS, UTM, DMS) et azimut vers un point MGRS.
    - Guides : catégories de fiches, recherche plein texte et lecture.
    - Réglages : composition du foyer, objectif, verrouillage.

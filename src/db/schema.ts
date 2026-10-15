@@ -183,6 +183,10 @@ const migration2: Migration = {
 };
 
 /**
+ * Armes et munitions. Les munitions sont des articles de stock (catégorie
+ * `weapon`) portant un calibre ; les armes ont leur propre table et
+ * retrouvent leurs munitions par calibre.
+ *
  * SQLite ne sait pas modifier une contrainte CHECK : la table des articles
  * est reconstruite. Les lots sont mis de côté avant de supprimer l'ancienne
  * table, sinon `ON DELETE CASCADE` les effacerait (foreign_keys est actif
@@ -212,6 +216,9 @@ const migration3: Migration = {
        updated_at        TEXT NOT NULL DEFAULT ${NOW},
        min_stock         REAL CHECK (min_stock IS NULL OR min_stock >= 0),
        alert_days        INTEGER CHECK (alert_days IS NULL OR alert_days BETWEEN 1 AND 3650),
+       -- Calibre des munitions (ex. « 12/70 »), réservé à la catégorie weapon.
+       caliber           TEXT CHECK (caliber IS NULL
+                                     OR (category = 'weapon' AND length(trim(caliber)) > 0)),
        CHECK (category <> 'water' OR unit IN ('L', 'mL'))
      ) STRICT`,
     `INSERT INTO inventory_items_new (id, name, category, unit, calories_per_unit,
@@ -247,6 +254,19 @@ const migration3: Migration = {
        ON inventory_lots (expiration_date)
        WHERE expiration_date IS NOT NULL AND quantity > 0`,
     touchTrigger('inventory_lots'),
+
+    `CREATE TABLE weapons (
+       id            TEXT PRIMARY KEY NOT NULL,
+       model         TEXT NOT NULL CHECK (length(trim(model)) > 0),
+       kind          TEXT NOT NULL
+                     CHECK (kind IN ('rifle', 'shotgun', 'handgun', 'other')),
+       caliber       TEXT NOT NULL CHECK (length(trim(caliber)) > 0),
+       serial_number TEXT,
+       notes         TEXT,
+       created_at    TEXT NOT NULL DEFAULT ${NOW},
+       updated_at    TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('weapons'),
   ],
 };
 

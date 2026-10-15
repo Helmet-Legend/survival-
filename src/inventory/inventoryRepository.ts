@@ -62,6 +62,8 @@ export interface ItemInput {
   minStock?: number | null;
   /** Prévenir N jours avant la péremption (en plus des seuils 30/60/90). */
   alertDays?: number | null;
+  /** Calibre des munitions (catégorie `weapon` seulement), ex. « 12/70 ». */
+  caliber?: string | null;
 }
 
 export interface LotInput {
@@ -83,6 +85,7 @@ export interface InventoryItem {
   notes: string | null;
   minStock: number | null;
   alertDays: number | null;
+  caliber: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -172,7 +175,10 @@ interface CleanItem {
   notes: string | null;
   minStock: number | null;
   alertDays: number | null;
+  caliber: string | null;
 }
+
+export const CALIBER_MAX = 40;
 
 function validateItem(input: ItemInput): CleanItem {
   const name = typeof input.name === 'string' ? input.name.trim() : '';
@@ -208,7 +214,18 @@ function validateItem(input: ItemInput): CleanItem {
     notes: cleanText(input.notes, 'notes'),
     minStock: validateMinStock(input.minStock),
     alertDays: validateAlertDays(input.alertDays),
+    // Le calibre n'a de sens que pour les munitions : ignoré ailleurs.
+    caliber:
+      input.category === 'weapon' ? validateCaliber(input.caliber) : null,
   };
+}
+
+function validateCaliber(value: string | null | undefined): string | null {
+  const caliber = cleanText(value, 'caliber');
+  if (caliber !== null && caliber.length > CALIBER_MAX) {
+    throw invalid('caliber', `${CALIBER_MAX} caractères au maximum`);
+  }
+  return caliber;
 }
 
 function validateMinStock(value: number | null | undefined): number | null {
@@ -294,13 +311,17 @@ function toItem(row: SqlRow): InventoryItem {
     notes: row.notes === null ? null : String(row.notes),
     minStock: row.min_stock === null ? null : Number(row.min_stock),
     alertDays: row.alert_days === null ? null : Number(row.alert_days),
+    caliber:
+      row.caliber === null || row.caliber === undefined
+        ? null
+        : String(row.caliber),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
-  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days,
+  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber,
   i.created_at, i.updated_at`;
 
 /**
@@ -338,8 +359,8 @@ export class InventoryRepository {
       await this.db.execute(
         `INSERT INTO inventory_items
            (id, name, category, unit, calories_per_unit, location, is_critical,
-            notes, min_stock, alert_days)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            notes, min_stock, alert_days, caliber)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -351,6 +372,7 @@ export class InventoryRepository {
           item.notes,
           item.minStock,
           item.alertDays,
+          item.caliber,
         ],
       );
       if (lot !== null) {
@@ -385,7 +407,7 @@ export class InventoryRepository {
         `UPDATE inventory_items
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
                 location = ?, is_critical = ?, notes = ?,
-                min_stock = ?, alert_days = ?
+                min_stock = ?, alert_days = ?, caliber = ?
           WHERE id = ?`,
         [
           item.name,
@@ -397,6 +419,7 @@ export class InventoryRepository {
           item.notes,
           item.minStock,
           item.alertDays,
+          item.caliber,
           id,
         ],
       );

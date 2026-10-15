@@ -404,7 +404,9 @@ describe('écrans', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Outils : 0 article')).toBeTruthy();
     expect(
-      screen.getByLabelText('Armes et munitions : 0 article'),
+      screen.getByLabelText(
+        'Armes et munitions : 0 munition, 0 arme, 0 article',
+      ),
     ).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
@@ -416,6 +418,57 @@ describe('écrans', () => {
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
+  });
+
+  it('enregistre une arme et compte ses munitions par calibre', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armes et munitions' }),
+    );
+    expect(await screen.findByText(/Aucune arme enregistrée/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Ajouter une arme'));
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    expect(await screen.findAllByText('Champ obligatoire')).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Marque et modèle'),
+      'Browning B525',
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Fusil' }));
+    await fireEvent.changeText(screen.getByLabelText('Calibre'), '12/70');
+    await fireEvent.changeText(
+      screen.getByLabelText('N° de série (facultatif)'),
+      'AB1234',
+    );
+    await fireEvent.press(screen.getByText('Ajouter l’arme'));
+    expect(await screen.findByText('« Browning B525 » ajoutée.')).toBeTruthy();
+    expect(screen.getByText('Aucune munition')).toBeTruthy();
+
+    // Munitions : article en pièces au même calibre, saisi autrement.
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom'),
+      'Cartouches plomb 7',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Calibre des munitions'),
+      '12 / 70',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Quantité'), '250');
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Cartouches plomb 7 » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(
+      await screen.findByLabelText('Browning B525, 12/70, 250 munitions'),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText('Browning B525, 12/70, 250 munitions'),
+    );
+    expect(await screen.findByText('N° de série : AB1234')).toBeTruthy();
   });
 
   it('cherche dans les fiches sans tenir compte des accents', async () => {

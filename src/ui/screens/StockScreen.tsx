@@ -34,6 +34,7 @@ import {
   Notice,
   Panel,
   SearchField,
+  SectionTitle,
   StatusChip,
 } from '../components/controls';
 import {
@@ -57,6 +58,7 @@ import {
   type StatusTone,
 } from '../theme';
 import { useLoader } from '../useLoader';
+import { ArmorySection } from './ArmorySection';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
 
@@ -104,6 +106,12 @@ function categoryAmount(
     );
     return `${formatNumber(liters)} L`;
   }
+  if (category === 'weapon') {
+    const rounds = items
+      .filter(i => i.unit === 'unit' && i.caliber !== null)
+      .reduce((sum, i) => sum + i.usableQuantity, 0);
+    return `${formatNumber(rounds, 0)} munition${rounds > 1 ? 's' : ''}`;
+  }
   if (category === 'food') {
     const known = items.filter(i => i.caloriesPerUnit !== null);
     if (known.length === 0) {
@@ -123,7 +131,7 @@ function articles(count: number): string {
 }
 
 export function StockScreen() {
-  const { repo } = useSession();
+  const { repo, armory } = useSession();
   const [filter, setFilter] = useState<ItemCategory | 'all'>('all');
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -139,7 +147,9 @@ export function StockScreen() {
     })) as ItemSummary[];
     const detail =
       expanded === null ? null : await repo.getItem(expanded).catch(() => null);
+    const weapons = await armory.listWeapons();
     return {
+      weapons,
       all,
       items,
       detail,
@@ -246,6 +256,8 @@ export function StockScreen() {
 
       {adding ? (
         <AddItemForm
+          initialCategory={filter === 'all' ? 'food' : filter}
+          calibers={[...new Set((data?.weapons ?? []).map(w => w.caliber))]}
           onDone={async (item, message) => {
             setAdding(false);
             setFilter(item.category);
@@ -270,6 +282,12 @@ export function StockScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${CATEGORY_LABELS[c]} : ${
                   amount ? `${amount}, ` : ''
+                }${
+                  c === 'weapon'
+                    ? `${data.weapons.length} arme${
+                        data.weapons.length > 1 ? 's' : ''
+                      }, `
+                    : ''
                 }${articles(inCategory.length)}${
                   alerts > 0 ? `, ${alerts} à vérifier` : ''
                 }`}
@@ -284,6 +302,11 @@ export function StockScreen() {
                   <Text style={text.h3}>{CATEGORY_LABELS[c]}</Text>
                   {amount ? <Text style={styles.amount}>{amount}</Text> : null}
                   <Text style={text.muted}>
+                    {c === 'weapon'
+                      ? `${data.weapons.length} arme${
+                          data.weapons.length > 1 ? 's' : ''
+                        } · `
+                      : ''}
                     {articles(inCategory.length)}
                     {alerts > 0 ? (
                       <Text style={styles.warn}> · {alerts} à vérifier</Text>
@@ -295,6 +318,19 @@ export function StockScreen() {
             );
           })
         : null}
+
+      {filter === 'weapon' && query.trim() === '' && data ? (
+        <>
+          <ArmorySection
+            weapons={data.weapons}
+            onChanged={async message => {
+              setFeedback(message);
+              await reload();
+            }}
+          />
+          <SectionTitle title="Munitions" />
+        </>
+      ) : null}
 
       {!showCategories && data?.items.length === 0 ? (
         <EmptyState
@@ -346,6 +382,7 @@ export function StockScreen() {
                       </Text>
                       <Text style={text.subtle}>
                         {CATEGORY_LABELS[item.category]}
+                        {item.caliber ? ` · ${item.caliber}` : ''}
                         {item.location ? ` · ${item.location}` : ''}
                       </Text>
                     </View>
@@ -527,13 +564,23 @@ function ItemDetail(props: {
   );
 }
 
+function defaultUnit(category: ItemCategory): ItemUnit {
+  return category === 'water' ? 'L' : category === 'food' ? 'kg' : 'unit';
+}
+
 function AddItemForm(props: {
+  initialCategory: ItemCategory;
+  /** Calibres des armes enregistrées, proposés pour les munitions. */
+  calibers: readonly string[];
   onDone: (item: InventoryItem, message: string) => Promise<void>;
 }) {
   const { repo } = useSession();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<ItemCategory>('food');
-  const [unit, setUnit] = useState<ItemUnit>('kg');
+  const [category, setCategory] = useState<ItemCategory>(props.initialCategory);
+  const [unit, setUnit] = useState<ItemUnit>(
+    defaultUnit(props.initialCategory),
+  );
+  const [caliber, setCaliber] = useState('');
   const [quantity, setQuantity] = useState('');
   const [kcal, setKcal] = useState('');
   const [expiration, setExpiration] = useState('');
@@ -550,6 +597,7 @@ function AddItemForm(props: {
           unit,
           caloriesPerUnit: optionalNumber(kcal),
           minStock: optionalNumber(minStock),
+          caliber,
         },
         {
           quantity: parseDecimal(quantity),
@@ -583,10 +631,40 @@ function AddItemForm(props: {
             key={c}
             label={CATEGORY_LABELS[c]}
             selected={category === c}
-            onPress={() => setCategory(c)}
+            onPress={() => {
+              setCategory(c);
+              setUnit(defaultUnit(c));
+            }}
           />
         ))}
       </View>
+      {category === 'weapon' ? (
+        <>
+          <Field
+            label="Calibre des munitions"
+            value={caliber}
+            onChangeText={setCaliber}
+            placeholder="Ex. 12/70, .22 LR, 9x19"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={40}
+            error={errors.caliber}
+            hint="Comptées en pièces, elles s’affichent sur les armes du même calibre."
+          />
+          {props.calibers.length > 0 ? (
+            <View style={styles.wrap}>
+              {props.calibers.map(c => (
+                <Chip
+                  key={c}
+                  label={c}
+                  selected={caliber.trim() === c}
+                  onPress={() => setCaliber(c)}
+                />
+              ))}
+            </View>
+          ) : null}
+        </>
+      ) : null}
       <Text style={styles.fieldLabel}>Unité</Text>
       <View style={styles.wrap}>
         {ITEM_UNITS.map(u => (
