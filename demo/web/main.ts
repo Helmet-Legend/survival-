@@ -3,7 +3,6 @@
  * reste (coffre, mode sous contrainte, schéma, inventaire, calculs,
  * conversions, recherche) est le code de `src/`, exécuté tel quel.
  */
-/* eslint-disable no-void -- `void` marque les promesses lancées depuis les gestionnaires d'événements. */
 import { CryptoError } from '../../src/crypto/errors';
 import { systemRandom } from '../../src/crypto/native/random';
 import { SLOT_FILE_NAMES } from '../../src/crypto/params';

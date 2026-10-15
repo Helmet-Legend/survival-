@@ -15,7 +15,8 @@ import {
   type SqlDatabase,
 } from '../db';
 
-export type VaultDatabase = EncryptedDatabase & SqlDatabase;
+/** `SqlDatabase` en premier : son `execute` typé l'emporte dans l'intersection. */
+export type VaultDatabase = SqlDatabase & EncryptedDatabase;
 
 export interface VaultContent {
   /** Fiches Markdown embarquées, identiques dans les deux bases. */

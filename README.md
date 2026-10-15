@@ -222,3 +222,63 @@ le produit en kg (3 600 kcal/kg).
 ordinaire (eau, pâtes, conserves, pharmacie, piles…). Quantités et dates
 varient d'une installation à l'autre. À brancher sur
 `createVault(manager, { guides, seedDecoy: seedDecoyInventory }, pins)`.
+
+## Interface mobile (`src/ui`)
+
+L'application s'ouvre sur l'un de trois écrans :
+
+1. **Premier lancement** : explication du coffre, puis choix du code maître
+   (saisi deux fois) et, facultativement, du code de contrainte.
+2. **Verrouillage** : un seul pavé numérique pour les deux codes. Aucun
+   message ni comportement ne trahit le code de contrainte. En cas de
+   blocage, un compte à rebours s'affiche, y compris s'il était déjà en
+   cours au démarrage.
+3. **Coffre ouvert** : quatre onglets.
+   - Autonomie : jours restants, ressource limitante, foyer réglable,
+     péremptions.
+   - Stock : filtres, lots, consommation, ajout, « jeter les périmés ».
+   - Coordonnées : MGRS, UTM, DMS, cap vers un point MGRS.
+   - Fiches : recherche et lecture.
+
+Si l'état du coffre est illisible, un écran le signale et propose de tout
+effacer, après une seconde confirmation.
+
+Protections :
+
+- Verrouillage automatique dès que l'application passe en arrière-plan :
+  la base est fermée et aucune minuterie ne tourne.
+- Écran noir pendant la transition, pour que l'aperçu du sélecteur
+  d'applications iOS ne capture rien.
+- `FLAG_SECURE` sur Android : captures et enregistrements d'écran
+  interdits, contenu masqué dans les applications récentes.
+
+Le style passe par `StyleSheet` et les jetons de `src/ui/theme.ts`, au lieu de
+NativeWind prévu par le cahier des charges. Cela évite une chaîne de build
+supplémentaire tant que l'application n'a pas été validée sur appareil ; une
+migration reste possible.
+
+Les tests (`__tests__/ui`) rendent l'application complète sur le vrai moteur
+SQLite, avec React Native Testing Library. Seuls les modules natifs sont
+simulés.
+
+## Lancer sur un téléphone
+
+```sh
+npm install
+# Android (Android Studio, téléphone en mode développeur ou émulateur)
+npm run android
+# iOS (macOS + Xcode)
+cd ios && bundle install && bundle exec pod install && cd .. && npm run ios
+```
+
+Rien de natif n'a encore été exécuté. À vérifier en priorité sur appareil :
+
+1. Durée du déverrouillage avec Argon2id 64 Mio (objectif : 150 à 300 ms par
+   dérivation, soit deux fois cela par essai).
+2. Ouverture SQLCipher avec la bonne clé et refus avec une mauvaise.
+3. Écriture dans le Keychain / Keystore, y compris sur un appareil sans
+   module matériel sécurisé.
+4. Recherche FTS5 (activée par `"op-sqlite": { "fts5": true }`).
+5. Verrouillage à la mise en arrière-plan et écran masqué dans le
+   sélecteur d'applications.
+6. Capture d'écran bloquée sur Android.
