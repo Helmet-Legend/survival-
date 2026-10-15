@@ -279,11 +279,17 @@ describe('écrans', () => {
 
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Réglages'));
-    await fireEvent.press(await screen.findByLabelText('Ajouter une personne'));
-    expect(await screen.findByText('2 pers.')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    // Directement depuis l'accueil.
+    await fireEvent.press(screen.getByLabelText('Ajouter une personne'));
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
+    expect(screen.getByText('2 pers.')).toBeTruthy();
+
+    // Et toujours depuis les réglages.
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
+    expect(await screen.findByText('1 pers.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(await screen.findByLabelText('10 jours')).toBeTruthy();
   });
 
   it('affiche l’état et la liste de réapprovisionnement', async () => {
@@ -373,7 +379,7 @@ describe('écrans', () => {
       screen.getByLabelText('Nom'),
       'Flocons d’avoine',
     );
-    await fireEvent.changeText(screen.getByLabelText('Quantité'), '2');
+    await fireEvent.changeText(screen.getByLabelText('Quantité (kg)'), '2');
     await fireEvent.changeText(
       screen.getByLabelText('À consommer avant le (AAAA-MM-JJ, facultatif)'),
       '2027-02-30',
@@ -451,6 +457,37 @@ describe('écrans', () => {
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
   });
 
+  it('saisit l’eau en bidons et la retire bidon par bidon', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Bidons garage');
+    await fireEvent.changeText(
+      screen.getByLabelText('Contenance d’un bidon (L)'),
+      '10',
+    );
+    await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '3');
+    expect(screen.getByText('= 30 L')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Ajouter au stock'));
+    expect(
+      await screen.findByText('« Bidons garage » ajouté au stock.'),
+    ).toBeTruthy();
+    expect(screen.getByText('3 bidons de 10 L')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Retirer 1 bidon (10 L)'));
+    expect(
+      await screen.findByText('Retiré : 10 L du lot sans date. Reste 20 L.'),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '2');
+    await fireEvent.press(screen.getByText('Ajouter au stock existant'));
+    expect(
+      await screen.findByText('Stock de « Bidons garage » complété.'),
+    ).toBeTruthy();
+    expect(screen.getByText('4 bidons de 10 L')).toBeTruthy();
+  });
+
   it('enregistre une arme et compte ses munitions par calibre', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
@@ -487,7 +524,10 @@ describe('écrans', () => {
       screen.getByLabelText('Calibre des munitions'),
       '12 / 70',
     );
-    await fireEvent.changeText(screen.getByLabelText('Quantité'), '250');
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité (cartouches)'),
+      '250',
+    );
     await fireEvent.press(screen.getByText('Ajouter au stock'));
     expect(
       await screen.findByText('« Cartouches plomb 7 » ajouté au stock.'),

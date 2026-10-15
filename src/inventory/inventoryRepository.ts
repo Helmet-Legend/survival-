@@ -64,6 +64,8 @@ export interface ItemInput {
   alertDays?: number | null;
   /** Calibre des munitions (catégorie `weapon` seulement), ex. « 12/70 ». */
   caliber?: string | null;
+  /** Contenance d'un contenant (bidon, boîte), dans l'unité de l'article. */
+  packageSize?: number | null;
 }
 
 export interface LotInput {
@@ -86,6 +88,7 @@ export interface InventoryItem {
   minStock: number | null;
   alertDays: number | null;
   caliber: string | null;
+  packageSize: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -176,6 +179,7 @@ interface CleanItem {
   minStock: number | null;
   alertDays: number | null;
   caliber: string | null;
+  packageSize: number | null;
 }
 
 export const CALIBER_MAX = 40;
@@ -217,7 +221,18 @@ function validateItem(input: ItemInput): CleanItem {
     // Le calibre n'a de sens que pour les munitions : ignoré ailleurs.
     caliber:
       input.category === 'weapon' ? validateCaliber(input.caliber) : null,
+    packageSize: validatePackageSize(input.packageSize),
   };
+}
+
+function validatePackageSize(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    throw invalid('packageSize', 'La contenance doit être un nombre positif');
+  }
+  return roundQuantity(value);
 }
 
 function validateCaliber(value: string | null | undefined): string | null {
@@ -315,13 +330,17 @@ function toItem(row: SqlRow): InventoryItem {
       row.caliber === null || row.caliber === undefined
         ? null
         : String(row.caliber),
+    packageSize:
+      row.package_size === null || row.package_size === undefined
+        ? null
+        : Number(row.package_size),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
-  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber,
+  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size,
   i.created_at, i.updated_at`;
 
 /**
@@ -359,8 +378,8 @@ export class InventoryRepository {
       await this.db.execute(
         `INSERT INTO inventory_items
            (id, name, category, unit, calories_per_unit, location, is_critical,
-            notes, min_stock, alert_days, caliber)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            notes, min_stock, alert_days, caliber, package_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -373,6 +392,7 @@ export class InventoryRepository {
           item.minStock,
           item.alertDays,
           item.caliber,
+          item.packageSize,
         ],
       );
       if (lot !== null) {
@@ -407,7 +427,8 @@ export class InventoryRepository {
         `UPDATE inventory_items
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
                 location = ?, is_critical = ?, notes = ?,
-                min_stock = ?, alert_days = ?, caliber = ?
+                min_stock = ?, alert_days = ?, caliber = ?,
+                package_size = ?
           WHERE id = ?`,
         [
           item.name,
@@ -420,6 +441,7 @@ export class InventoryRepository {
           item.minStock,
           item.alertDays,
           item.caliber,
+          item.packageSize,
           id,
         ],
       );

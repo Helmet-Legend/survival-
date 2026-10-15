@@ -5,6 +5,7 @@
 import {
   ChevronDown,
   ChevronRight,
+  Minus,
   PackageOpen,
   Plus,
   SearchX,
@@ -17,7 +18,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   InventoryError,
   ITEM_CATEGORIES,
-  ITEM_UNITS,
   type InventoryItem,
   type InventoryLot,
   type ItemCategory,
@@ -57,6 +57,7 @@ import {
   toneColor,
   type StatusTone,
 } from '../theme';
+import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
 import { useLoader } from '../useLoader';
 import { ArmorySection } from './ArmorySection';
 
@@ -366,7 +367,7 @@ export function StockScreen() {
                     accessibilityState={{ expanded: open }}
                     accessibilityLabel={`${item.name}, ${formatNumber(
                       item.usableQuantity,
-                    )} ${UNIT_LABELS[item.unit]}`}
+                    )} ${unitLabel(item.category, item.unit)}`}
                     onPress={() => {
                       setExpanded(open ? null : item.id);
                       setFeedback(null);
@@ -383,6 +384,9 @@ export function StockScreen() {
                       <Text style={text.subtle}>
                         {CATEGORY_LABELS[item.category]}
                         {item.caliber ? ` · ${item.caliber}` : ''}
+                        {packageSummary(item, item.usableQuantity)
+                          ? ` · ${packageSummary(item, item.usableQuantity)}`
+                          : ''}
                         {item.location ? ` · ${item.location}` : ''}
                       </Text>
                     </View>
@@ -390,7 +394,7 @@ export function StockScreen() {
                       <Text style={styles.qty}>
                         {formatNumber(item.usableQuantity)}{' '}
                         <Text style={styles.qtyUnit}>
-                          {UNIT_LABELS[item.unit]}
+                          {unitLabel(item.category, item.unit)}
                         </Text>
                       </Text>
                       {state ? (
@@ -424,25 +428,107 @@ export function StockScreen() {
   );
 }
 
+/**
+ * Quantité saisie selon la catégorie : « contenance × nombre » pour les
+ * articles en contenants (bidons d'eau, boîtes de cartouches), quantité
+ * directe sinon. Renvoie aussi le total calculé, affiché sous les champs.
+ */
+function QuantityFields(props: {
+  category: ItemCategory;
+  unit: ItemUnit;
+  /** Contenance déjà connue (article existant) : seul le nombre est demandé. */
+  knownSize: number | null;
+  size: string;
+  onSize: (value: string) => void;
+  count: string;
+  onCount: (value: string) => void;
+  errors: Record<string, string>;
+}) {
+  const container = PROFILES[props.category].container;
+  const unitText = unitLabel(props.category, props.unit);
+  const sizeValue =
+    props.knownSize ??
+    (props.size.trim() === '' ? null : parseDecimal(props.size));
+  const packaged = container !== null && sizeValue !== null;
+  const total = totalQuantity(props.count, sizeValue, container !== null);
+  return (
+    <>
+      {container !== null && props.knownSize === null ? (
+        <Field
+          label={`Contenance d’un ${container.one} (${unitText})`}
+          value={props.size}
+          onChangeText={props.onSize}
+          keyboardType="decimal-pad"
+          placeholder={props.category === 'water' ? 'ex. 10' : 'ex. 25'}
+          error={props.errors.packageSize}
+          hint={
+            props.category === 'water'
+              ? 'Bidon, bouteille, jerrican… Laisser vide pour saisir des litres.'
+              : 'Laisser vide pour saisir des cartouches à l’unité.'
+          }
+        />
+      ) : null}
+      <Field
+        label={
+          packaged ? `Nombre de ${container.many}` : `Quantité (${unitText})`
+        }
+        value={props.count}
+        onChangeText={props.onCount}
+        keyboardType="decimal-pad"
+        placeholder={packaged ? 'ex. 3' : 'ex. 2'}
+        error={props.errors.quantity}
+      />
+      {packaged && Number.isFinite(total) && total > 0 ? (
+        <Text style={styles.total}>
+          = {formatNumber(total)} {unitText}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
+/** Total dans l'unité de l'article ; NaN si la saisie est incomplète. */
+function totalQuantity(
+  count: string,
+  size: number | null,
+  hasContainer: boolean,
+): number {
+  const n = parseDecimal(count);
+  return hasContainer && size !== null ? n * size : n;
+}
+
 function ItemDetail(props: {
   item: InventoryItem;
   lots: InventoryLot[];
   onChanged: (feedback: Feedback) => Promise<void>;
 }) {
   const { repo } = useSession();
+  const { item } = props;
+  const profile = PROFILES[item.category];
+  const container = profile.container;
   const [quantity, setQuantity] = useState('');
+  const [addCount, setAddCount] = useState('');
+  const [addSize, setAddSize] = useState('');
+  const [addExpiration, setAddExpiration] = useState('');
   const [minStock, setMinStock] = useState(
-    props.item.minStock === null ? '' : String(props.item.minStock),
+    item.minStock === null ? '' : String(item.minStock),
   );
   const [alertDays, setAlertDays] = useState(
-    props.item.alertDays === null ? '' : String(props.item.alertDays),
+    item.alertDays === null ? '' : String(item.alertDays),
+  );
+  const [packageSize, setPackageSize] = useState(
+    item.packageSize === null ? '' : String(item.packageSize),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const unit = UNIT_LABELS[props.item.unit];
+  const unit = unitLabel(item.category, item.unit);
+  const usable = props.lots
+    .filter(l => !l.isExpired)
+    .reduce((sum, l) => sum + l.quantity, 0);
+  const summary = packageSummary(item, usable);
 
-  const consume = async () => {
+  const consume = async (amount: number) => {
     try {
-      const result = await repo.consume(props.item.id, parseDecimal(quantity));
+      const result = await repo.consume(item.id, amount);
       const parts = result.taken.map(
         t =>
           `${formatNumber(t.quantity)} ${unit} ${
@@ -463,15 +549,46 @@ function ItemDetail(props: {
     }
   };
 
+  const addStock = async () => {
+    setErrors({});
+    try {
+      const size =
+        item.packageSize ??
+        (addSize.trim() === '' ? null : parseDecimal(addSize));
+      await repo.addLot(item.id, {
+        quantity: totalQuantity(addCount, size, container !== null),
+        expirationDate:
+          addExpiration.trim() === '' ? null : addExpiration.trim(),
+      });
+      setAddCount('');
+      setAddExpiration('');
+      await props.onChanged({
+        message: `Stock de « ${item.name} » complété.`,
+        tone: 'ok',
+      });
+    } catch (e) {
+      if (e instanceof InventoryError && e.field) {
+        setErrors({
+          [e.field === 'expirationDate' ? 'addExpiration' : e.field]: e.message,
+        });
+      } else {
+        await props.onChanged({ message: errorMessage(e), tone: 'error' });
+      }
+    }
+  };
+
   const saveSettings = async () => {
     setErrors({});
     try {
-      await repo.updateItem(props.item.id, {
+      await repo.updateItem(item.id, {
         minStock: optionalNumber(minStock),
         alertDays: optionalNumber(alertDays),
+        ...(container !== null
+          ? { packageSize: optionalNumber(packageSize) }
+          : {}),
       });
       await props.onChanged({
-        message: `Réglages de « ${props.item.name} » enregistrés.`,
+        message: `Réglages de « ${item.name} » enregistrés.`,
         tone: 'ok',
       });
     } catch (e) {
@@ -485,6 +602,11 @@ function ItemDetail(props: {
 
   return (
     <View style={styles.detail}>
+      {summary ? <Text style={styles.summary}>{summary}</Text> : null}
+      {item.caliber ? (
+        <Text style={text.muted}>Calibre : {item.caliber}</Text>
+      ) : null}
+
       <Text style={text.label}>Lots, du premier au dernier consommé</Text>
       {props.lots.length === 0 ? (
         <Text style={text.muted}>Aucun lot.</Text>
@@ -504,10 +626,24 @@ function ItemDetail(props: {
         </View>
       ))}
 
+      <Text style={[text.label, styles.section]}>Utiliser</Text>
+      {container !== null && item.packageSize !== null ? (
+        <Button
+          compact
+          icon={Minus}
+          label={`Retirer 1 ${container.one} (${formatNumber(
+            item.packageSize,
+          )} ${unitLabel(item.category, item.unit, item.packageSize)})`}
+          disabled={usable < item.packageSize}
+          onPress={() => {
+            void consume(item.packageSize ?? 0);
+          }}
+        />
+      ) : null}
       <View style={styles.inline}>
         <View style={styles.grow}>
           <Field
-            label={`Quantité à retirer (${unit})`}
+            label={`Quantité à retirer (${UNIT_LABELS[item.unit]})`}
             value={quantity}
             onChangeText={setQuantity}
             keyboardType="decimal-pad"
@@ -519,16 +655,57 @@ function ItemDetail(props: {
           label="Retirer"
           disabled={quantity.trim() === ''}
           onPress={() => {
-            void consume();
+            void consume(parseDecimal(quantity));
+          }}
+        />
+      </View>
+
+      <Text style={[text.label, styles.section]}>Ajouter du stock</Text>
+      <QuantityFields
+        category={item.category}
+        unit={item.unit}
+        knownSize={item.packageSize}
+        size={addSize}
+        onSize={setAddSize}
+        count={addCount}
+        onCount={setAddCount}
+        errors={errors}
+      />
+      <Field
+        label="À consommer avant le (AAAA-MM-JJ, facultatif)"
+        value={addExpiration}
+        onChangeText={setAddExpiration}
+        placeholder="2027-06-30"
+        autoCapitalize="none"
+        error={errors.addExpiration}
+      />
+      <View style={styles.row}>
+        <Button
+          compact
+          icon={Plus}
+          label="Ajouter au stock existant"
+          disabled={addCount.trim() === ''}
+          onPress={() => {
+            void addStock();
           }}
         />
       </View>
 
       <Text style={[text.label, styles.section]}>Réglages de l’article</Text>
+      {container !== null ? (
+        <Field
+          label={`Contenance d’un ${container.one} (${unit})`}
+          value={packageSize}
+          onChangeText={setPackageSize}
+          keyboardType="decimal-pad"
+          placeholder="aucune"
+          error={errors.packageSize}
+        />
+      ) : null}
       <View style={styles.inline}>
         <View style={styles.grow}>
           <Field
-            label={`Stock minimal (${unit})`}
+            label={`Stock minimal (${UNIT_LABELS[item.unit]})`}
             value={minStock}
             onChangeText={setMinStock}
             keyboardType="decimal-pad"
@@ -564,10 +741,6 @@ function ItemDetail(props: {
   );
 }
 
-function defaultUnit(category: ItemCategory): ItemUnit {
-  return category === 'water' ? 'L' : category === 'food' ? 'kg' : 'unit';
-}
-
 function AddItemForm(props: {
   initialCategory: ItemCategory;
   /** Calibres des armes enregistrées, proposés pour les munitions. */
@@ -578,29 +751,47 @@ function AddItemForm(props: {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<ItemCategory>(props.initialCategory);
   const [unit, setUnit] = useState<ItemUnit>(
-    defaultUnit(props.initialCategory),
+    PROFILES[props.initialCategory].units[0],
   );
   const [caliber, setCaliber] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [size, setSize] = useState('');
+  const [count, setCount] = useState('');
   const [kcal, setKcal] = useState('');
   const [expiration, setExpiration] = useState('');
   const [minStock, setMinStock] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const profile = PROFILES[category];
+
+  const chooseCategory = (next: ItemCategory) => {
+    setCategory(next);
+    setUnit(PROFILES[next].units[0]);
+    setSize('');
+    setErrors({});
+  };
 
   const submit = async () => {
     setErrors({});
+    const packageSize =
+      profile.container !== null && size.trim() !== ''
+        ? parseDecimal(size)
+        : null;
     try {
       const item = await repo.createItem(
         {
           name,
           category,
           unit,
-          caloriesPerUnit: optionalNumber(kcal),
+          caloriesPerUnit: profile.calories ? optionalNumber(kcal) : null,
           minStock: optionalNumber(minStock),
-          caliber,
+          caliber: profile.caliber ? caliber : null,
+          packageSize,
         },
         {
-          quantity: parseDecimal(quantity),
+          quantity: totalQuantity(
+            count,
+            packageSize,
+            profile.container !== null,
+          ),
           expirationDate: expiration.trim() === '' ? null : expiration.trim(),
         },
       );
@@ -615,15 +806,10 @@ function AddItemForm(props: {
   };
 
   return (
-    <Panel title="Nouvel article" accent={colors.primary}>
-      <Field
-        label="Nom"
-        value={name}
-        onChangeText={setName}
-        placeholder="Ex. Flocons d’avoine"
-        maxLength={120}
-        error={errors.name}
-      />
+    <Panel
+      title={category === 'weapon' ? 'Nouvelles munitions' : 'Nouvel article'}
+      accent={colors.primary}
+    >
       <Text style={styles.fieldLabel}>Catégorie</Text>
       <View style={styles.wrap}>
         {ITEM_CATEGORIES.map(c => (
@@ -631,14 +817,19 @@ function AddItemForm(props: {
             key={c}
             label={CATEGORY_LABELS[c]}
             selected={category === c}
-            onPress={() => {
-              setCategory(c);
-              setUnit(defaultUnit(c));
-            }}
+            onPress={() => chooseCategory(c)}
           />
         ))}
       </View>
-      {category === 'weapon' ? (
+      <Field
+        label="Nom"
+        value={name}
+        onChangeText={setName}
+        placeholder={profile.namePlaceholder}
+        maxLength={120}
+        error={errors.name}
+      />
+      {profile.caliber ? (
         <>
           <Field
             label="Calibre des munitions"
@@ -649,7 +840,7 @@ function AddItemForm(props: {
             autoCorrect={false}
             maxLength={40}
             error={errors.caliber}
-            hint="Comptées en pièces, elles s’affichent sur les armes du même calibre."
+            hint="Elles s’affichent sur les armes du même calibre."
           />
           {props.calibers.length > 0 ? (
             <View style={styles.wrap}>
@@ -665,40 +856,42 @@ function AddItemForm(props: {
           ) : null}
         </>
       ) : null}
-      <Text style={styles.fieldLabel}>Unité</Text>
-      <View style={styles.wrap}>
-        {ITEM_UNITS.map(u => (
-          <Chip
-            key={u}
-            label={UNIT_LABELS[u]}
-            selected={unit === u}
-            onPress={() => setUnit(u)}
-          />
-        ))}
-      </View>
+      {profile.units.length > 1 ? (
+        <>
+          <Text style={styles.fieldLabel}>Unité</Text>
+          <View style={styles.wrap}>
+            {profile.units.map(u => (
+              <Chip
+                key={u}
+                label={UNIT_LABELS[u]}
+                selected={unit === u}
+                onPress={() => setUnit(u)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
       {errors.unit ? <Text style={styles.expired}>{errors.unit}</Text> : null}
-      <View style={styles.inline}>
-        <View style={styles.grow}>
-          <Field
-            label="Quantité"
-            value={quantity}
-            onChangeText={setQuantity}
-            keyboardType="decimal-pad"
-            placeholder="2"
-            error={errors.quantity}
-          />
-        </View>
-        <View style={styles.grow}>
-          <Field
-            label="kcal par unité"
-            value={kcal}
-            onChangeText={setKcal}
-            keyboardType="number-pad"
-            placeholder="facultatif"
-            error={errors.caloriesPerUnit}
-          />
-        </View>
-      </View>
+      <QuantityFields
+        category={category}
+        unit={unit}
+        knownSize={null}
+        size={size}
+        onSize={setSize}
+        count={count}
+        onCount={setCount}
+        errors={errors}
+      />
+      {profile.calories ? (
+        <Field
+          label={`kcal par ${unit === 'unit' ? 'pièce' : UNIT_LABELS[unit]}`}
+          value={kcal}
+          onChangeText={setKcal}
+          keyboardType="number-pad"
+          placeholder="facultatif (indiqué sur l’emballage)"
+          error={errors.caloriesPerUnit}
+        />
+      ) : null}
       <Field
         label="À consommer avant le (AAAA-MM-JJ, facultatif)"
         value={expiration}
@@ -712,7 +905,7 @@ function AddItemForm(props: {
         value={minStock}
         onChangeText={setMinStock}
         keyboardType="decimal-pad"
-        placeholder="ex. 2"
+        placeholder={`ex. 2 (${unitLabel(category, unit)})`}
         error={errors.minStock}
         hint="L’article apparaîtra dans « À racheter » en dessous de ce seuil."
       />
@@ -790,4 +983,6 @@ const styles = StyleSheet.create({
   lot: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
   expired: { color: colors.danger },
   fieldLabel: { color: colors.textMuted, fontSize: 14 },
+  total: { color: colors.primaryBright, fontSize: 15, fontWeight: '700' },
+  summary: { color: colors.cyanSoft, fontSize: 15, fontWeight: '600' },
 });

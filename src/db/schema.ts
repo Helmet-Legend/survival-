@@ -270,10 +270,22 @@ const migration3: Migration = {
   ],
 };
 
+const migration4: Migration = {
+  version: 4,
+  name: 'conditionnement des articles',
+  statements: [
+    // Contenance d'un contenant, dans l'unité de l'article (ex. bidon de
+    // 10 L, boîte de 25 cartouches). Sert à la saisie et à l'affichage.
+    `ALTER TABLE inventory_items ADD COLUMN package_size REAL
+       CHECK (package_size IS NULL OR package_size > 0)`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
   migration3,
+  migration4,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

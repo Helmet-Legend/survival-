@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Droplet,
   MapPinned,
+  Users,
   Wheat,
 } from 'lucide-react-native';
 import React from 'react';
@@ -18,6 +19,7 @@ import {
   getExpiryAlerts,
   getResilienceReport,
   loadTargetDays,
+  saveHousehold,
 } from '../../resilience/resilienceCalculator';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import {
@@ -26,6 +28,7 @@ import {
   MetricCard,
   Notice,
   StatusChip,
+  Stepper,
 } from '../components/controls';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import { autonomyStatus, formatDate, formatNumber } from '../format';
@@ -34,10 +37,13 @@ import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
 
+/** Même borne que dans les Réglages. */
+const MAX_MEMBERS = 12;
+
 export function HomeScreen() {
   const { db } = useSession();
   const navigation = useNavigation();
-  const { data, error } = useLoader(async () => {
+  const { data, error, reload } = useLoader(async () => {
     const today = localToday();
     const [report, alerts, targetDays] = await Promise.all([
       getResilienceReport(db, today),
@@ -60,6 +66,11 @@ export function HomeScreen() {
   const { today, report, alerts, targetDays } = data;
   const status = autonomyStatus(report.days, targetDays);
   const limiting = report.limitingFactor === 'water' ? 'eau' : 'vivres';
+  const members = report.household.members;
+  const changeMembers = async (delta: number) => {
+    await saveHousehold(db, { ...report.household, members: members + delta });
+    await reload();
+  };
   const urgent = alerts.filter(
     a => a.bucket === 'expired' || a.bucket === 'within30',
   ).length;
@@ -77,6 +88,27 @@ export function HomeScreen() {
           <StatusChip tone={status.tone} label={status.label} />
           <Text style={text.muted}>objectif {targetDays} j</Text>
         </View>
+      </View>
+
+      <View style={styles.household}>
+        <Users color={colors.cyan} size={22} strokeWidth={2} />
+        <View style={styles.grow}>
+          <Text style={styles.householdTitle}>Foyer</Text>
+          <Text style={text.subtle}>Personnes à faire tenir</Text>
+        </View>
+        <Stepper
+          value={`${members} pers.`}
+          onDecrease={() => {
+            void changeMembers(-1);
+          }}
+          onIncrease={() => {
+            void changeMembers(1);
+          }}
+          canDecrease={members > 1}
+          canIncrease={members < MAX_MEMBERS}
+          decreaseLabel="Retirer une personne"
+          increaseLabel="Ajouter une personne"
+        />
       </View>
 
       <Pressable
@@ -176,6 +208,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.m,
   },
+  household: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    paddingVertical: space.s,
+    paddingHorizontal: space.l,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  householdTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
   limiting: {
     flexDirection: 'row',
     alignItems: 'center',
