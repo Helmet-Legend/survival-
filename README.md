@@ -135,3 +135,54 @@ FTS5 inclus). Seul le chiffrement SQLCipher est simulé.
 - Les tests utilisent Argon2id en JS pur avec des paramètres réduits. La
   dérivation native avec les paramètres réels doit être validée sur appareil
   (objectif : 150 à 300 ms sur un SoC milieu de gamme).
+
+## Calcul de résilience (`src/resilience`)
+
+`getResilienceReport(db)` calcule l'autonomie à partir de l'inventaire et des
+réglages du foyer :
+
+- **Eau** : litres (`L`, `mL`) ÷ (membres × L/pers./jour).
+- **Vivres** : kcal (`quantité × kcal par unité`, catégorie `food`) ÷
+  (membres × kcal/pers./jour).
+- **Autonomie globale** : minimum des deux, avec la ressource limitante.
+
+Chaque ressource fournit deux valeurs :
+
+- `naiveDays` : la formule du cahier des charges ;
+- `days` : une simulation qui consomme les lots dans l'ordre de péremption
+  (FEFO) et compte ce qui périmera avant d'être consommé (`wasted`). Par
+  exemple, 60 L qui périment dans 9 jours ne donnent que 10 jours d'eau, pas
+  20. C'est cette valeur qu'il faut afficher.
+
+`getExpiryAlerts(db)` classe les lots en `expired`, `within30`, `within60` et
+`within90`. La requête utilise l'index partiel prévu à cet effet ; un test
+vérifie le plan d'exécution.
+
+Les dates sont des dates calendaires locales `AAAA-MM-JJ` : pas d'effet de
+fuseau ni d'heure d'été. Une date de péremption est le dernier jour où le
+produit est consommable.
+
+## Coordonnées (`src/geo`)
+
+`geoConverter.ts` convertit WGS84 ↔ UTM ↔ MGRS sans bibliothèque ni réseau :
+
+- Mercator transverse par les séries de Krüger d'ordre 6 (Karney 2011),
+  précision inférieure au millimètre. Le résultat est identique à proj4 au
+  millimètre près sur 3000 points de test.
+- Zones spéciales de Norvège (32V) et du Svalbard (31X–37X).
+- MGRS de 0 à 5 chiffres, tronqués comme l'exige la norme. La lecture est
+  tolérante (espaces, casse, zéro de tête). `mgrsToLatLon` renvoie le centre
+  du carré désigné.
+- Convergence du méridien (nord géographique / nord du quadrillage),
+  distance et azimut, conversion azimut vrai → magnétique.
+- Formats texte : UTM (`31 N 448252 5411933`), degrés décimaux,
+  degrés-minutes, DMS.
+
+Limites :
+
+- Les zones polaires (au-delà de 84° N et 80° S, grille UPS) ne sont pas
+  prises en charge et lèvent l'erreur `POLAR_UNSUPPORTED`.
+- La déclinaison magnétique doit être fournie : il n'y a pas encore de
+  modèle magnétique embarqué (WMM).
+- Dans le format UTM, la lettre désigne l'hémisphère (N ou S), jamais la
+  bande, car « 31S » serait ambigu.
