@@ -17,11 +17,12 @@
  * Une date de péremption est le dernier jour de consommation possible.
  */
 import type { SqlDatabase, SqlValue } from '../db/types';
+import type { ItemCategory, ItemUnit } from '../inventory/types';
+import { addDays, assertIsoDate, daysBetween, localToday } from '../lib/dates';
 
 // --- Types ------------------------------------------------------------------
 
-export type ItemCategory = 'water' | 'food' | 'medical' | 'energy' | 'tool';
-export type ItemUnit = 'L' | 'mL' | 'kg' | 'g' | 'unit';
+export type { ItemCategory, ItemUnit };
 
 export interface HouseholdSettings {
   members: number;
@@ -93,43 +94,7 @@ export class ResilienceError extends Error {
 
 // --- Dates calendaires ------------------------------------------------------
 
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DAY_MS = 86_400_000;
-
-/** Jour julien (entier) d'une date `AAAA-MM-JJ`, insensible au fuseau et à l'heure d'été. */
-function dayNumber(date: string): number {
-  const match = ISO_DATE.exec(date);
-  if (match === null) {
-    throw new ResilienceError(`Date invalide : ${date}`);
-  }
-  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  const ms = Date.UTC(y, m - 1, d);
-  const check = new Date(ms);
-  if (check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) {
-    throw new ResilienceError(`Date inexistante : ${date}`);
-  }
-  return ms / DAY_MS;
-}
-
-function fromDayNumber(day: number): string {
-  return new Date(day * DAY_MS).toISOString().slice(0, 10);
-}
-
-export function addDays(date: string, days: number): string {
-  return fromDayNumber(dayNumber(date) + days);
-}
-
-export function daysBetween(from: string, to: string): number {
-  return dayNumber(to) - dayNumber(from);
-}
-
-/** Date locale du jour au format `AAAA-MM-JJ`. */
-export function localToday(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
-    now.getDate(),
-  )}`;
-}
+export { addDays, daysBetween, localToday } from '../lib/dates';
 
 // --- Calcul pur -------------------------------------------------------------
 
@@ -244,7 +209,7 @@ export function computeResilience(
   asOf: string,
 ): ResilienceReport {
   assertHousehold(household);
-  dayNumber(asOf);
+  assertIsoDate(asOf);
   const water = computeResource(
     lots,
     lotWaterLiters,

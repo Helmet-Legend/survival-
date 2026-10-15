@@ -5,6 +5,7 @@
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 
+import { withTransaction } from './transaction';
 import type { SqlDatabase } from './types';
 
 export interface BundledGuide {
@@ -63,8 +64,7 @@ export async function syncGuides(
   );
   const report: GuideSyncReport = { inserted: 0, updated: 0, removed: 0 };
 
-  await db.execute('BEGIN IMMEDIATE');
-  try {
+  await withTransaction(db, async () => {
     for (const guide of guides) {
       const hash = hashGuide(guide);
       const current = existing.get(guide.slug);
@@ -95,11 +95,7 @@ export async function syncGuides(
         report.removed++;
       }
     }
-    await db.execute('COMMIT');
-  } catch (error) {
-    await db.execute('ROLLBACK').catch(() => undefined);
-    throw error;
-  }
+  });
   return report;
 }
 

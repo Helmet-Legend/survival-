@@ -186,3 +186,39 @@ Limites :
   modèle magnétique embarqué (WMM).
 - Dans le format UTM, la lettre désigne l'hémisphère (N ou S), jamais la
   bande, car « 31S » serait ambigu.
+
+## Inventaire (`src/inventory`)
+
+`InventoryRepository` gère les articles et leurs lots :
+
+- **Articles** : création (avec un premier lot facultatif), modification
+  partielle, suppression avec les lots, liste avec totaux (stock total, stock
+  utilisable, prochaine péremption). Le filtre texte ignore la casse et les
+  accents.
+- **Lots** : ajout, correction (une quantité 0 supprime le lot), suppression,
+  et `discardExpired()` pour jeter les périmés. Un lot qui périme aujourd'hui
+  reste consommable.
+- **Consommation** : `consume(itemId, quantité)` puise dans le lot qui périme
+  le plus tôt, puis dans le plus ancien (FEFO puis FIFO). Les lots non
+  périssables passent en dernier et les lots vidés sont supprimés. Les lots
+  périmés sont ignorés, sauf avec `allowExpired`. L'opération est en tout ou
+  rien : si le stock manque, rien n'est modifié et l'erreur indique la
+  quantité disponible.
+
+Garde-fous :
+
+- Toutes les entrées sont validées avant SQLite, et l'`InventoryError`
+  renvoyée indique le champ en cause.
+- Changer l'unité d'un article qui a du stock est refusé : 2 kg
+  deviendraient 2 g.
+- Les quantités sont arrondies au millionième, pour éviter des reliquats
+  comme 0,30000000000000004.
+- Les écritures multiples passent par `withTransaction` (`src/db/transaction.ts`).
+
+Les calories sont un entier par unité. Pour un produit à 3,6 kcal/g, saisir
+le produit en kg (3 600 kcal/kg).
+
+`seedDecoyInventory(db)` remplit la base factice avec l'inventaire d'un foyer
+ordinaire (eau, pâtes, conserves, pharmacie, piles…). Quantités et dates
+varient d'une installation à l'autre. À brancher sur
+`createVault(manager, { guides, seedDecoy: seedDecoyInventory }, pins)`.
