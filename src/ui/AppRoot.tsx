@@ -33,6 +33,10 @@ import {
   PhotoRepository,
 } from '../inventory';
 import {
+  nativeScreenCapture,
+  type ScreenCaptureSetting,
+} from '../device/screenCapture';
+import {
   isAwayForPhoto,
   nativePhotoSource,
   type PhotoSource,
@@ -44,6 +48,7 @@ import {
   type VaultContent,
   type VaultDatabase,
 } from '../vault';
+import { AppIcon } from './components/AppIcon';
 import { BottomNav } from './components/BottomNav';
 import { Brand, Button, IconButton } from './components/controls';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -78,10 +83,15 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   updater?: Updater;
   /** Appareil photo ; le module natif Android par défaut. */
   photoSource?: PhotoSource;
+  /** Réglage des captures d'écran ; le module natif Android par défaut. */
+  screenCapture?: ScreenCaptureSetting;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
     () => props.photoSource ?? nativePhotoSource(),
+  );
+  const [screenCapture] = useState(
+    () => props.screenCapture ?? nativeScreenCapture(),
   );
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -118,6 +128,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       documents: new DocumentRepository(db),
       photos: new PhotoRepository(db),
       photoSource,
+      screenCapture,
     };
     sessionRef.current = session;
     setTab('home');
@@ -256,7 +267,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       {body}
       {covered && phase.kind === 'open' ? (
         <View style={styles.cover} testID="privacy-cover">
-          <Brand size={30} tagline />
+          <AppIcon size={140} />
         </View>
       ) : null}
     </View>

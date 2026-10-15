@@ -260,6 +260,46 @@ describe('cycle de vie', () => {
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
   });
 
+  it('autorise les captures d’écran depuis les réglages', async () => {
+    const ctx = await existingVault();
+    let allowed = false;
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        screenCapture={{
+          available: true,
+          isAllowed: async () => allowed,
+          setAllowed: async value => {
+            allowed = value;
+          },
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByLabelText('Réglages'));
+    const toggle = await screen.findByLabelText(
+      'Autoriser les captures d’écran',
+    );
+    expect(toggle.props.value).toBe(false);
+    expect(screen.getByText(/l’écran apparaît noir/)).toBeTruthy();
+
+    await fireEvent(toggle, 'valueChange', true);
+    expect(allowed).toBe(true);
+    expect(await screen.findByText(/Captures autorisées/)).toBeTruthy();
+  });
+
+  it('masque le réglage des captures hors Android', async () => {
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByLabelText('Réglages'));
+    await screen.findByText('Verrouiller maintenant');
+    expect(
+      screen.queryByLabelText('Autoriser les captures d’écran'),
+    ).toBeNull();
+  });
+
   it('propose d’effacer un coffre illisible', async () => {
     const { manager, store } = await existingVault();
     store.value = '{corrompu';

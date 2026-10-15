@@ -1,11 +1,11 @@
 package com.resilios
 
 import android.os.Bundle
-import android.view.WindowManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
+import com.resilios.screen.ScreenCapture
 
 class MainActivity : ReactActivity() {
 
@@ -17,12 +17,12 @@ class MainActivity : ReactActivity() {
 
   /**
    * FLAG_SECURE : interdit les captures et enregistrements d'écran, et masque
-   * le contenu dans la liste des applications récentes.
+   * le contenu dans la liste des applications récentes. Actif par défaut,
+   * désactivable dans les Réglages (voir ScreenCapture).
    */
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    window.setFlags(
-        WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    ScreenCapture.apply(this)
   }
 
   /**
