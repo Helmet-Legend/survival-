@@ -36,7 +36,7 @@ const result = await build({
     __DEV__: 'false',
     'process.env.NODE_ENV': '"production"',
   },
-  loader: { '.js': 'jsx', '.png': 'dataurl' },
+  loader: { '.js': 'jsx', '.png': 'dataurl', '.jpg': 'dataurl' },
   logLevel: 'warning',
 });
 

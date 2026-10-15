@@ -144,7 +144,7 @@ export function PlanScreen() {
         {restock.food.missing > 0 ? (
           <RestockLine
             color={colors.food}
-            label="Vivres"
+            label="Nourriture"
             amount={`+${formatNumber(restock.food.missing, 0)} kcal`}
             detail={`≈ ${formatNumber(
               restock.food.missing / report.household.kcalPerPersonDay,
@@ -214,7 +214,7 @@ export function PlanScreen() {
           scale={scale}
         />
         <ResourceTile
-          label="Vivres"
+          label="Nourriture"
           color={colors.food}
           resource={report.food}
           unit="kcal"

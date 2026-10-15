@@ -3,27 +3,29 @@
  * disponibles pour chacune, affichées dans la catégorie « Armes et
  * munitions » de l'écran Stocks.
  */
-import { Crosshair, Pencil, Plus, Trash2, X } from 'lucide-react-native';
+import {
+  Crosshair,
+  Eye,
+  EyeOff,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  InventoryError,
-  WEAPON_KINDS,
-  type WeaponKind,
-  type WeaponSummary,
-} from '../../inventory';
+import { type WeaponSummary } from '../../inventory';
 import {
   Button,
-  Chip,
-  Field,
   IconTile,
   Panel,
   SectionTitle,
   StatusChip,
 } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
-import { formatNumber, WEAPON_KIND_LABELS } from '../format';
+import { CATEGORY_COLORS, formatNumber, WEAPON_KIND_LABELS } from '../format';
+import { useNavigation } from '../navigation';
+import { weaponFacts } from '../stockForms/details';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 
@@ -38,7 +40,8 @@ export function ArmorySection(props: {
   onChanged: (feedback: Feedback) => Promise<void>;
 }) {
   const { armory } = useSession();
-  const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const navigation = useNavigation();
+  const [revealed, setRevealed] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -66,237 +69,156 @@ export function ArmorySection(props: {
         right={
           <Button
             compact
-            variant={editing === 'new' ? 'ghost' : 'secondary'}
-            icon={editing === 'new' ? X : Plus}
-            label={editing === 'new' ? 'Fermer' : 'Ajouter une arme'}
-            onPress={() => setEditing(editing === 'new' ? null : 'new')}
+            variant="secondary"
+            icon={Plus}
+            label="Ajouter une arme"
+            onPress={() =>
+              navigation.openStockForm({
+                category: 'weapon',
+                recordType: 'weapon',
+              })
+            }
           />
         }
       />
 
-      {editing === 'new' ? (
-        <WeaponForm
-          onDone={async message => {
-            setEditing(null);
-            await props.onChanged({ message, tone: 'ok' });
-          }}
-        />
-      ) : null}
-
-      {props.weapons.length === 0 && editing !== 'new' ? (
+      {props.weapons.length === 0 ? (
         <Text style={text.muted}>
           Aucune arme enregistrée. Ajoutez-en une pour suivre ses munitions par
           calibre.
         </Text>
       ) : null}
 
-      {props.weapons.map(weapon =>
-        editing === weapon.id ? (
-          <WeaponForm
-            key={weapon.id}
-            weapon={weapon}
-            onCancel={() => setEditing(null)}
-            onDone={async message => {
-              setEditing(null);
-              await props.onChanged({ message, tone: 'ok' });
-            }}
-          />
-        ) : (
-          <View key={weapon.id} style={styles.card}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: expanded === weapon.id }}
-              accessibilityLabel={`${weapon.model}, ${weapon.caliber}, ${rounds(
-                weapon.rounds,
-              )}`}
-              onPress={() =>
-                setExpanded(expanded === weapon.id ? null : weapon.id)
-              }
-              style={({ pressed }) => [styles.head, pressed && styles.pressed]}
-            >
-              <IconTile icon={Crosshair} color={colors.purple} />
-              <View style={styles.grow}>
-                <Text style={text.h3}>{weapon.model}</Text>
-                <Text style={text.muted}>
-                  {WEAPON_KIND_LABELS[weapon.kind]} · {weapon.caliber}
-                </Text>
-                {weapon.rounds === 0 ? (
-                  <StatusChip tone="warn" label="Aucune munition" />
-                ) : null}
-              </View>
-              {weapon.rounds > 0 ? (
-                <View style={styles.side}>
-                  <Text style={styles.rounds}>
-                    {formatNumber(weapon.rounds, 0)}
-                  </Text>
-                  <Text style={text.subtle}>munitions</Text>
-                </View>
+      {props.weapons.map(weapon => (
+        <View key={weapon.id} style={styles.card}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expanded === weapon.id }}
+            accessibilityLabel={`${weapon.model}, ${weapon.caliber}, ${rounds(
+              weapon.rounds,
+            )}`}
+            onPress={() =>
+              setExpanded(expanded === weapon.id ? null : weapon.id)
+            }
+            style={({ pressed }) => [styles.head, pressed && styles.pressed]}
+          >
+            <IconTile icon={Crosshair} color={CATEGORY_COLORS.weapon} />
+            <View style={styles.grow}>
+              <Text style={text.h3}>{weapon.model}</Text>
+              <Text style={text.muted}>
+                {WEAPON_KIND_LABELS[weapon.kind]} · {weapon.caliber}
+              </Text>
+              {weapon.rounds === 0 ? (
+                <StatusChip tone="warn" label="Aucune munition" />
               ) : null}
-            </Pressable>
-            {expanded === weapon.id ? (
-              <View style={styles.detail}>
-                <Text style={text.muted}>
-                  N° de série : {weapon.serialNumber ?? 'non renseigné'}
+            </View>
+            {weapon.rounds > 0 ? (
+              <View style={styles.side}>
+                <Text style={styles.rounds}>
+                  {formatNumber(weapon.rounds, 0)}
                 </Text>
-                {weapon.notes ? (
-                  <Text style={text.body}>{weapon.notes}</Text>
-                ) : null}
-                <PhotoStrip
-                  owner="weapon"
-                  ownerId={weapon.id}
-                  label={weapon.model}
-                />
-                <Text style={text.subtle}>
-                  Munitions comptées : articles « Armes et munitions » en
-                  pièces, au calibre {weapon.caliber}, lots non périmés.
-                </Text>
-                {confirmDelete === weapon.id ? (
-                  <Panel accent={colors.danger} style={styles.dialog}>
-                    <Text style={text.body}>
-                      Retirer « {weapon.model} » ? Les munitions restent en
-                      stock.
-                    </Text>
-                    <View style={styles.row}>
-                      <Button
-                        variant="danger"
-                        label="Retirer"
-                        onPress={() => {
-                          void remove(weapon);
-                        }}
-                      />
-                      <Button
-                        variant="ghost"
-                        label="Annuler"
-                        onPress={() => setConfirmDelete(null)}
-                      />
-                    </View>
-                  </Panel>
-                ) : (
-                  <View style={styles.row}>
-                    <Button
-                      compact
-                      icon={Pencil}
-                      label="Modifier"
-                      onPress={() => setEditing(weapon.id)}
-                    />
-                    <Button
-                      compact
-                      variant="danger"
-                      icon={Trash2}
-                      label="Retirer l’arme"
-                      onPress={() => setConfirmDelete(weapon.id)}
-                    />
-                  </View>
-                )}
+                <Text style={text.subtle}>munitions</Text>
               </View>
             ) : null}
-          </View>
-        ),
-      )}
+          </Pressable>
+          {expanded === weapon.id ? (
+            <View style={styles.detail}>
+              {weaponFacts(weapon).map(([label, value]) => (
+                <Text key={label} style={text.muted}>
+                  {label} : <Text style={styles.factValue}>{value}</Text>
+                </Text>
+              ))}
+              {weapon.attributes.location ? (
+                <Text style={text.muted}>
+                  Emplacement :{' '}
+                  <Text style={styles.factValue}>
+                    {weapon.attributes.location}
+                  </Text>
+                </Text>
+              ) : null}
+              {weapon.serialNumber ? (
+                <View style={styles.serial}>
+                  <Text style={[text.muted, styles.grow]}>
+                    N° de série :{' '}
+                    <Text style={styles.factValue}>
+                      {revealed === weapon.id
+                        ? weapon.serialNumber
+                        : '•'.repeat(Math.min(weapon.serialNumber.length, 10))}
+                    </Text>
+                  </Text>
+                  <Button
+                    compact
+                    variant="ghost"
+                    icon={revealed === weapon.id ? EyeOff : Eye}
+                    label={revealed === weapon.id ? 'Masquer' : 'Afficher'}
+                    accessibilityLabel={
+                      revealed === weapon.id
+                        ? 'Masquer le numéro de série'
+                        : 'Afficher le numéro de série'
+                    }
+                    onPress={() =>
+                      setRevealed(revealed === weapon.id ? null : weapon.id)
+                    }
+                  />
+                </View>
+              ) : null}
+              <PhotoStrip
+                owner="weapon"
+                ownerId={weapon.id}
+                label={weapon.model}
+              />
+              <Text style={text.subtle}>
+                Munitions comptées : stocks « Armement & munitions » au calibre{' '}
+                {weapon.caliber} (cartouches, ou boîtes dont la contenance est
+                renseignée), lots non périmés.
+              </Text>
+              {confirmDelete === weapon.id ? (
+                <Panel accent={colors.danger} style={styles.dialog}>
+                  <Text style={text.body}>
+                    Retirer « {weapon.model} » ? Les munitions restent en stock.
+                  </Text>
+                  <View style={styles.row}>
+                    <Button
+                      variant="danger"
+                      label="Retirer"
+                      onPress={() => {
+                        void remove(weapon);
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      label="Annuler"
+                      onPress={() => setConfirmDelete(null)}
+                    />
+                  </View>
+                </Panel>
+              ) : (
+                <View style={styles.row}>
+                  <Button
+                    compact
+                    icon={Pencil}
+                    label="Modifier"
+                    onPress={() =>
+                      navigation.openStockForm({
+                        category: 'weapon',
+                        weaponId: weapon.id,
+                      })
+                    }
+                  />
+                  <Button
+                    compact
+                    variant="danger"
+                    icon={Trash2}
+                    label="Retirer l’arme"
+                    onPress={() => setConfirmDelete(weapon.id)}
+                  />
+                </View>
+              )}
+            </View>
+          ) : null}
+        </View>
+      ))}
     </View>
-  );
-}
-
-function WeaponForm(props: {
-  weapon?: WeaponSummary;
-  onDone: (message: string) => Promise<void>;
-  onCancel?: () => void;
-}) {
-  const { armory } = useSession();
-  const [model, setModel] = useState(props.weapon?.model ?? '');
-  const [kind, setKind] = useState<WeaponKind>(props.weapon?.kind ?? 'rifle');
-  const [caliber, setCaliber] = useState(props.weapon?.caliber ?? '');
-  const [serial, setSerial] = useState(props.weapon?.serialNumber ?? '');
-  const [notes, setNotes] = useState(props.weapon?.notes ?? '');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const submit = async () => {
-    setErrors({});
-    const input = { model, kind, caliber, serialNumber: serial, notes };
-    try {
-      const saved = props.weapon
-        ? await armory.updateWeapon(props.weapon.id, input)
-        : await armory.createWeapon(input);
-      await props.onDone(
-        props.weapon
-          ? `« ${saved.model} » modifiée.`
-          : `« ${saved.model} » ajoutée.`,
-      );
-    } catch (e) {
-      if (e instanceof InventoryError && e.field) {
-        setErrors({ [e.field]: e.message });
-      } else {
-        setErrors({ form: e instanceof Error ? e.message : String(e) });
-      }
-    }
-  };
-
-  return (
-    <Panel
-      title={props.weapon ? 'Modifier l’arme' : 'Nouvelle arme'}
-      accent={colors.primary}
-    >
-      <Field
-        label="Marque et modèle"
-        value={model}
-        onChangeText={setModel}
-        placeholder="Ex. Browning B525"
-        maxLength={120}
-        error={errors.model}
-      />
-      <Text style={styles.fieldLabel}>Type</Text>
-      <View style={styles.wrap}>
-        {WEAPON_KINDS.map(k => (
-          <Chip
-            key={k}
-            label={WEAPON_KIND_LABELS[k]}
-            selected={kind === k}
-            onPress={() => setKind(k)}
-          />
-        ))}
-      </View>
-      <Field
-        label="Calibre"
-        value={caliber}
-        onChangeText={setCaliber}
-        placeholder="Ex. 12/70, .22 LR, 9x19"
-        autoCapitalize="none"
-        autoCorrect={false}
-        maxLength={40}
-        error={errors.caliber}
-      />
-      <Field
-        label="N° de série (facultatif)"
-        value={serial}
-        onChangeText={setSerial}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        maxLength={60}
-        error={errors.serialNumber}
-      />
-      <Field
-        label="Notes (facultatif)"
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Lunette, rangement, entretien…"
-        multiline
-        maxLength={500}
-        error={errors.notes}
-      />
-      {errors.form ? <Text style={styles.error}>{errors.form}</Text> : null}
-      <View style={styles.row}>
-        <Button
-          variant="primary"
-          label={props.weapon ? 'Enregistrer l’arme' : 'Ajouter l’arme'}
-          onPress={() => {
-            void submit();
-          }}
-        />
-        {props.onCancel ? (
-          <Button variant="ghost" label="Annuler" onPress={props.onCancel} />
-        ) : null}
-      </View>
-    </Panel>
   );
 }
 
@@ -329,7 +251,6 @@ const styles = StyleSheet.create({
   },
   dialog: { backgroundColor: colors.bgElevated },
   row: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
-  fieldLabel: { color: colors.textMuted, fontSize: 14 },
-  error: { color: colors.danger },
+  serial: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  factValue: { color: colors.text },
 });

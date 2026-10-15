@@ -36,6 +36,7 @@ import {
   StatusChip,
 } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
+import { frToIso, isoToFr } from '../../lib/dates';
 import { formatDate } from '../format';
 import { useSession } from '../session';
 import { colors, radius, space, text, type StatusTone } from '../theme';
@@ -252,19 +253,26 @@ function DocumentForm(props: {
   const [title, setTitle] = useState(props.doc?.title ?? '');
   const [holder, setHolder] = useState(props.doc?.holder ?? '');
   const [number, setNumber] = useState(props.doc?.number ?? '');
-  const [expiresAt, setExpiresAt] = useState(props.doc?.expiresAt ?? '');
+  const [expiresAt, setExpiresAt] = useState(
+    props.doc?.expiresAt ? isoToFr(props.doc.expiresAt) : '',
+  );
   const [notes, setNotes] = useState(props.doc?.notes ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const submit = async () => {
     setErrors({});
+    const expiresIso = expiresAt.trim() === '' ? '' : frToIso(expiresAt);
+    if (expiresIso === null) {
+      setErrors({ expiresAt: 'Date invalide (JJ/MM/AAAA)' });
+      return;
+    }
     const input = {
       kind,
       // Sans intitulé, le type suffit (« Passeport »).
       title: title.trim() === '' ? DOCUMENT_KIND_LABELS[kind] : title,
       holder,
       number,
-      expiresAt,
+      expiresAt: expiresIso,
       notes,
     };
     try {
@@ -328,10 +336,10 @@ function DocumentForm(props: {
         error={errors.number}
       />
       <Field
-        label="Date d’expiration (AAAA-MM-JJ, facultatif)"
+        label="Date d’expiration (JJ/MM/AAAA, facultatif)"
         value={expiresAt}
         onChangeText={setExpiresAt}
-        placeholder="2031-05-20"
+        placeholder="20/05/2031"
         autoCapitalize="none"
         error={errors.expiresAt}
         hint={`Signalé « À renouveler » ${DOCUMENT_RENEW_DAYS} jours avant.`}

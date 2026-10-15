@@ -181,9 +181,21 @@ export function unitLabel(
 
 /** « 3 bidons de 10 L », ou null sans contenance connue. */
 export function packageSummary(
-  item: Pick<InventoryItem, 'category' | 'unit' | 'packageSize'>,
+  item: Pick<InventoryItem, 'category' | 'unit' | 'packageSize'> & {
+    attributes?: InventoryItem['attributes'];
+  },
   quantity: number,
 ): string | null {
+  const countUnit = item.attributes?.countUnit;
+  if (countUnit !== undefined) {
+    // Fiche récente : la quantité compte déjà les boîtes.
+    if (countUnit === 'box' && item.packageSize !== null) {
+      return `${formatNumber(quantity)} boîte${
+        quantity > 1 ? 's' : ''
+      } de ${formatNumber(item.packageSize, 0)} cartouches`;
+    }
+    return null;
+  }
   const container = PROFILES[item.category].container;
   if (item.packageSize === null || container === null) {
     return null;

@@ -6,16 +6,15 @@ import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
-  Droplet,
   MapPinned,
   Users,
-  Wheat,
 } from 'lucide-react-native';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { addDays, localToday } from '../../lib/dates';
 import {
+  countIncompleteFood,
   getExpiryAlerts,
   getResilienceReport,
   loadTargetDays,
@@ -32,6 +31,7 @@ import {
 } from '../components/controls';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import { autonomyStatus, formatDate, formatNumber } from '../format';
+import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
@@ -45,12 +45,13 @@ export function HomeScreen() {
   const navigation = useNavigation();
   const { data, error, reload } = useLoader(async () => {
     const today = localToday();
-    const [report, alerts, targetDays] = await Promise.all([
+    const [report, alerts, targetDays, incompleteFood] = await Promise.all([
       getResilienceReport(db, today),
       getExpiryAlerts(db, today),
       loadTargetDays(db),
+      countIncompleteFood(db, today),
     ]);
-    return { today, report, alerts, targetDays };
+    return { today, report, alerts, targetDays, incompleteFood };
   });
 
   if (error) {
@@ -63,7 +64,7 @@ export function HomeScreen() {
   if (data === null) {
     return null;
   }
-  const { today, report, alerts, targetDays } = data;
+  const { today, report, alerts, targetDays, incompleteFood } = data;
   const status = autonomyStatus(report.days, targetDays);
   const limiting = report.limitingFactor === 'water' ? 'eau' : 'vivres';
   // Aucun vivre compté : le dire, plutôt qu'une date d'épuisement.
@@ -97,7 +98,7 @@ export function HomeScreen() {
         <Users color={colors.cyan} size={22} strokeWidth={2} />
         <View style={styles.grow}>
           <Text style={styles.householdTitle}>Foyer</Text>
-          <Text style={text.subtle}>Personnes à faire tenir</Text>
+          <Text style={text.subtle}>À faire tenir</Text>
         </View>
         <Stepper
           value={`${members} pers.`}
@@ -122,14 +123,16 @@ export function HomeScreen() {
             : `Ressource limitante : ${limiting}. Ouvrir le plan d’action`
         }
         onPress={() =>
-          noFood ? navigation.goTo('stock') : navigation.open('plan')
+          noFood
+            ? navigation.goTo('stock', { category: 'food' })
+            : navigation.open('plan')
         }
         style={({ pressed }) => [styles.limiting, pressed && styles.pressed]}
       >
         {report.limitingFactor === 'water' ? (
-          <Droplet color={colors.cyan} size={20} strokeWidth={2} />
+          <WaterIcon color={colors.cyan} size={20} strokeWidth={2} />
         ) : (
-          <Wheat color={colors.food} size={20} strokeWidth={2} />
+          <FoodIcon color={colors.food} size={20} strokeWidth={2} />
         )}
         <View style={styles.grow}>
           <Text style={styles.limitingText}>
@@ -139,7 +142,7 @@ export function HomeScreen() {
           </Text>
           <Text style={text.subtle}>
             {noFood
-              ? `Ajoutez vos vivres dans Stocks › Vivres. L’eau seule couvre ${report.water.days} j.`
+              ? `Ajoutez vos vivres dans Stocks › Nourriture. L’eau seule couvre ${report.water.days} j.`
               : `Stock épuisé le ${formatDate(addDays(today, report.days))}`}
           </Text>
         </View>
@@ -148,24 +151,48 @@ export function HomeScreen() {
 
       <View style={styles.grid}>
         <MetricCard
-          icon={Droplet}
+          icon={WaterIcon}
           color={colors.water}
           label="Eau disponible"
           value={formatNumber(report.water.available)}
           unit="L"
           caption={`${report.water.days} j d’autonomie`}
-          onPress={() => navigation.goTo('stock')}
+          onPress={() => navigation.goTo('stock', { category: 'water' })}
         />
         <MetricCard
-          icon={Wheat}
+          icon={FoodIcon}
           color={colors.food}
           label="Réserves alimentaires"
           value={formatNumber(report.food.available, 0)}
           unit="kcal"
           caption={`${report.food.days} j d’autonomie`}
-          onPress={() => navigation.goTo('stock')}
+          onPress={() => navigation.goTo('stock', { category: 'food' })}
         />
       </View>
+      {incompleteFood > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Données incomplètes : ${incompleteFood} aliment${
+            incompleteFood > 1 ? 's' : ''
+          } sans calories. Ouvrir la nourriture`}
+          onPress={() => navigation.goTo('stock', { category: 'food' })}
+          style={({ pressed }) => [
+            styles.incomplete,
+            pressed && styles.pressed,
+          ]}
+        >
+          <FoodIcon color={colors.food} size={18} strokeWidth={2} />
+          <View style={styles.grow}>
+            <Text style={styles.limitingText}>Données incomplètes</Text>
+            <Text style={text.subtle}>
+              {incompleteFood} aliment{incompleteFood > 1 ? 's' : ''} sans
+              valeur énergétique : non compté{incompleteFood > 1 ? 's' : ''}{' '}
+              dans l’autonomie.
+            </Text>
+          </View>
+          <ChevronRight color={colors.text} size={20} />
+        </Pressable>
+      ) : null}
       <View style={styles.grid}>
         <MetricCard
           icon={MapPinned}
@@ -244,6 +271,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary,
     backgroundColor: tint(colors.primary, '12'),
+  },
+  incomplete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: sizes.touch,
+    paddingVertical: space.s,
+    paddingHorizontal: space.l,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: tint(colors.food, '66'),
+    backgroundColor: tint(colors.food, '12'),
   },
   limitingText: { color: colors.cyanSoft, fontSize: 15, fontWeight: '600' },
   pressed: { opacity: 0.82 },
