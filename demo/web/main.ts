@@ -3,6 +3,7 @@
  * reste (coffre, mode sous contrainte, schéma, inventaire, calculs,
  * conversions, recherche) est le code de `src/`, exécuté tel quel.
  */
+/* eslint-disable no-void -- `void` marque les promesses lancées depuis les gestionnaires d'événements. */
 import { CryptoError } from '../../src/crypto/errors';
 import { systemRandom } from '../../src/crypto/native/random';
 import { SLOT_FILE_NAMES } from '../../src/crypto/params';
@@ -392,7 +393,7 @@ async function renderOpen(): Promise<void> {
       error instanceof Error ? error.message : error,
     )}</p>`;
   }
-  const flash = state.flash
+  const flashHtml = state.flash
     ? `<p class="flash ${state.flashTone}" role="status">${esc(
         state.flash,
       )}</p>`
@@ -403,7 +404,7 @@ async function renderOpen(): Promise<void> {
         <span class="brand">ResiliOS</span>
         <button class="ghost" data-action="lock">Verrouiller</button>
       </header>
-      <main class="screen" id="screen">${flash}${body}</main>
+      <main class="screen" id="screen">${flashHtml}${body}</main>
       <nav class="tabs" aria-label="Sections">
         ${tabs
           .map(
