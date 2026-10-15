@@ -22,6 +22,7 @@ import { addDays, assertIsoDate, daysBetween, localToday } from '../lib/dates';
 
 // --- Types ------------------------------------------------------------------
 
+import { estimateKcal } from './kcalEstimate';
 export type { ItemCategory, ItemUnit };
 
 export interface HouseholdSettings {
@@ -380,7 +381,7 @@ export async function saveHousehold(
 export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
   const { rows } = await db.execute(
     `SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
-            l.quantity, i.calories_per_unit, l.expiration_date
+            l.quantity, i.calories_per_unit, i.subtype, l.expiration_date
        FROM inventory_lots AS l
        JOIN inventory_items AS i ON i.id = l.item_id
       WHERE l.quantity > 0 AND i.category IN ('water', 'food')`,
@@ -392,8 +393,17 @@ export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
     category: r.category as ItemCategory,
     unit: r.unit as ItemUnit,
     quantity: Number(r.quantity),
+    // Sans étiquette saisie, estimation d'après le nom (riz, conserve…).
     caloriesPerUnit:
-      r.calories_per_unit === null ? null : Number(r.calories_per_unit),
+      r.calories_per_unit !== null
+        ? Number(r.calories_per_unit)
+        : r.category === 'food'
+        ? estimateKcal(
+            String(r.name),
+            r.unit as ItemUnit,
+            r.subtype === null ? null : String(r.subtype),
+          )?.kcalPerUnit ?? null
+        : null,
     expirationDate:
       r.expiration_date === null ? null : String(r.expiration_date),
   }));

@@ -66,6 +66,8 @@ export interface ItemInput {
   caliber?: string | null;
   /** Contenance d'un contenant (bidon, boîte), dans l'unité de l'article. */
   packageSize?: number | null;
+  /** Type au sein de la catégorie (ex. `canned`, `medicine`). */
+  subtype?: string | null;
 }
 
 export interface LotInput {
@@ -89,6 +91,7 @@ export interface InventoryItem {
   alertDays: number | null;
   caliber: string | null;
   packageSize: number | null;
+  subtype: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -180,7 +183,10 @@ interface CleanItem {
   alertDays: number | null;
   caliber: string | null;
   packageSize: number | null;
+  subtype: string | null;
 }
+
+const SUBTYPE_RE = /^[a-z_]{1,30}$/;
 
 export const CALIBER_MAX = 40;
 
@@ -222,7 +228,18 @@ function validateItem(input: ItemInput): CleanItem {
     caliber:
       input.category === 'weapon' ? validateCaliber(input.caliber) : null,
     packageSize: validatePackageSize(input.packageSize),
+    subtype: validateSubtype(input.subtype),
   };
+}
+
+function validateSubtype(value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (!SUBTYPE_RE.test(value)) {
+    throw invalid('subtype', 'Type inconnu');
+  }
+  return value;
 }
 
 function validatePackageSize(value: number | null | undefined): number | null {
@@ -334,13 +351,17 @@ function toItem(row: SqlRow): InventoryItem {
       row.package_size === null || row.package_size === undefined
         ? null
         : Number(row.package_size),
+    subtype:
+      row.subtype === null || row.subtype === undefined
+        ? null
+        : String(row.subtype),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
-  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size,
+  i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size, i.subtype,
   i.created_at, i.updated_at`;
 
 /**
@@ -378,8 +399,8 @@ export class InventoryRepository {
       await this.db.execute(
         `INSERT INTO inventory_items
            (id, name, category, unit, calories_per_unit, location, is_critical,
-            notes, min_stock, alert_days, caliber, package_size)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            notes, min_stock, alert_days, caliber, package_size, subtype)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -393,6 +414,7 @@ export class InventoryRepository {
           item.alertDays,
           item.caliber,
           item.packageSize,
+          item.subtype,
         ],
       );
       if (lot !== null) {
@@ -428,7 +450,7 @@ export class InventoryRepository {
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
                 location = ?, is_critical = ?, notes = ?,
                 min_stock = ?, alert_days = ?, caliber = ?,
-                package_size = ?
+                package_size = ?, subtype = ?
           WHERE id = ?`,
         [
           item.name,
@@ -442,6 +464,7 @@ export class InventoryRepository {
           item.alertDays,
           item.caliber,
           item.packageSize,
+          item.subtype,
           id,
         ],
       );

@@ -66,6 +66,9 @@ export function HomeScreen() {
   const { today, report, alerts, targetDays } = data;
   const status = autonomyStatus(report.days, targetDays);
   const limiting = report.limitingFactor === 'water' ? 'eau' : 'vivres';
+  // Aucun vivre compté : le dire, plutôt qu'une date d'épuisement.
+  const noFood =
+    report.limitingFactor === 'food' && report.food.available === 0;
   const members = report.household.members;
   const changeMembers = async (delta: number) => {
     await saveHousehold(db, { ...report.household, members: members + delta });
@@ -113,8 +116,14 @@ export function HomeScreen() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Ressource limitante : ${limiting}. Ouvrir le plan d’action`}
-        onPress={() => navigation.open('plan')}
+        accessibilityLabel={
+          noFood
+            ? 'Aucun vivre compté. Ajouter des vivres'
+            : `Ressource limitante : ${limiting}. Ouvrir le plan d’action`
+        }
+        onPress={() =>
+          noFood ? navigation.goTo('stock') : navigation.open('plan')
+        }
         style={({ pressed }) => [styles.limiting, pressed && styles.pressed]}
       >
         {report.limitingFactor === 'water' ? (
@@ -124,10 +133,14 @@ export function HomeScreen() {
         )}
         <View style={styles.grow}>
           <Text style={styles.limitingText}>
-            Ressource limitante : {limiting}
+            {noFood
+              ? 'Aucun vivre compté'
+              : `Ressource limitante : ${limiting}`}
           </Text>
           <Text style={text.subtle}>
-            Stock épuisé le {formatDate(addDays(today, report.days))}
+            {noFood
+              ? `Ajoutez vos vivres dans Stocks › Vivres. L’eau seule couvre ${report.water.days} j.`
+              : `Stock épuisé le ${formatDate(addDays(today, report.days))}`}
           </Text>
         </View>
         <ChevronRight color={colors.text} size={20} />

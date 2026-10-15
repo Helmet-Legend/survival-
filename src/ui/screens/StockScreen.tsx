@@ -26,7 +26,7 @@ import {
   type ItemUnit,
   type DocumentSummary,
 } from '../../inventory';
-import { daysBetween, localToday } from '../../lib/dates';
+import { addDays, daysBetween, localToday } from '../../lib/dates';
 import {
   Button,
   Chip,
@@ -59,7 +59,13 @@ import {
   toneColor,
   type StatusTone,
 } from '../theme';
-import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
+import { estimateKcal } from '../../resilience/kcalEstimate';
+import {
+  PROFILES,
+  packageSummary,
+  subtypeLabel,
+  unitLabel,
+} from '../itemProfiles';
 import { useLoader } from '../useLoader';
 import { ArmorySection } from './ArmorySection';
 import { DocumentsSection, documentStatus } from './DocumentsSection';
@@ -460,7 +466,8 @@ export function StockScreen() {
                             ) : null}
                           </Text>
                           <Text style={text.subtle}>
-                            {CATEGORY_LABELS[item.category]}
+                            {subtypeLabel(item.category, item.subtype) ??
+                              CATEGORY_LABELS[item.category]}
                             {item.caliber ? ` · ${item.caliber}` : ''}
                             {packageSummary(item, item.usableQuantity)
                               ? ` · ${packageSummary(
@@ -608,6 +615,38 @@ function ItemDetail(props: {
     .filter(l => !l.isExpired)
     .reduce((sum, l) => sum + l.quantity, 0);
   const summary = packageSummary(item, usable);
+  const kcalUnit = item.unit === 'unit' ? 'pièce' : UNIT_LABELS[item.unit];
+  const estimate =
+    item.category === 'food' && item.caloriesPerUnit === null
+      ? estimateKcal(item.name, item.unit, item.subtype)
+      : null;
+  const facts: Array<[string, string]> = [];
+  const type = subtypeLabel(item.category, item.subtype);
+  if (type) {
+    facts.push(['Type', type]);
+  }
+  if (item.caliber) {
+    facts.push(['Calibre', item.caliber]);
+  }
+  if (item.category === 'food') {
+    facts.push([
+      'Calories',
+      item.caloriesPerUnit !== null
+        ? `${formatNumber(item.caloriesPerUnit, 0)} kcal par ${kcalUnit}`
+        : estimate
+        ? `≈ ${formatNumber(
+            estimate.kcalPerUnit,
+            0,
+          )} kcal par ${kcalUnit} (estimé : ${estimate.basis})`
+        : 'inconnues : non comptées dans l’autonomie',
+    ]);
+  }
+  if (item.location) {
+    facts.push(['Emplacement', item.location]);
+  }
+  if (item.notes) {
+    facts.push([profile.notesLabel.replace(' (facultatif)', ''), item.notes]);
+  }
 
   const consume = async (amount: number) => {
     try {
@@ -686,9 +725,14 @@ function ItemDetail(props: {
   return (
     <View style={styles.detail}>
       {summary ? <Text style={styles.summary}>{summary}</Text> : null}
-      {item.caliber ? (
-        <Text style={text.muted}>Calibre : {item.caliber}</Text>
-      ) : null}
+      {facts.map(([label, value]) => (
+        <View key={label} style={styles.fact}>
+          <Text style={text.subtle}>{label}</Text>
+          <Text selectable style={[text.body, styles.factValue]}>
+            {value}
+          </Text>
+        </View>
+      ))}
 
       <Text style={text.label}>Lots, du premier au dernier consommé</Text>
       {props.lots.length === 0 ? (
@@ -754,14 +798,16 @@ function ItemDetail(props: {
         onCount={setAddCount}
         errors={errors}
       />
-      <Field
-        label="À consommer avant le (AAAA-MM-JJ, facultatif)"
-        value={addExpiration}
-        onChangeText={setAddExpiration}
-        placeholder="2027-06-30"
-        autoCapitalize="none"
-        error={errors.addExpiration}
-      />
+      {profile.expiryLabel !== null ? (
+        <Field
+          label={profile.expiryLabel}
+          value={addExpiration}
+          onChangeText={setAddExpiration}
+          placeholder="2027-06-30"
+          autoCapitalize="none"
+          error={errors.addExpiration}
+        />
+      ) : null}
       <View style={styles.row}>
         <Button
           compact
@@ -842,14 +888,34 @@ function AddItemForm(props: {
   const [kcal, setKcal] = useState('');
   const [expiration, setExpiration] = useState('');
   const [minStock, setMinStock] = useState('');
+  const [subtype, setSubtype] = useState<string | null>(
+    PROFILES[props.initialCategory].subtypes[0]?.id ?? null,
+  );
+  const [location, setLocation] = useState('');
+  const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const profile = PROFILES[category];
+  const subtypeInfo = profile.subtypes.find(t => t.id === subtype);
+  const estimate =
+    profile.calories && name.trim() !== ''
+      ? estimateKcal(name, unit, subtype)
+      : null;
 
   const chooseCategory = (next: ItemCategory) => {
     setCategory(next);
     setUnit(PROFILES[next].units[0]);
+    setSubtype(PROFILES[next].subtypes[0]?.id ?? null);
     setSize('');
     setErrors({});
+  };
+
+  const chooseSubtype = (next: string) => {
+    setSubtype(next);
+    // Eau du robinet : date de renouvellement proposée (modifiable).
+    const renew = profile.subtypes.find(t => t.id === next)?.renewDays;
+    if (renew !== undefined && expiration.trim() === '') {
+      setExpiration(addDays(localToday(), renew));
+    }
   };
 
   const submit = async () => {
@@ -868,6 +934,9 @@ function AddItemForm(props: {
           minStock: optionalNumber(minStock),
           caliber: profile.caliber ? caliber : null,
           packageSize,
+          subtype,
+          location,
+          notes,
         },
         {
           quantity: totalQuantity(
@@ -875,7 +944,10 @@ function AddItemForm(props: {
             packageSize,
             profile.container !== null,
           ),
-          expirationDate: expiration.trim() === '' ? null : expiration.trim(),
+          expirationDate:
+            profile.expiryLabel === null || expiration.trim() === ''
+              ? null
+              : expiration.trim(),
         },
       );
       await props.onDone(item, `« ${item.name} » ajouté au stock.`);
@@ -889,10 +961,7 @@ function AddItemForm(props: {
   };
 
   return (
-    <Panel
-      title={category === 'weapon' ? 'Nouvelles munitions' : 'Nouvel article'}
-      accent={colors.primary}
-    >
+    <Panel title={profile.formTitle} accent={colors.primary}>
       <Text style={styles.fieldLabel}>Catégorie</Text>
       <View style={styles.wrap}>
         {ITEM_CATEGORIES.map(c => (
@@ -912,6 +981,24 @@ function AddItemForm(props: {
         maxLength={120}
         error={errors.name}
       />
+      {profile.subtypes.length > 0 ? (
+        <>
+          <Text style={styles.fieldLabel}>Type</Text>
+          <View style={styles.wrap}>
+            {profile.subtypes.map(t => (
+              <Chip
+                key={t.id}
+                label={t.label}
+                selected={subtype === t.id}
+                onPress={() => chooseSubtype(t.id)}
+              />
+            ))}
+          </View>
+          {subtypeInfo?.hint ? (
+            <Text style={text.subtle}>{subtypeInfo.hint}</Text>
+          ) : null}
+        </>
+      ) : null}
       {profile.caliber ? (
         <>
           <Field
@@ -971,17 +1058,49 @@ function AddItemForm(props: {
           value={kcal}
           onChangeText={setKcal}
           keyboardType="number-pad"
-          placeholder="facultatif (indiqué sur l’emballage)"
+          placeholder={
+            estimate
+              ? `≈ ${formatNumber(estimate.kcalPerUnit, 0)} (estimation)`
+              : 'facultatif (indiqué sur l’emballage)'
+          }
           error={errors.caloriesPerUnit}
+          hint={
+            estimate && kcal.trim() === ''
+              ? `Sans saisie, estimation d’après « ${
+                  estimate.basis
+                } » : ${formatNumber(estimate.kcalPerUnit, 0)} kcal par ${
+                  unit === 'unit' ? 'pièce' : UNIT_LABELS[unit]
+                }.`
+              : 'Indiqué sur l’emballage (kcal pour 100 g × 10 = par kg).'
+          }
+        />
+      ) : null}
+      {profile.expiryLabel !== null ? (
+        <Field
+          label={profile.expiryLabel}
+          value={expiration}
+          onChangeText={setExpiration}
+          placeholder="2027-06-30"
+          autoCapitalize="none"
+          error={errors.expirationDate}
         />
       ) : null}
       <Field
-        label="À consommer avant le (AAAA-MM-JJ, facultatif)"
-        value={expiration}
-        onChangeText={setExpiration}
-        placeholder="2027-06-30"
-        autoCapitalize="none"
-        error={errors.expirationDate}
+        label="Emplacement (facultatif)"
+        value={location}
+        onChangeText={setLocation}
+        placeholder={profile.locationPlaceholder}
+        maxLength={120}
+        error={errors.location}
+      />
+      <Field
+        label={profile.notesLabel}
+        value={notes}
+        onChangeText={setNotes}
+        placeholder={profile.notesPlaceholder}
+        multiline
+        maxLength={500}
+        error={errors.notes}
       />
       <Field
         label="Stock minimal (facultatif)"
@@ -1068,4 +1187,6 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.textMuted, fontSize: 14 },
   total: { color: colors.primaryBright, fontSize: 15, fontWeight: '700' },
   summary: { color: colors.cyanSoft, fontSize: 15, fontWeight: '600' },
+  fact: { flexDirection: 'row', gap: space.m, alignItems: 'baseline' },
+  factValue: { flex: 1, minWidth: 0, textAlign: 'right' },
 });
