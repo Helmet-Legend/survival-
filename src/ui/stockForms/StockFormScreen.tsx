@@ -214,6 +214,42 @@ function StockForm(props: {
     }
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  /** Fiche existante : suppression ; fiche d'ajout : saisie effacée. */
+  const removeOrClear = async () => {
+    setConfirmDelete(false);
+    if (!isEdit) {
+      setValues({
+        ...initialValues(category, props.target.recordType),
+        ...(category === 'weapon' ? { recordType: values.recordType } : {}),
+      });
+      setErrors({});
+      setFormError(null);
+      setPendingPhotos([]);
+      return;
+    }
+    try {
+      let name: string;
+      if (props.weapon) {
+        await armory.deleteWeapon(props.weapon.id);
+        name = props.weapon.model;
+      } else if (props.item) {
+        await repo.deleteItem(props.item.id);
+        name = props.item.name;
+      } else {
+        return;
+      }
+      navigation.goTo('stock', { category, message: `« ${name} » supprimé.` });
+    } catch (e) {
+      setFormError(
+        `Suppression impossible : ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  };
+
   const save = async () => {
     setErrors({});
     setFormError(null);
@@ -760,26 +796,81 @@ function StockForm(props: {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Enregistrer le stock"
-          accessibilityState={{ disabled: saving, busy: saving }}
-          disabled={saving}
-          onPress={() => {
-            void save();
-          }}
-          style={({ pressed }) => [
-            styles.save,
-            { borderColor: color, backgroundColor: tint(color, '26') },
-            pressed && styles.pressed,
-            saving && styles.disabled,
-          ]}
-        >
-          <Check color={color} size={22} strokeWidth={2.6} />
-          <Text style={[styles.saveText, { color }]}>
-            {saving ? 'Enregistrement…' : 'Enregistrer le stock'}
-          </Text>
-        </Pressable>
+        {confirmDelete ? (
+          <View style={styles.confirm}>
+            <Text style={text.body}>
+              {isEdit
+                ? `Supprimer « ${
+                    props.weapon?.model ?? props.item?.name ?? ''
+                  } »${
+                    props.item ? ' et tout son stock' : ''
+                  } ? Cette action est définitive.`
+                : 'Effacer tout ce qui a été saisi sur cette fiche ?'}
+            </Text>
+            <View style={styles.confirmRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isEdit ? 'Oui, supprimer' : 'Oui, tout effacer'
+                }
+                onPress={() => {
+                  void removeOrClear();
+                }}
+                style={({ pressed }) => [
+                  styles.confirmYes,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.confirmYesText}>
+                  {isEdit ? 'Oui, supprimer' : 'Oui, tout effacer'}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Annuler"
+                onPress={() => setConfirmDelete(false)}
+                style={({ pressed }) => [
+                  styles.confirmNo,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.confirmNoText}>Annuler</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+        <View style={styles.footerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              isEdit ? 'Supprimer cette fiche' : 'Effacer la saisie'
+            }
+            onPress={() => setConfirmDelete(true)}
+            style={({ pressed }) => [styles.trash, pressed && styles.pressed]}
+          >
+            <Trash2 color={colors.danger} size={22} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Enregistrer le stock"
+            accessibilityState={{ disabled: saving, busy: saving }}
+            disabled={saving}
+            onPress={() => {
+              void save();
+            }}
+            style={({ pressed }) => [
+              styles.save,
+              { borderColor: color, backgroundColor: tint(color, '26') },
+              pressed && styles.pressed,
+              saving && styles.disabled,
+            ]}
+          >
+            <Check color={color} size={22} strokeWidth={2.6} />
+            <Text style={[styles.saveText, { color }]}>
+              {saving ? 'Enregistrement…' : 'Enregistrer le stock'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -1081,6 +1172,43 @@ const styles = StyleSheet.create({
     padding: 2,
     backgroundColor: colors.dangerSurface,
   },
+  footerRow: { flexDirection: 'row', gap: space.s },
+  trash: {
+    width: 52,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: tint(colors.danger, '88'),
+    backgroundColor: colors.dangerSurface,
+  },
+  confirm: {
+    gap: space.s,
+    padding: space.m,
+    marginBottom: space.s,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
+  confirmRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  confirmYes: {
+    minHeight: 44,
+    paddingHorizontal: space.l,
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSurface,
+  },
+  confirmYesText: { color: '#FF8A96', fontSize: 15, fontWeight: '700' },
+  confirmNo: {
+    minHeight: 44,
+    paddingHorizontal: space.l,
+    justifyContent: 'center',
+  },
+  confirmNoText: { color: colors.cyan, fontSize: 15, fontWeight: '700' },
   footer: {
     paddingHorizontal: 16,
     paddingTop: space.s,
@@ -1104,6 +1232,7 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.textMuted, fontSize: 15 },
   fields: { gap: 10 },
   save: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

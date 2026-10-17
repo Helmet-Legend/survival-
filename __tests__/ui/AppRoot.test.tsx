@@ -792,6 +792,45 @@ describe('écrans', () => {
     expect(screen.queryByLabelText(/^Bidons cave,/)).toBeNull();
   });
 
+  it('supprime depuis la fiche modifiée et efface une fiche d’ajout', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+
+    // Fiche d'ajout : la corbeille efface la saisie, sans rien enregistrer.
+    await fireEvent.press(screen.getByLabelText('+ Ajouter : Nourriture'));
+    await fireEvent.changeText(
+      await screen.findByLabelText('Nom / Description, obligatoire'),
+      'Pâtes',
+    );
+    await fireEvent.press(screen.getByLabelText('Effacer la saisie'));
+    await fireEvent.press(screen.getByLabelText('Oui, tout effacer'));
+    expect(
+      screen.getByLabelText('Nom / Description, obligatoire').props.value,
+    ).toBe('');
+    await fireEvent.press(screen.getByLabelText('Retour'));
+
+    // Fiche existante : suppression après confirmation.
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    await fireEvent.press(await screen.findByText('Modifier la fiche'));
+    await fireEvent.press(
+      await screen.findByLabelText('Supprimer cette fiche'),
+    );
+    expect(
+      screen.getByText(
+        'Supprimer « Riz » et tout son stock ? Cette action est définitive.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Annuler'));
+    expect(screen.queryByText(/Cette action est définitive/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Supprimer cette fiche'));
+    await fireEvent.press(screen.getByLabelText('Oui, supprimer'));
+    expect(await screen.findByText('« Riz » supprimé.')).toBeTruthy();
+    expect(screen.queryByLabelText('Riz, 10 kg')).toBeNull();
+  });
+
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
@@ -1105,7 +1144,7 @@ describe('fiches par type de produit', () => {
     await openForm('Nourriture');
     await fireEvent.press(await screen.findByLabelText('Retour'));
     await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
-    await fireEvent.press(await screen.findByLabelText('Modifier la fiche'));
+    await fireEvent.press(await screen.findByText('Modifier la fiche'));
     expect(await screen.findByText('Modifier l’aliment')).toBeTruthy();
     expect(screen.queryByLabelText('Quantité, obligatoire')).toBeNull();
     await fireEvent.changeText(
@@ -1355,7 +1394,7 @@ describe('fiche médicale', () => {
     expect(screen.queryByText('Trousse principale')).toBeNull();
 
     // La fiche rouverte garde son conditionnement.
-    await fireEvent.press(screen.getByLabelText('Modifier la fiche'));
+    await fireEvent.press(screen.getByText('Modifier la fiche'));
     expect(
       await screen.findByLabelText('Conditionnement : Pièce'),
     ).toBeTruthy();
@@ -1420,7 +1459,7 @@ describe('fiche médicale', () => {
     await fireEvent.press(
       await screen.findByLabelText('Ancien paracétamol, 3 pièces'),
     );
-    await fireEvent.press(screen.getByLabelText('Modifier la fiche'));
+    await fireEvent.press(screen.getByText('Modifier la fiche'));
     expect(
       await screen.findByLabelText('Conditionnement : Pièce'),
     ).toBeTruthy();

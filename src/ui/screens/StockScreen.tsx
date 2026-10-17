@@ -800,30 +800,22 @@ function ItemDetail(props: {
           </Text>
         </View>
       ))}
-      <View style={styles.row}>
-        <Button
-          compact
-          icon={Pencil}
-          label="Modifier"
-          accessibilityLabel="Modifier la fiche"
-          style={styles.grow}
-          onPress={() =>
-            navigation.openStockForm({
-              category: item.category,
-              itemId: item.id,
-            })
-          }
-        />
-        <Button
-          compact
-          variant="danger"
-          icon={Trash2}
-          label="Supprimer"
-          accessibilityLabel={`Supprimer « ${item.name} »`}
-          style={styles.grow}
-          onPress={() => setConfirm({ kind: 'item' })}
-        />
-      </View>
+      <Button
+        compact
+        icon={Pencil}
+        label="Modifier la fiche"
+        onPress={() =>
+          navigation.openStockForm({ category: item.category, itemId: item.id })
+        }
+      />
+      <Button
+        compact
+        variant="danger"
+        icon={Trash2}
+        label="Supprimer l’article"
+        accessibilityLabel={`Supprimer « ${item.name} »`}
+        onPress={() => setConfirm({ kind: 'item' })}
+      />
       {confirm?.kind === 'item' ? (
         <Panel accent={colors.danger} style={styles.dialog}>
           <Text style={text.body}>
