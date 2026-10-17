@@ -14,7 +14,12 @@ import {
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { type WeaponSummary } from '../../inventory';
+import {
+  caliberKey,
+  roundCount,
+  type ItemSummary,
+  type WeaponSummary,
+} from '../../inventory';
 import {
   Button,
   IconTile,
@@ -25,11 +30,26 @@ import {
 import { PhotoStrip } from '../components/PhotoStrip';
 import { CATEGORY_COLORS, formatNumber, WEAPON_KIND_LABELS } from '../format';
 import { useNavigation } from '../navigation';
-import { weaponFacts } from '../stockForms/details';
+import { itemUnitLabel, weaponFacts } from '../stockForms/details';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 
 type Feedback = { message: string; tone: 'ok' | 'error' };
+
+/** Munitions (pas les accessoires) au même calibre qu'une arme. */
+function matchingAmmo(
+  items: readonly ItemSummary[],
+  caliber: string,
+): ItemSummary[] {
+  const key = caliberKey(caliber);
+  return items.filter(
+    i =>
+      i.attributes.recordType !== 'accessory' &&
+      i.caliber !== null &&
+      caliberKey(i.caliber) === key &&
+      roundCount(1, i.packageSize, i.attributes) !== null,
+  );
+}
 
 function rounds(count: number): string {
   return `${formatNumber(count, 0)} munition${count > 1 ? 's' : ''}`;
@@ -37,6 +57,10 @@ function rounds(count: number): string {
 
 export function ArmorySection(props: {
   weapons: readonly WeaponSummary[];
+  /** Articles de la catégorie Armement (munitions et accessoires). */
+  ammo: readonly ItemSummary[];
+  /** Ouvre la fiche d'un article de munitions (pour compléter son stock). */
+  onOpenItem: (itemId: string) => void;
   onChanged: (feedback: Feedback) => Promise<void>;
 }) {
   const { armory } = useSession();
@@ -167,10 +191,60 @@ export function ArmorySection(props: {
                 ownerId={weapon.id}
                 label={weapon.model}
               />
+              <Text style={[text.label, styles.ammoTitle]}>
+                Munitions en {weapon.caliber}
+              </Text>
+              {matchingAmmo(props.ammo, weapon.caliber).map(item => (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Compléter « ${
+                    item.name
+                  } », ${formatNumber(item.usableQuantity)} ${itemUnitLabel(
+                    item,
+                    item.usableQuantity,
+                  )}`}
+                  onPress={() => props.onOpenItem(item.id)}
+                  style={({ pressed }) => [
+                    styles.ammo,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[text.body, styles.grow]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.factValue}>
+                    {formatNumber(item.usableQuantity)}{' '}
+                    {itemUnitLabel(item, item.usableQuantity)}
+                  </Text>
+                  <Text style={styles.link}>Compléter</Text>
+                </Pressable>
+              ))}
+              {matchingAmmo(props.ammo, weapon.caliber).length === 0 ? (
+                <Text style={text.subtle}>
+                  Aucune munition de ce calibre en stock.
+                </Text>
+              ) : null}
+              <Button
+                compact
+                variant="primary"
+                icon={Plus}
+                label="Ajouter des munitions"
+                accessibilityLabel={`Ajouter des munitions en ${weapon.caliber}`}
+                onPress={() =>
+                  navigation.openStockForm({
+                    category: 'weapon',
+                    recordType: 'ammo',
+                    prefill: {
+                      caliber: weapon.caliber,
+                      name: `Munitions ${weapon.caliber}`,
+                    },
+                  })
+                }
+              />
               <Text style={text.subtle}>
-                Munitions comptées : stocks « Armement & munitions » au calibre{' '}
-                {weapon.caliber} (cartouches, ou boîtes dont la contenance est
-                renseignée), lots non périmés.
+                Comptées : cartouches, ou boîtes dont la contenance est
+                renseignée, lots non périmés.
               </Text>
               {confirmDelete === weapon.id ? (
                 <Panel accent={colors.danger} style={styles.dialog}>
@@ -252,5 +326,18 @@ const styles = StyleSheet.create({
   dialog: { backgroundColor: colors.bgElevated },
   row: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   serial: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  ammoTitle: { marginTop: space.s },
+  ammo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: 48,
+    paddingHorizontal: space.m,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  link: { color: colors.primary, fontWeight: '700' },
   factValue: { color: colors.text },
 });

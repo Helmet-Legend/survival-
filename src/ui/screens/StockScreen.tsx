@@ -437,6 +437,11 @@ export function StockScreen() {
             <>
               <ArmorySection
                 weapons={data.weapons}
+                ammo={data.items}
+                onOpenItem={id => {
+                  setFeedback(null);
+                  setExpanded(id);
+                }}
                 onChanged={async message => {
                   setFeedback(message);
                   await reload();

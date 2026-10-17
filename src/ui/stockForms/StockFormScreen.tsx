@@ -124,7 +124,10 @@ function StockForm(props: {
       ? valuesFromItem(props.item)
       : props.weapon
       ? valuesFromWeapon(props.weapon)
-      : initialValues(category, props.target.recordType),
+      : {
+          ...initialValues(category, props.target.recordType),
+          ...props.target.prefill,
+        },
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -146,7 +149,12 @@ function StockForm(props: {
     .filter(f => !(isEdit && f.type === 'date' && f.key === 'expiry'));
   const essential = new Set(ESSENTIAL[category]);
   const isEssential = (f: Field) =>
-    essential.has(fieldId(f)) || (f.type === 'text' && f.required === true);
+    essential.has(fieldId(f)) ||
+    ((f.type === 'text' || f.type === 'select') && f.required === true);
+  // Unité choisie dans un champ à part (« Conditionnement ») : la quantité
+  // n'affiche plus que le nombre, suivi de l'unité choisie.
+  const separateUnit = config.fields.some(f => f.type === 'packaging');
+  const chosenUnit = config.units.filter(u => u.value === values.unit);
   const main = visible.filter(isEssential);
   const details = visible.filter(f => !isEssential(f));
   const detailKeys = new Set(
@@ -155,6 +163,8 @@ function StockForm(props: {
         ? ['quantity', 'unit']
         : f.type === 'threshold'
         ? ['minStock']
+        : f.type === 'packaging'
+        ? ['unit']
         : f.type === 'measure'
         ? [f.key, f.unitKey]
         : [f.key],
@@ -326,7 +336,23 @@ function StockForm(props: {
             error={errors[field.key] || errors[field.unitKey]}
           />
         );
+      case 'packaging':
+        return (
+          <ChoiceRow
+            key={key}
+            icon={field.icon}
+            color={color}
+            label={`${field.label} *`}
+            value={values.unit ?? ''}
+            options={field.options}
+            onChange={set('unit')}
+            error={errors.unit}
+          />
+        );
       case 'quantity':
+        if (isEdit && separateUnit) {
+          return null; // l'unité se choisit dans « Conditionnement »
+        }
         if (isEdit) {
           return (
             <MeasureRow
@@ -353,10 +379,11 @@ function StockForm(props: {
             value={values.quantity ?? ''}
             onChange={set('quantity')}
             unit={values.unit}
-            units={config.units}
+            units={separateUnit ? chosenUnit : config.units}
             onUnit={set('unit')}
             stepper
-            error={errors.quantity || errors.unit}
+            integer={config.integerQuantity}
+            error={errors.quantity || (separateUnit ? undefined : errors.unit)}
           />
         );
       case 'threshold':

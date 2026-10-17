@@ -14,6 +14,8 @@ export interface StockFormTarget {
   recordType?: 'weapon' | 'ammo' | 'accessory';
   itemId?: string;
   weaponId?: string;
+  /** Valeurs préremplies d'une nouvelle fiche (ex. calibre d'une arme). */
+  prefill?: Record<string, string>;
 }
 
 /** Catégorie et message à afficher en arrivant sur les Stocks. */
