@@ -15,7 +15,11 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 import { BUNDLED_GUIDES } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
-import { InventoryRepository, seedDecoyInventory } from '../../src/inventory';
+import {
+  ArmoryRepository,
+  InventoryRepository,
+  seedDecoyInventory,
+} from '../../src/inventory';
 import { addDays, localToday } from '../../src/lib/dates';
 import { whileAway, type PhotoSource } from '../../src/photo/photoSource';
 import { AppRoot } from '../../src/ui/AppRoot';
@@ -431,7 +435,7 @@ describe('écrans', () => {
       await screen.findByLabelText('Quantité à retirer (L)'),
       '12',
     );
-    await fireEvent.press(screen.getByText('Retirer'));
+    await fireEvent.press(screen.getByLabelText('Retirer'));
     expect(
       await screen.findByText('Retiré : 12 L du lot sans date. Reste 18 L.'),
     ).toBeTruthy();
@@ -440,7 +444,7 @@ describe('écrans', () => {
       screen.getByLabelText('Quantité à retirer (L)'),
       '50',
     );
-    await fireEvent.press(screen.getByText('Retirer'));
+    await fireEvent.press(screen.getByLabelText('Retirer'));
     expect(
       await screen.findByText('Stock insuffisant : 18 disponible(s)'),
     ).toBeTruthy();
@@ -602,7 +606,7 @@ describe('écrans', () => {
     ).toBeTruthy();
 
     await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '2');
-    await fireEvent.press(screen.getByText('Ajouter au stock existant'));
+    await fireEvent.press(screen.getByLabelText('Ajouter au stock existant'));
     expect(
       await screen.findByText('Stock de « Bidons garage » complété.'),
     ).toBeTruthy();
@@ -686,6 +690,60 @@ describe('écrans', () => {
       await screen.findByLabelText(
         'Armement : 250 munitions, 1 arme, 1 article',
       ),
+    ).toBeTruthy();
+  });
+
+  it('ajoute des munitions depuis la fiche d’une arme existante', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    await new ArmoryRepository(db).createWeapon({
+      model: 'Browning B525',
+      kind: 'shotgun',
+      caliber: '12/70',
+    });
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armement' }),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Browning B525, 12/70, 0 munition'),
+    );
+    expect(
+      await screen.findByText('Aucune munition de ce calibre en stock.'),
+    ).toBeTruthy();
+
+    // Le calibre de l'arme est déjà rempli.
+    await fireEvent.press(
+      screen.getByLabelText('Ajouter des munitions en 12/70'),
+    );
+    expect(
+      await screen.findByRole('tab', { name: 'Munition', selected: true }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Calibre').props.value).toBe('12/70');
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '50',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(
+      await screen.findByText('« Munitions 12/70 » enregistré.'),
+    ).toBeTruthy();
+
+    // La fiche de l'arme liste ce stock et permet de le compléter.
+    await fireEvent.press(
+      screen.getByLabelText('Browning B525, 12/70, 50 munitions'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Compléter « Munitions 12/70 », 50 cartouches',
+      ),
+    );
+    expect(
+      await screen.findByLabelText('Ajouter au stock existant'),
     ).toBeTruthy();
   });
 
@@ -890,6 +948,68 @@ describe('fiches par type de produit', () => {
     expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
   });
 
+  it('propose une valeur énergétique habituelle, comptée après confirmation', async () => {
+    await openForm('Nourriture');
+    await fireEvent.changeText(
+      await screen.findByLabelText('Nom / Description, obligatoire'),
+      'Riz basmati',
+    );
+    await unit('kg');
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '4',
+    );
+    expect(screen.getByText(/Valeur habituelle pour « riz »/)).toBeTruthy();
+    // Rien n'est rempli tant que la valeur n'est pas confirmée.
+    expect(screen.getByLabelText('Valeur énergétique').props.value).toBe('');
+    await fireEvent.press(screen.getByLabelText('Utiliser cette valeur'));
+    expect(screen.getByLabelText('Valeur énergétique').props.value).toBe('355');
+    // 4 kg × 3 550 kcal = 14 200 kcal, à 2 000 kcal par jour.
+    expect(screen.getByText(/environ 7,1 jours pour 1 pers\./)).toBeTruthy();
+    expect(screen.getByText('14 200 kcal')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Riz basmati » enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Nourriture : 50 200 kcal, 2 articles'),
+    ).toBeTruthy();
+  });
+
+  it('propose aussi le poids habituel d’une boîte de conserve', async () => {
+    await openForm('Nourriture');
+    await fireEvent.press(
+      within(await screen.findByLabelText('Saisie rapide')).getByRole(
+        'button',
+        { name: 'Conserves' },
+      ),
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '3',
+    );
+    expect(screen.getByText(/400 g par boîte/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Utiliser cette valeur'));
+    expect(screen.getByText('1 200 kcal')).toBeTruthy();
+  });
+
+  it('calcule le volume de plusieurs bidons identiques', async () => {
+    await openForm('Eau');
+    await fireEvent.press(
+      await screen.findByLabelText('Plusieurs contenants : calculer le total'),
+    );
+    await fireEvent.changeText(screen.getByLabelText('Nombre'), '4');
+    await fireEvent.changeText(screen.getByLabelText('Contenance'), '20');
+    expect(screen.getByLabelText('Quantité, obligatoire').props.value).toBe(
+      '80',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom / Description, obligatoire'),
+      'Jerricans garage',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByLabelText('Jerricans garage, 80 L')).toBeTruthy();
+  });
+
   it('compte les calories seulement d’après la valeur saisie', async () => {
     await openForm('Nourriture');
     await fireEvent.changeText(
@@ -943,38 +1063,6 @@ describe('fiches par type de produit', () => {
     expect(screen.getByText('3 600 kcal par kg')).toBeTruthy();
   });
 
-  it('propose une fiche médicale sans conseil de traitement', async () => {
-    await openForm('Médical');
-    expect(await screen.findByText('Ajouter un produit médical')).toBeTruthy();
-    await fireEvent.changeText(
-      screen.getByLabelText('Nom / Description, obligatoire'),
-      'Paracétamol 500 mg',
-    );
-    await pick('Type', 'Médicament');
-    await fireEvent.changeText(
-      screen.getByLabelText('Quantité, obligatoire'),
-      '2',
-    );
-    await fireEvent.changeText(
-      screen.getByLabelText('Dosage / Contenance'),
-      '500 mg (16 comprimés)',
-    );
-    await fireEvent.changeText(
-      screen.getByLabelText('Date de péremption'),
-      '31/03/2028',
-    );
-    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
-    expect(
-      await screen.findByText('« Paracétamol 500 mg » enregistré.'),
-    ).toBeTruthy();
-    await fireEvent.press(
-      screen.getByLabelText('Paracétamol 500 mg, 2 boîtes'),
-    );
-    expect(await screen.findByText('500 mg (16 comprimés)')).toBeTruthy();
-    expect(screen.getByText('jusqu’au 31/03/2028')).toBeTruthy();
-    expect(screen.queryByText(/Calories/)).toBeNull();
-  });
-
   it('ne déduit pas la potabilité du contenant', async () => {
     await openForm('Eau');
     expect(await screen.findByText('Ajouter de l’eau')).toBeTruthy();
@@ -1003,6 +1091,153 @@ describe('fiches par type de produit', () => {
     expect(screen.queryByLabelText('Date de péremption')).toBeNull();
     await fireEvent.press(screen.getByRole('tab', { name: 'Accessoire' }));
     expect(screen.queryByLabelText(/^Calibre/)).toBeNull();
+  });
+});
+
+describe('fiche médicale', () => {
+  async function openMedical() {
+    const ctx = await existingVault();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
+    await fireEvent.press(screen.getByLabelText('Ajouter : Médical'));
+    await screen.findByText('Ajouter un produit médical');
+  }
+
+  const save = () =>
+    fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+  const count = (value: string) =>
+    fireEvent.changeText(screen.getByLabelText('Nombre, obligatoire'), value);
+
+  it('ne montre que les six champs prévus, sans contenance ni dosage', async () => {
+    await openMedical();
+    for (const label of [
+      'Nom du produit, obligatoire',
+      'Catégorie',
+      'Conditionnement',
+      'Nombre, obligatoire',
+      'Date de péremption',
+      'Emplacement',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    expect(screen.queryByLabelText(/Dosage|Contenance/)).toBeNull();
+    expect(screen.queryByLabelText('Plus de détails')).toBeNull();
+    // Aucun conditionnement choisi d'office.
+    expect(
+      within(screen.getByLabelText('Conditionnement')).queryByRole('radio', {
+        selected: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('exige nom, catégorie, conditionnement et un nombre entier positif', async () => {
+    await openMedical();
+    await save();
+    expect(await screen.findByText('Champ obligatoire')).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom du produit, obligatoire'),
+      'Compresses stériles',
+    );
+    await save();
+    expect(await screen.findByText('Champ obligatoire')).toBeTruthy(); // catégorie
+    await pick('Catégorie', 'Pansements');
+    await save();
+    expect(
+      await screen.findByText('Choisissez un conditionnement'),
+    ).toBeTruthy();
+    await pick('Conditionnement', 'Boîte');
+    await save();
+    expect(await screen.findByText('Nombre obligatoire')).toBeTruthy();
+    for (const [value, message] of [
+      ['0', 'Nombre positif attendu'],
+      ['-2', 'Nombre positif attendu'],
+      ['2,5', 'Nombre entier attendu (ex. 3)'],
+    ]) {
+      await count(value);
+      await save();
+      expect(await screen.findByText(message)).toBeTruthy();
+    }
+    // La saisie reste en place après chaque erreur.
+    expect(
+      screen.getByLabelText('Nom du produit, obligatoire').props.value,
+    ).toBe('Compresses stériles');
+    await count('3');
+    await save();
+    expect(
+      await screen.findByText('« Compresses stériles » enregistré.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Compresses stériles, 3 boîtes')).toBeTruthy();
+  });
+
+  it('enregistre les quatre conditionnements et les garde après redémarrage', async () => {
+    await openMedical();
+    const cases = [
+      ['Boîte', '2', 'boîtes'],
+      ['Pièce', '4', 'pièces'],
+      ['Flacon', '2', 'flacons'],
+      ['Paquet', '5', 'paquets'],
+    ] as const;
+    for (const [i, [packaging, n]] of cases.entries()) {
+      if (i > 0) {
+        await fireEvent.press(
+          await screen.findByLabelText('+ Ajouter : Médical'),
+        );
+      }
+      await fireEvent.changeText(
+        await screen.findByLabelText('Nom du produit, obligatoire'),
+        `Produit ${packaging}`,
+      );
+      await pick('Catégorie', 'Autre');
+      await pick('Conditionnement', packaging);
+      await count(n);
+      if (i === 0) {
+        // Péremption et emplacement facultatifs : renseignés une seule fois.
+        await fireEvent.changeText(
+          screen.getByLabelText('Date de péremption'),
+          '31/03/2028',
+        );
+        await fireEvent.changeText(
+          screen.getByLabelText('Emplacement'),
+          'Trousse principale',
+        );
+      }
+      await save();
+      expect(
+        await screen.findByText(`« Produit ${packaging} » enregistré.`),
+      ).toBeTruthy();
+    }
+
+    // Verrouillage puis réouverture du coffre : tout est relu de la base.
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Médical' }),
+    );
+    for (const [packaging, n, unitLabel] of cases) {
+      expect(
+        await screen.findByLabelText(`Produit ${packaging}, ${n} ${unitLabel}`),
+      ).toBeTruthy();
+    }
+    await fireEvent.press(screen.getByLabelText('Produit Boîte, 2 boîtes'));
+    expect(await screen.findByText('jusqu’au 31/03/2028')).toBeTruthy();
+    expect(screen.getByText('Trousse principale')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Produit Boîte, 2 boîtes'));
+    await fireEvent.press(screen.getByLabelText('Produit Pièce, 4 pièces'));
+    expect(screen.queryByText('Trousse principale')).toBeNull();
+
+    // La fiche rouverte garde son conditionnement.
+    await fireEvent.press(screen.getByText('Modifier la fiche'));
+    expect(
+      within(await screen.findByLabelText('Conditionnement')).getByRole(
+        'radio',
+        { name: 'Pièce', selected: true },
+      ),
+    ).toBeTruthy();
   });
 });
 

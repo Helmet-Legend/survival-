@@ -182,3 +182,45 @@ export function estimateKcal(
   }
   return null;
 }
+
+/** Valeur habituelle d'un aliment, proposée à la saisie (jamais imposée). */
+export interface EnergySuggestion {
+  /** kcal pour 100 g (valeur moyenne). */
+  per100g: number;
+  /** Aliment reconnu (« riz », « conserve »). */
+  label: string;
+  /** Poids habituel d'une pièce, boîte ou portion, en grammes. */
+  pieceGrams?: number;
+}
+
+/** Valeurs par type d'aliment des fiches actuelles, faute de nom reconnu. */
+const BY_FORM_SUBTYPE: Record<string, Entry> = {
+  ...BY_SUBTYPE,
+  starch: e('', 'féculent sec', 355),
+  cereal: e('', 'céréales', 370),
+  legume: e('', 'légumineuses sèches', 330),
+};
+
+/**
+ * Valeur énergétique habituelle d'après le nom (puis le type) d'un
+ * aliment, pour aider à remplir la fiche : l'utilisateur la confirme d'un
+ * appui ou saisit celle de l'étiquette.
+ */
+export function suggestEnergy(
+  name: string,
+  subtype: string | null = null,
+): EnergySuggestion | null {
+  const folded = fold(name);
+  const entry =
+    (folded.trim() === ''
+      ? undefined
+      : FOODS.find(candidate => matches(folded, candidate))) ??
+    (subtype !== null ? BY_FORM_SUBTYPE[subtype] : undefined);
+  return entry
+    ? {
+        per100g: entry.per100g,
+        label: entry.label,
+        pieceGrams: entry.pieceGrams,
+      }
+    : null;
+}

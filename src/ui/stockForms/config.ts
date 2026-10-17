@@ -67,7 +67,10 @@ export type Field =
       key: string;
       options: readonly Option[];
       placeholder?: string;
+      required?: boolean;
     })
+  /** Choix de l'unité de comptage, en champ à part (fiche médicale). */
+  | (Base & { type: 'packaging'; options: readonly Option[] })
   | (Base & { type: 'date'; key: string })
   | (Base & {
       type: 'measure';
@@ -92,6 +95,10 @@ export interface FormConfig {
   color: string;
   units: readonly UnitOption[];
   fields: readonly Field[];
+  /** Unité à choisir explicitement (pas de valeur par défaut). */
+  requireUnit?: boolean;
+  /** Quantité en nombre entier (conditionnements). */
+  integerQuantity?: boolean;
 }
 
 const u = (
@@ -469,6 +476,8 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
       notes('Ex : Accessoires, optique, chargeurs…'),
     ],
   },
+  // Fiche médicale corrigée : stock compté en conditionnements (boîtes,
+  // pièces, flacons, paquets), sans contenance ni dosage.
   medical: {
     title: 'Ajouter un produit médical',
     editTitle: 'Modifier le produit médical',
@@ -478,73 +487,56 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
     units: [
       UNIT_OPTIONS.box,
       UNIT_OPTIONS.piece,
-      UNIT_OPTIONS.dose,
       UNIT_OPTIONS.bottle,
       UNIT_OPTIONS.package,
     ],
+    requireUnit: true,
+    integerQuantity: true,
     fields: [
-      name('Ex : Paracétamol, compresses…'),
+      {
+        type: 'text',
+        key: 'name',
+        label: 'Nom du produit',
+        icon: TagIcon,
+        placeholder: 'Ex : Compresses stériles',
+        required: true,
+        maxLength: 120,
+      },
       {
         type: 'select',
         key: 'subtype',
-        label: 'Type',
+        label: 'Catégorie',
         icon: BoxIcon,
+        required: true,
         options: options('medical.subtype', [
-          o('medicine', 'Médicament'),
-          o('dressing', 'Pansement'),
-          o('antiseptic', 'Antiseptique'),
-          o('diagnostic', 'Diagnostic'),
+          o('medicine', 'Médicaments'),
+          o('dressing', 'Pansements'),
+          o('antiseptic', 'Antiseptiques'),
           o('protection', 'Protection'),
+          o('diagnostic', 'Diagnostic'),
           o('hygiene', 'Hygiène'),
           o('other', 'Autre'),
         ]),
       },
-      quantity,
       {
-        type: 'text',
-        key: 'dosage',
-        label: 'Dosage / Contenance',
-        icon: FlaskConical,
-        placeholder: 'Ex : 500 mg (16 comprimés)',
-        maxLength: 120,
+        type: 'packaging',
+        label: 'Conditionnement',
+        icon: BoxIcon,
+        options: [
+          o('box', 'Boîte'),
+          o('piece', 'Pièce'),
+          o('bottle', 'Flacon'),
+          o('package', 'Paquet'),
+        ],
       },
+      { type: 'quantity', label: 'Nombre', icon: QuantityIcon },
       {
         type: 'date',
         key: 'expiry',
         label: 'Date de péremption',
         icon: ExpiryIcon,
       },
-      {
-        type: 'number',
-        key: 'alertDays',
-        label: 'Prévenir avant péremption',
-        icon: AlertIcon,
-        placeholder: '30 / 60 / 90',
-        suffix: 'jours',
-      },
-      {
-        type: 'text',
-        key: 'lotNumber',
-        label: 'Lot',
-        icon: Hash,
-        placeholder: 'Ex : n° de lot',
-        maxLength: 60,
-      },
-      {
-        type: 'select',
-        key: 'storage',
-        label: 'Conditions de conservation',
-        icon: Thermometer,
-        options: options('medical.storage', [
-          o('ambient', 'Température ambiante'),
-          o('fridge', 'Réfrigérée'),
-          o('light_protected', 'Protégée de la lumière'),
-          o('other', 'Autre'),
-        ]),
-      },
       location('Ex : Trousse principale'),
-      threshold,
-      notes('Ex : Indications, remarques…'),
     ],
   },
   tool: {
@@ -703,14 +695,19 @@ export function unitOptionFor(
     return unit;
   }
   const value = countUnit ?? 'piece';
-  return FORMS[category].units.some(x => x.value === value)
-    ? value
-    : FORMS[category].units[0].value;
+  if (FORMS[category].units.some(x => x.value === value)) {
+    return value;
+  }
+  // Unité qui n'est plus proposée (ex. « dose ») : à choisir à nouveau
+  // plutôt que remplacée en silence.
+  return FORMS[category].requireUnit ? '' : FORMS[category].units[0].value;
 }
 
 /** Identifiant d'un champ (sa clé, ou son type pour quantité et seuil). */
 export function fieldId(field: Field): string {
-  return field.type === 'quantity' || field.type === 'threshold'
+  return field.type === 'quantity' ||
+    field.type === 'threshold' ||
+    field.type === 'packaging'
     ? field.type
     : field.key;
 }
@@ -733,7 +730,7 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
     'packageSize',
     'serial',
   ],
-  medical: ['name', 'quantity', 'dosage', 'expiry'],
+  medical: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
   tool: ['name', 'quantity', 'condition'],
   energy: ['name', 'quantity', 'condition'],
 };

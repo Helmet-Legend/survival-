@@ -274,6 +274,8 @@ export function MeasureRow(props: {
   stepper?: boolean;
   /** Saisie masquée : seule l'unité se choisit (modification d'une fiche). */
   unitOnly?: boolean;
+  /** Nombre entier (clavier sans virgule). */
+  integer?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const name = bare(props.label);
@@ -303,7 +305,7 @@ export function MeasureRow(props: {
             placeholder={props.placeholder ?? '0'}
             placeholderTextColor={colors.textSubtle}
             selectionColor={props.color}
-            keyboardType="decimal-pad"
+            keyboardType={props.integer ? 'number-pad' : 'decimal-pad'}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             style={[

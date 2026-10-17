@@ -83,8 +83,22 @@ export function toItemDraft(
 ): ItemDraft {
   checkCommon(values);
   const config = FORMS[category];
-  const unitOption =
-    config.units.find(x => x.value === values.unit) ?? config.units[0];
+  // Champs à choix obligatoires (ex. catégorie d'un produit médical).
+  for (const field of config.fields) {
+    if (
+      field.type === 'select' &&
+      field.required &&
+      (!field.visible || field.visible(values)) &&
+      !text(values, field.key)
+    ) {
+      throw new FormError(field.key, 'Champ obligatoire');
+    }
+  }
+  const chosen = config.units.find(x => x.value === values.unit);
+  if (config.requireUnit && chosen === undefined) {
+    throw new FormError('unit', 'Choisissez un conditionnement');
+  }
+  const unitOption = chosen ?? config.units[0];
   const recordType =
     category === 'weapon'
       ? values.recordType === 'accessory'
@@ -134,7 +148,13 @@ export function toItemDraft(
   if (!isEdit) {
     const quantity = number(values, 'quantity');
     if (quantity === undefined) {
-      throw new FormError('quantity', 'Quantité obligatoire');
+      throw new FormError(
+        'quantity',
+        config.integerQuantity ? 'Nombre obligatoire' : 'Quantité obligatoire',
+      );
+    }
+    if (config.integerQuantity && !Number.isInteger(quantity)) {
+      throw new FormError('quantity', 'Nombre entier attendu (ex. 3)');
     }
     lot = { quantity, expirationDate: date(values, 'expiry') ?? null };
   }
@@ -187,7 +207,8 @@ export function initialValues(
   recordType?: 'weapon' | 'ammo' | 'accessory',
 ): Values {
   return {
-    unit: FORMS[category].units[0].value,
+    // Unité à choisir soi-même quand la fiche l'exige (conditionnement).
+    unit: FORMS[category].requireUnit ? '' : FORMS[category].units[0].value,
     ...(category === 'weapon' ? { recordType: recordType ?? 'weapon' } : {}),
   };
 }

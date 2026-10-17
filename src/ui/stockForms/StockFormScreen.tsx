@@ -36,6 +36,15 @@ import { useNavigation, type StockFormTarget } from '../navigation';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
+import { parseDecimal, formatNumber } from '../format';
+import { QuantityIcon, VolumeIcon } from '../icons';
+import { caloriesPerUnit, type ItemAttributes } from '../../inventory';
+import {
+  loadHousehold,
+  type HouseholdSettings,
+} from '../../resilience/resilienceCalculator';
+import { suggestEnergy } from '../../resilience/kcalEstimate';
+import { COUNT_UNIT_LABELS } from './details';
 import {
   COMMON_CALIBERS,
   ESSENTIAL,
@@ -73,10 +82,11 @@ const RECORD_TYPES = [
 ] as const;
 
 export function StockFormScreen({ target }: { target: StockFormTarget }) {
-  const { repo, armory } = useSession();
+  const { repo, armory, db } = useSession();
   const { data, error } = useLoader(async () => {
+    const household = await loadHousehold(db).catch(() => null);
     if (target.itemId) {
-      return { item: (await repo.getItem(target.itemId)).item };
+      return { household, item: (await repo.getItem(target.itemId)).item };
     }
     if (target.weaponId) {
       const weapon = (await armory.listWeapons()).find(
@@ -85,9 +95,9 @@ export function StockFormScreen({ target }: { target: StockFormTarget }) {
       if (!weapon) {
         throw new Error('Arme introuvable');
       }
-      return { weapon };
+      return { household, weapon };
     }
-    return {};
+    return { household };
   }, [target.itemId, target.weaponId]);
 
   if (error) {
@@ -103,6 +113,7 @@ export function StockFormScreen({ target }: { target: StockFormTarget }) {
   return (
     <StockForm
       target={target}
+      household={data.household}
       item={'item' in data ? data.item : undefined}
       weapon={'weapon' in data ? data.weapon : undefined}
     />
@@ -111,6 +122,7 @@ export function StockFormScreen({ target }: { target: StockFormTarget }) {
 
 function StockForm(props: {
   target: StockFormTarget;
+  household: HouseholdSettings | null;
   item?: InventoryItem;
   weapon?: Weapon;
 }) {
@@ -124,7 +136,10 @@ function StockForm(props: {
       ? valuesFromItem(props.item)
       : props.weapon
       ? valuesFromWeapon(props.weapon)
-      : initialValues(category, props.target.recordType),
+      : {
+          ...initialValues(category, props.target.recordType),
+          ...props.target.prefill,
+        },
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -146,7 +161,12 @@ function StockForm(props: {
     .filter(f => !(isEdit && f.type === 'date' && f.key === 'expiry'));
   const essential = new Set(ESSENTIAL[category]);
   const isEssential = (f: Field) =>
-    essential.has(fieldId(f)) || (f.type === 'text' && f.required === true);
+    essential.has(fieldId(f)) ||
+    ((f.type === 'text' || f.type === 'select') && f.required === true);
+  // Unité choisie dans un champ à part (« Conditionnement ») : la quantité
+  // n'affiche plus que le nombre, suivi de l'unité choisie.
+  const separateUnit = config.fields.some(f => f.type === 'packaging');
+  const chosenUnit = config.units.filter(u => u.value === values.unit);
   const main = visible.filter(isEssential);
   const details = visible.filter(f => !isEssential(f));
   const detailKeys = new Set(
@@ -155,6 +175,8 @@ function StockForm(props: {
         ? ['quantity', 'unit']
         : f.type === 'threshold'
         ? ['minStock']
+        : f.type === 'packaging'
+        ? ['unit']
         : f.type === 'measure'
         ? [f.key, f.unitKey]
         : [f.key],
@@ -311,6 +333,33 @@ function StockForm(props: {
           />
         );
       case 'measure':
+        if (field.key === 'energyValue') {
+          return (
+            <View key={key} style={styles.withSuggestions}>
+              <MeasureRow
+                icon={field.icon}
+                color={color}
+                label={field.label}
+                value={values.energyValue ?? ''}
+                onChange={set('energyValue')}
+                unit={values.energyBasis || field.units[0].value}
+                units={field.units}
+                onUnit={set('energyBasis')}
+                placeholder="Sur l’étiquette : « pour 100 g »"
+                error={errors.energyValue || errors.energyBasis}
+              />
+              <FoodEnergyHelp
+                values={values}
+                color={color}
+                household={props.household}
+                onApply={patch => {
+                  setValues(v => ({ ...v, ...patch }));
+                  setErrors({});
+                }}
+              />
+            </View>
+          );
+        }
         return (
           <MeasureRow
             key={key}
@@ -326,7 +375,23 @@ function StockForm(props: {
             error={errors[field.key] || errors[field.unitKey]}
           />
         );
+      case 'packaging':
+        return (
+          <ChoiceRow
+            key={key}
+            icon={field.icon}
+            color={color}
+            label={`${field.label} *`}
+            value={values.unit ?? ''}
+            options={field.options}
+            onChange={set('unit')}
+            error={errors.unit}
+          />
+        );
       case 'quantity':
+        if (isEdit && separateUnit) {
+          return null; // l'unité se choisit dans « Conditionnement »
+        }
         if (isEdit) {
           return (
             <MeasureRow
@@ -344,7 +409,7 @@ function StockForm(props: {
             />
           );
         }
-        return (
+        const quantityRow = (
           <MeasureRow
             key={key}
             icon={field.icon}
@@ -353,12 +418,27 @@ function StockForm(props: {
             value={values.quantity ?? ''}
             onChange={set('quantity')}
             unit={values.unit}
-            units={config.units}
+            units={separateUnit ? chosenUnit : config.units}
             onUnit={set('unit')}
             stepper
-            error={errors.quantity || errors.unit}
+            integer={config.integerQuantity}
+            error={errors.quantity || (separateUnit ? undefined : errors.unit)}
           />
         );
+        if (category === 'water' && !isEdit) {
+          return (
+            <View key={key} style={styles.withSuggestions}>
+              {quantityRow}
+              <ContainerCalculator
+                color={color}
+                onTotal={liters =>
+                  setValues(v => ({ ...v, quantity: liters, unit: 'L' }))
+                }
+              />
+            </View>
+          );
+        }
+        return quantityRow;
       case 'threshold':
         return (
           <TextRow
@@ -609,6 +689,187 @@ function StockForm(props: {
   );
 }
 
+/**
+ * Aide au calcul des calories d'un aliment : valeur habituelle proposée
+ * d'après le nom (à confirmer d'un appui), puis total en kcal et en jours
+ * pour le foyer. Rien n'est compté sans valeur saisie ou confirmée.
+ */
+function FoodEnergyHelp(props: {
+  values: Values;
+  color: string;
+  household: HouseholdSettings | null;
+  onApply: (patch: Values) => void;
+}) {
+  const { values, color, household } = props;
+  const unitOption = FORMS.food.units.find(u => u.value === values.unit);
+  const countUnit = unitOption?.countUnit;
+  const energy = parseDecimal(values.energyValue ?? '');
+  const weight = parseDecimal(values.unitWeight ?? '');
+  const quantity = parseDecimal(values.quantity ?? '');
+  const attrs: ItemAttributes = {
+    countUnit,
+    energyValue: energy > 0 ? energy : undefined,
+    energyBasis: (values.energyBasis || 'per100g') as 'per100g' | 'perPortion',
+    unitWeight: weight > 0 ? weight : undefined,
+    unitWeightUnit: (values.unitWeightUnit || 'g') as 'g' | 'kg',
+  };
+  const perUnit = unitOption
+    ? caloriesPerUnit(unitOption.unit, null, attrs)
+    : null;
+  const counted = unitOption?.unit === 'unit';
+  const suggestion =
+    energy > 0
+      ? null
+      : suggestEnergy(values.name ?? '', values.subtype || null);
+  const needsWeight =
+    counted &&
+    countUnit !== 'portion' &&
+    !(weight > 0) &&
+    (values.energyBasis || 'per100g') === 'per100g';
+  const unitName = COUNT_UNIT_LABELS[countUnit ?? 'piece']?.[0] ?? 'pièce';
+
+  if (suggestion) {
+    const patch: Values = {
+      energyValue: String(suggestion.per100g),
+      energyBasis: 'per100g',
+    };
+    const withWeight = needsWeight && suggestion.pieceGrams !== undefined;
+    if (withWeight) {
+      patch.unitWeight = String(suggestion.pieceGrams);
+      patch.unitWeightUnit = 'g';
+    }
+    return (
+      <View style={[styles.help, { borderColor: tint(color, '55') }]}>
+        <Text style={text.body}>
+          Valeur habituelle pour « {suggestion.label} » :{' '}
+          <Text style={styles.helpStrong}>
+            {suggestion.per100g} kcal / 100 g
+          </Text>
+          {withWeight ? `, ${suggestion.pieceGrams} g par ${unitName}` : ''}.
+        </Text>
+        <Text style={text.subtle}>
+          Moyenne indicative : l’étiquette fait foi si vous l’avez.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Utiliser cette valeur"
+          onPress={() => props.onApply(patch)}
+          style={({ pressed }) => [
+            styles.helpButton,
+            { borderColor: color },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Check color={color} size={18} strokeWidth={2.6} />
+          <Text style={[styles.helpButtonText, { color }]}>
+            Utiliser cette valeur
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (perUnit !== null && quantity > 0) {
+    const total = perUnit * quantity;
+    const daily =
+      household !== null ? household.kcalPerPersonDay * household.members : 0;
+    return (
+      <View style={[styles.help, { borderColor: tint(color, '55') }]}>
+        <Text style={text.body}>
+          Total :{' '}
+          <Text style={styles.helpStrong}>{formatNumber(total, 0)} kcal</Text>
+          {daily > 0
+            ? ` · environ ${formatNumber(total / daily)} jour${
+                total / daily >= 2 ? 's' : ''
+              } pour ${household?.members} pers.`
+            : ''}
+        </Text>
+      </View>
+    );
+  }
+  if (energy > 0 && needsWeight) {
+    return (
+      <Text style={styles.helpWarn}>
+        Indiquez le poids d’une {unitName} (dans « Plus de détails ») pour
+        compter ces calories.
+      </Text>
+    );
+  }
+  return null;
+}
+
+/** Plusieurs contenants identiques : nombre × contenance = litres. */
+function ContainerCalculator(props: {
+  color: string;
+  onTotal: (liters: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState('');
+  const [size, setSize] = useState('');
+  const update = (nextCount: string, nextSize: string) => {
+    setCount(nextCount);
+    setSize(nextSize);
+    const total = parseDecimal(nextCount) * parseDecimal(nextSize);
+    if (Number.isFinite(total) && total > 0) {
+      props.onTotal(String(Math.round(total * 100) / 100).replace('.', ','));
+    }
+  };
+  const total = parseDecimal(count) * parseDecimal(size);
+  if (!open) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Plusieurs contenants : calculer le total"
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [styles.calcLink, pressed && styles.pressed]}
+      >
+        <Text style={[styles.helpButtonText, { color: props.color }]}>
+          Plusieurs bidons ou bouteilles ? Calculer le total
+        </Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={[styles.help, { borderColor: tint(props.color, '55') }]}>
+      <View style={styles.calc}>
+        <View style={styles.grow}>
+          <TextRow
+            icon={QuantityIcon}
+            color={props.color}
+            label="Nombre"
+            value={count}
+            onChange={v => update(v, size)}
+            placeholder="Ex : 4"
+            keyboardType="decimal-pad"
+          />
+        </View>
+        <Text style={styles.times}>×</Text>
+        <View style={styles.grow}>
+          <TextRow
+            icon={VolumeIcon}
+            color={props.color}
+            label="Contenance"
+            value={size}
+            onChange={v => update(count, v)}
+            placeholder="Ex : 20"
+            keyboardType="decimal-pad"
+            suffix="L"
+          />
+        </View>
+      </View>
+      <Text style={text.body}>
+        {Number.isFinite(total) && total > 0 ? (
+          <>
+            = <Text style={styles.helpStrong}>{formatNumber(total)} L</Text>{' '}
+            reportés dans la quantité
+          </>
+        ) : (
+          'Exemple : 4 jerricans de 20 L = 80 L.'
+        )}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   page: {
@@ -668,6 +929,29 @@ const styles = StyleSheet.create({
   quick: { gap: space.s },
   quickTitle: { color: colors.textMuted, fontSize: 13 },
   withSuggestions: { gap: space.s },
+  help: {
+    gap: space.s,
+    padding: space.m,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: colors.bg,
+  },
+  helpStrong: { color: colors.text, fontWeight: '700' },
+  helpWarn: { color: colors.warning, fontSize: 14, lineHeight: 20 },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: space.s,
+    minHeight: 44,
+    paddingHorizontal: space.l,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  helpButtonText: { fontSize: 15, fontWeight: '700' },
+  calcLink: { minHeight: 40, justifyContent: 'center' },
+  calc: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  times: { color: colors.textMuted, fontSize: 20 },
   more: {
     flexDirection: 'row',
     alignItems: 'center',
