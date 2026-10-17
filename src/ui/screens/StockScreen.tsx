@@ -33,7 +33,6 @@ import {
   type InventoryLot,
   type ItemCategory,
   type ItemSummary,
-  type ItemUnit,
   type DocumentSummary,
 } from '../../inventory';
 import { daysBetween, frToIso, localToday } from '../../lib/dates';
@@ -62,7 +61,9 @@ import {
   UNIT_LABELS,
 } from '../format';
 import { PhotoStrip } from '../components/PhotoStrip';
+import { ExpiryIcon, QuantityIcon } from '../icons';
 import { useNavigation } from '../navigation';
+import { DateRow, MeasureRow } from '../stockForms/FormRows';
 import {
   CATEGORY_ILLUSTRATIONS,
   ILLUSTRATION_FADE,
@@ -628,66 +629,6 @@ function CategoryChooser(props: {
   );
 }
 
-/**
- * Quantité saisie selon la catégorie : « contenance × nombre » pour les
- * articles en contenants (bidons d'eau, boîtes de cartouches), quantité
- * directe sinon. Renvoie aussi le total calculé, affiché sous les champs.
- */
-function QuantityFields(props: {
-  category: ItemCategory;
-  container: (typeof PROFILES)[ItemCategory]['container'];
-  unit: ItemUnit;
-  /** Contenance déjà connue (article existant) : seul le nombre est demandé. */
-  knownSize: number | null;
-  size: string;
-  onSize: (value: string) => void;
-  count: string;
-  onCount: (value: string) => void;
-  errors: Record<string, string>;
-}) {
-  const container = props.container;
-  const unitText = unitLabel(props.category, props.unit);
-  const sizeValue =
-    props.knownSize ??
-    (props.size.trim() === '' ? null : parseDecimal(props.size));
-  const packaged = container !== null && sizeValue !== null;
-  const total = totalQuantity(props.count, sizeValue, container !== null);
-  return (
-    <>
-      {container !== null && props.knownSize === null ? (
-        <Field
-          label={`Contenance d’un ${container.one} (${unitText})`}
-          value={props.size}
-          onChangeText={props.onSize}
-          keyboardType="decimal-pad"
-          placeholder={props.category === 'water' ? 'ex. 10' : 'ex. 25'}
-          error={props.errors.packageSize}
-          hint={
-            props.category === 'water'
-              ? 'Bidon, bouteille, jerrican… Laisser vide pour saisir des litres.'
-              : 'Laisser vide pour saisir des cartouches à l’unité.'
-          }
-        />
-      ) : null}
-      <Field
-        label={
-          packaged ? `Nombre de ${container.many}` : `Quantité (${unitText})`
-        }
-        value={props.count}
-        onChangeText={props.onCount}
-        keyboardType="decimal-pad"
-        placeholder={packaged ? 'ex. 3' : 'ex. 2'}
-        error={props.errors.quantity}
-      />
-      {packaged && Number.isFinite(total) && total > 0 ? (
-        <Text style={styles.total}>
-          = {formatNumber(total)} {unitText}
-        </Text>
-      ) : null}
-    </>
-  );
-}
-
 /** Total dans l'unité de l'article ; NaN si la saisie est incomplète. */
 function totalQuantity(
   count: string,
@@ -712,7 +653,6 @@ function ItemDetail(props: {
     item.attributes.countUnit === undefined ? profile.container : null;
   const [quantity, setQuantity] = useState('');
   const [addCount, setAddCount] = useState('');
-  const [addSize, setAddSize] = useState('');
   const [addExpiration, setAddExpiration] = useState('');
   const [minStock, setMinStock] = useState(
     item.minStock === null ? '' : String(item.minStock),
@@ -730,6 +670,13 @@ function ItemDetail(props: {
     .reduce((sum, l) => sum + l.quantity, 0);
   const summary = packageSummary(item, usable);
   const facts = itemFacts(item);
+  const color = CATEGORY_COLORS[item.category];
+  // Bidons, boîtes… de contenance connue : on compte les contenants.
+  const packaged = container !== null && item.packageSize !== null;
+  const addTotal =
+    addCount.trim() === ''
+      ? 0
+      : totalQuantity(addCount, item.packageSize, container !== null);
   const navigation = useNavigation();
 
   const consume = async (amount: number) => {
@@ -764,11 +711,8 @@ function ItemDetail(props: {
       return;
     }
     try {
-      const size =
-        item.packageSize ??
-        (addSize.trim() === '' ? null : parseDecimal(addSize));
       await repo.addLot(item.id, {
-        quantity: totalQuantity(addCount, size, container !== null),
+        quantity: addTotal,
         expirationDate,
       });
       setAddCount('');
@@ -851,70 +795,96 @@ function ItemDetail(props: {
         </View>
       ))}
 
-      <Text style={[text.label, styles.section]}>Utiliser</Text>
-      {container !== null && item.packageSize !== null ? (
-        <Button
-          compact
-          icon={Minus}
-          label={`Retirer 1 ${container.one} (${formatNumber(
-            item.packageSize,
-          )} ${unitLabel(item.category, item.unit, item.packageSize)})`}
-          disabled={usable < item.packageSize}
-          onPress={() => {
-            void consume(item.packageSize ?? 0);
-          }}
+      <View style={[styles.panel, { borderColor: tint(color, '55') }]}>
+        <Text style={[text.label, { color }]}>Ajouter du stock</Text>
+        <MeasureRow
+          icon={QuantityIcon}
+          color={color}
+          label={
+            packaged ? `Nombre de ${container.many}` : 'Quantité à ajouter'
+          }
+          value={addCount}
+          onChange={setAddCount}
+          unit="u"
+          units={[{ value: 'u', label: packaged ? container.many : unit }]}
+          onUnit={() => undefined}
+          stepper
+          error={errors.quantity}
         />
-      ) : null}
-      <View style={styles.inline}>
-        <View style={styles.grow}>
-          <Field
-            label={`Quantité à retirer (${UNIT_LABELS[item.unit]})`}
-            value={quantity}
-            onChangeText={setQuantity}
-            keyboardType="decimal-pad"
-            placeholder="0"
+        {packaged && addTotal > 0 ? (
+          <Text style={styles.total}>
+            = {formatNumber(addTotal)} {unit}
+          </Text>
+        ) : null}
+        {profile.expiryLabel !== null ? (
+          <DateRow
+            icon={ExpiryIcon}
+            color={color}
+            label="Péremption de ce lot (facultatif)"
+            value={addExpiration}
+            onChange={setAddExpiration}
+            error={errors.addExpiration}
           />
-        </View>
+        ) : null}
         <Button
           variant="primary"
-          label="Retirer"
-          disabled={quantity.trim() === ''}
+          icon={Plus}
+          label={
+            addTotal > 0
+              ? `Ajouter ${formatNumber(addTotal)} ${itemUnitLabel(
+                  item,
+                  addTotal,
+                )}`
+              : 'Ajouter au stock'
+          }
+          accessibilityLabel="Ajouter au stock existant"
+          disabled={!(addTotal > 0)}
           onPress={() => {
-            void consume(parseDecimal(quantity));
+            void addStock();
           }}
         />
       </View>
 
-      <Text style={[text.label, styles.section]}>Ajouter du stock</Text>
-      <QuantityFields
-        category={item.category}
-        container={container}
-        unit={item.unit}
-        knownSize={item.packageSize}
-        size={addSize}
-        onSize={setAddSize}
-        count={addCount}
-        onCount={setAddCount}
-        errors={errors}
-      />
-      {profile.expiryLabel !== null ? (
-        <Field
-          label="Date de péremption (JJ/MM/AAAA, facultatif)"
-          value={addExpiration}
-          onChangeText={setAddExpiration}
-          placeholder="30/06/2027"
-          autoCapitalize="none"
-          error={errors.addExpiration}
+      <View style={styles.panel}>
+        <Text style={text.label}>Retirer (consommation)</Text>
+        {packaged ? (
+          <Button
+            compact
+            icon={Minus}
+            label={`Retirer 1 ${container.one} (${formatNumber(
+              item.packageSize ?? 0,
+            )} ${unitLabel(
+              item.category,
+              item.unit,
+              item.packageSize ?? undefined,
+            )})`}
+            disabled={usable < (item.packageSize ?? 0)}
+            onPress={() => {
+              void consume(item.packageSize ?? 0);
+            }}
+          />
+        ) : null}
+        <MeasureRow
+          icon={QuantityIcon}
+          color={colors.textMuted}
+          label={`Quantité à retirer (${UNIT_LABELS[item.unit]})`}
+          value={quantity}
+          onChange={setQuantity}
+          unit="u"
+          units={[{ value: 'u', label: unit }]}
+          onUnit={() => undefined}
+          stepper
         />
-      ) : null}
-      <View style={styles.row}>
         <Button
-          compact
-          icon={Plus}
-          label="Ajouter au stock existant"
-          disabled={addCount.trim() === ''}
+          label={
+            quantity.trim() === ''
+              ? 'Retirer'
+              : `Retirer ${quantity.trim()} ${unit}`
+          }
+          accessibilityLabel="Retirer"
+          disabled={quantity.trim() === ''}
           onPress={() => {
-            void addStock();
+            void consume(parseDecimal(quantity));
           }}
         />
       </View>
@@ -979,6 +949,15 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   inline: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s },
+  panel: {
+    gap: space.m,
+    padding: space.m,
+    marginTop: space.s,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
   dialog: { backgroundColor: colors.bgElevated },
   category: {
     flexDirection: 'row',

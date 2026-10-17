@@ -435,7 +435,7 @@ describe('écrans', () => {
       await screen.findByLabelText('Quantité à retirer (L)'),
       '12',
     );
-    await fireEvent.press(screen.getByText('Retirer'));
+    await fireEvent.press(screen.getByLabelText('Retirer'));
     expect(
       await screen.findByText('Retiré : 12 L du lot sans date. Reste 18 L.'),
     ).toBeTruthy();
@@ -444,7 +444,7 @@ describe('écrans', () => {
       screen.getByLabelText('Quantité à retirer (L)'),
       '50',
     );
-    await fireEvent.press(screen.getByText('Retirer'));
+    await fireEvent.press(screen.getByLabelText('Retirer'));
     expect(
       await screen.findByText('Stock insuffisant : 18 disponible(s)'),
     ).toBeTruthy();
@@ -606,7 +606,7 @@ describe('écrans', () => {
     ).toBeTruthy();
 
     await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '2');
-    await fireEvent.press(screen.getByText('Ajouter au stock existant'));
+    await fireEvent.press(screen.getByLabelText('Ajouter au stock existant'));
     expect(
       await screen.findByText('Stock de « Bidons garage » complété.'),
     ).toBeTruthy();
@@ -742,7 +742,9 @@ describe('écrans', () => {
         'Compléter « Munitions 12/70 », 50 cartouches',
       ),
     );
-    expect(await screen.findByText('Ajouter au stock existant')).toBeTruthy();
+    expect(
+      await screen.findByLabelText('Ajouter au stock existant'),
+    ).toBeTruthy();
   });
 
   it('cherche dans les fiches sans tenir compte des accents', async () => {
@@ -944,6 +946,68 @@ describe('fiches par type de produit', () => {
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(await screen.findByText('« Lentilles » enregistré.')).toBeTruthy();
     expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
+  });
+
+  it('propose une valeur énergétique habituelle, comptée après confirmation', async () => {
+    await openForm('Nourriture');
+    await fireEvent.changeText(
+      await screen.findByLabelText('Nom / Description, obligatoire'),
+      'Riz basmati',
+    );
+    await unit('kg');
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '4',
+    );
+    expect(screen.getByText(/Valeur habituelle pour « riz »/)).toBeTruthy();
+    // Rien n'est rempli tant que la valeur n'est pas confirmée.
+    expect(screen.getByLabelText('Valeur énergétique').props.value).toBe('');
+    await fireEvent.press(screen.getByLabelText('Utiliser cette valeur'));
+    expect(screen.getByLabelText('Valeur énergétique').props.value).toBe('355');
+    // 4 kg × 3 550 kcal = 14 200 kcal, à 2 000 kcal par jour.
+    expect(screen.getByText(/environ 7,1 jours pour 1 pers\./)).toBeTruthy();
+    expect(screen.getByText('14 200 kcal')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Riz basmati » enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Nourriture : 50 200 kcal, 2 articles'),
+    ).toBeTruthy();
+  });
+
+  it('propose aussi le poids habituel d’une boîte de conserve', async () => {
+    await openForm('Nourriture');
+    await fireEvent.press(
+      within(await screen.findByLabelText('Saisie rapide')).getByRole(
+        'button',
+        { name: 'Conserves' },
+      ),
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '3',
+    );
+    expect(screen.getByText(/400 g par boîte/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Utiliser cette valeur'));
+    expect(screen.getByText('1 200 kcal')).toBeTruthy();
+  });
+
+  it('calcule le volume de plusieurs bidons identiques', async () => {
+    await openForm('Eau');
+    await fireEvent.press(
+      await screen.findByLabelText('Plusieurs contenants : calculer le total'),
+    );
+    await fireEvent.changeText(screen.getByLabelText('Nombre'), '4');
+    await fireEvent.changeText(screen.getByLabelText('Contenance'), '20');
+    expect(screen.getByLabelText('Quantité, obligatoire').props.value).toBe(
+      '80',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom / Description, obligatoire'),
+      'Jerricans garage',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByLabelText('Jerricans garage, 80 L')).toBeTruthy();
   });
 
   it('compte les calories seulement d’après la valeur saisie', async () => {
