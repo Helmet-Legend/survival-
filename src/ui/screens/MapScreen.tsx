@@ -2,9 +2,24 @@
  * Carte : conversion de coordonnées (MGRS, UTM, DMS) et calcul d'azimut
  * vers un point MGRS. Tout est calculé sur l'appareil, sans réseau.
  */
-import { Compass, LocateFixed, MapPin, Navigation } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Check,
+  Compass,
+  Copy,
+  LocateFixed,
+  MapPin,
+  Navigation,
+} from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Clipboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Circle, G, Line, Path } from 'react-native-svg';
 
 import {
   distanceAndBearing,
@@ -41,6 +56,114 @@ const PRECISIONS: Array<[MgrsDigits, string]> = [
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatDistance(meters: number): string {
+  return meters >= 1000
+    ? `${formatNumber(meters / 1000)} km`
+    : `${formatNumber(meters, 0)} m`;
+}
+
+/** Une coordonnée en grand, avec un bouton pour la copier. */
+function CoordCard(props: { label: string; value: string; accent?: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return (
+    <View
+      style={[
+        styles.coord,
+        props.accent ? { borderColor: props.accent } : null,
+      ]}
+    >
+      <View style={styles.grow}>
+        <Text style={text.label}>{props.label}</Text>
+        <Text
+          selectable
+          style={[
+            styles.coordValue,
+            { color: props.accent ?? colors.cyanSoft },
+          ]}
+        >
+          {props.value}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          copied ? `${props.label} copié` : `Copier ${props.label}`
+        }
+        onPress={() => {
+          Clipboard.setString(props.value);
+          setCopied(true);
+        }}
+        style={({ pressed }) => [styles.copy, pressed && styles.pressed]}
+      >
+        {copied ? (
+          <Check color={colors.success} size={16} />
+        ) : (
+          <Copy color={colors.text} size={16} />
+        )}
+        <Text style={styles.copyText}>{copied ? 'Copié' : 'Copier'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Rose des vents : la flèche pointe le cap à suivre. */
+function CompassRose({ heading }: { heading: number }) {
+  const size = 132;
+  const c = size / 2;
+  const ticks = Array.from({ length: 36 }, (_, i) => {
+    const a = (i * 10 * Math.PI) / 180;
+    const major = i % 9 === 0;
+    const r1 = major ? c - 14 : c - 9;
+    const r2 = c - 4;
+    return (
+      <Line
+        key={i}
+        x1={c + r1 * Math.sin(a)}
+        y1={c - r1 * Math.cos(a)}
+        x2={c + r2 * Math.sin(a)}
+        y2={c - r2 * Math.cos(a)}
+        stroke={major ? colors.textMuted : colors.textSubtle}
+        strokeWidth={major ? 2 : 1}
+      />
+    );
+  });
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={c}
+          cy={c}
+          r={c - 2}
+          fill={colors.surface}
+          stroke={colors.border}
+          strokeWidth={2}
+        />
+        {ticks}
+        <G rotation={heading} origin={`${c}, ${c}`}>
+          <Path
+            d={`M${c} ${c - 44} L${c + 8} ${c + 6} L${c} ${c} L${c - 8} ${
+              c + 6
+            } Z`}
+            fill={colors.primary}
+          />
+        </G>
+        <Circle cx={c} cy={c} r={4} fill={colors.text} />
+      </Svg>
+      <Text style={[styles.cardinal, styles.north]}>N</Text>
+      <Text style={[styles.cardinal, styles.east]}>E</Text>
+      <Text style={[styles.cardinal, styles.south]}>S</Text>
+      <Text style={[styles.cardinal, styles.west]}>O</Text>
+    </View>
+  );
 }
 
 export function MapScreen() {
@@ -156,26 +279,28 @@ export function MapScreen() {
           ) : 'error' in position ? (
             <Notice tone="error" message={position.error ?? ''} />
           ) : (
-            <Panel title="Votre position">
-              <Reading
+            <>
+              <CoordCard
                 label="MGRS"
                 value={position.mgrs}
-                color={colors.primary}
+                accent={colors.primary}
               />
-              <Reading label="UTM" value={formatUtm(position.utm)} />
-              <Reading
+              <CoordCard label="UTM" value={formatUtm(position.utm)} />
+              <CoordCard
                 label="DMS"
                 value={formatLatLon(position.point, 'dms')}
               />
-              <Reading
-                label="Deg. min."
-                value={formatLatLon(position.point, 'dm')}
-              />
-              <Reading
-                label="Convergence"
-                value={`${formatNumber(position.utm.convergence)}°`}
-              />
-            </Panel>
+              <Panel>
+                <Reading
+                  label="Deg. min."
+                  value={formatLatLon(position.point, 'dm')}
+                />
+                <Reading
+                  label="Convergence"
+                  value={`${formatNumber(position.utm.convergence)}°`}
+                />
+              </Panel>
+            </>
           )}
         </>
       ) : (
@@ -246,34 +371,48 @@ export function MapScreen() {
               accent={colors.primary}
               right={<Navigation color={colors.primary} size={20} />}
             >
-              <Reading
-                label="Arrivée"
-                value={formatLatLon(navigation.destination, 'dms')}
-              />
-              <Reading
-                label="Distance"
-                value={
-                  navigation.distance >= 1000
-                    ? `${formatNumber(navigation.distance / 1000)} km`
-                    : `${formatNumber(navigation.distance, 0)} m`
-                }
-              />
+              <View style={styles.route}>
+                <CompassRose
+                  heading={navigation.magnetic ?? navigation.bearing}
+                />
+                <View style={styles.routeValues}>
+                  <View>
+                    <Text style={text.label}>Distance</Text>
+                    <Text style={styles.big}>
+                      {formatDistance(navigation.distance)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={text.label}>Cap boussole</Text>
+                    {navigation.magnetic === null ? (
+                      <Text style={styles.missing}>déclinaison requise</Text>
+                    ) : (
+                      <Text
+                        style={[styles.big, { color: colors.primaryBright }]}
+                      >
+                        {formatNumber(navigation.magnetic, 0)}°
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+              {navigation.magnetic === null ? (
+                <Text style={text.subtle}>
+                  La flèche suit l’azimut vrai tant que la déclinaison n’est pas
+                  saisie.
+                </Text>
+              ) : null}
               <Reading
                 label="Azimut vrai"
                 value={`${formatNumber(navigation.bearing, 0)}°`}
-                color={colors.primary}
               />
               <Reading
                 label="Gisement carte"
                 value={`${formatNumber(navigation.grid, 0)}°`}
               />
               <Reading
-                label="Cap boussole"
-                value={
-                  navigation.magnetic === null
-                    ? 'déclinaison requise'
-                    : `${formatNumber(navigation.magnetic, 0)}°`
-                }
+                label="Arrivée"
+                value={formatLatLon(navigation.destination, 'dms')}
               />
             </Panel>
           )}
@@ -292,6 +431,52 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: space.s },
   pair: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   half: { flex: 1, minWidth: 120 },
+  grow: { flex: 1, minWidth: 0 },
+  pressed: { opacity: 0.82 },
+  coord: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    padding: space.m,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.card,
+  },
+  coordValue: {
+    fontFamily: fonts.mono,
+    fontSize: 17,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginTop: 4,
+  },
+  copy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: space.m,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  copyText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  route: { flexDirection: 'row', alignItems: 'center', gap: space.l },
+  routeValues: { flex: 1, minWidth: 0, gap: space.m },
+  big: { ...text.value, fontSize: 30 },
+  missing: { color: colors.warning, fontSize: 15, fontWeight: '600' },
+  cardinal: {
+    position: 'absolute',
+    width: 16,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
+  north: { top: 16, left: 58, color: colors.danger },
+  east: { right: 18, top: 58 },
+  south: { bottom: 16, left: 58 },
+  west: { left: 18, top: 58 },
   fix: {
     flexDirection: 'row',
     backgroundColor: colors.bgElevated,

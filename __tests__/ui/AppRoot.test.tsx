@@ -11,7 +11,7 @@ import {
   within,
 } from '@testing-library/react-native';
 import React from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Clipboard, type AppStateStatus } from 'react-native';
 
 import { BUNDLED_GUIDES, GUIDE_FOLDERS } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
@@ -535,6 +535,9 @@ describe('écrans', () => {
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '45,83265');
     await fireEvent.changeText(screen.getByLabelText('Longitude'), '6.86518');
     expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Copier MGRS'));
+    expect(Clipboard.setString).toHaveBeenCalledWith('32T LR 34199 77670');
+    expect(screen.getByLabelText('MGRS copié')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Azimut' }));
     await fireEvent.changeText(
@@ -584,6 +587,35 @@ describe('écrans', () => {
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
+  });
+
+  it('montre les trois péremptions les plus proches sur l’accueil', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    const repo = new InventoryRepository(db);
+    const today = localToday();
+    for (const [name, days] of [
+      ['Lait', 40],
+      ['Pâtes', 20],
+      ['Bouteilles', -3],
+      ['Compote', 10],
+    ] as const) {
+      await repo.createItem(
+        { name, category: 'food', unit: 'unit', caloriesPerUnit: 100 },
+        { quantity: 2, expirationDate: addDays(today, days) },
+      );
+    }
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+
+    expect(screen.getByText('Bouteilles')).toBeTruthy();
+    expect(screen.getByText('Compote')).toBeTruthy();
+    expect(screen.getByText('Pâtes')).toBeTruthy();
+    expect(screen.queryByText('Lait')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Voir les 4 péremptions'));
+    expect(await screen.findByText('Lait')).toBeTruthy();
   });
 
   it('retire bidon par bidon l’eau saisie avant les fiches', async () => {
