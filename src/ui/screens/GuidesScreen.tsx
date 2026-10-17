@@ -7,15 +7,21 @@ import {
   BookOpen,
   ChevronRight,
   ClipboardList,
+  Compass,
   Droplet,
+  Flame,
   HeartPulse,
   Radio,
   SearchX,
+  ShowerHead,
+  Siren,
+  Utensils,
   type LucideIcon,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { GUIDE_FOLDERS } from '../../content/fiches/fiche';
 import { searchGuides } from '../../db/guides';
 import {
   Button,
@@ -35,13 +41,24 @@ interface GuideRow {
   snippet?: string;
 }
 
-/** Pictogramme et couleur par catégorie connue ; livre ouvert sinon. */
+/** Pictogramme et couleur par dossier connu ; livre ouvert sinon. */
 const CATEGORY_STYLE: Record<string, [LucideIcon, string]> = {
+  Survie: [Flame, colors.energy],
+  Médical: [HeartPulse, colors.health],
   Eau: [Droplet, colors.water],
-  Secourisme: [HeartPulse, colors.health],
-  Signalisation: [Radio, colors.cyan],
+  Communication: [Radio, colors.cyan],
+  Orientation: [Compass, colors.equipment],
+  Alimentation: [Utensils, colors.food],
+  Hygiène: [ShowerHead, colors.cyanSoft],
   Préparation: [ClipboardList, colors.primary],
+  'Risques & alertes': [Siren, colors.danger],
 };
+
+/** Ordre des dossiers : celui de GUIDE_FOLDERS, les inconnus à la fin. */
+function folderRank(category: string): number {
+  const index = (GUIDE_FOLDERS as readonly string[]).indexOf(category);
+  return index === -1 ? GUIDE_FOLDERS.length : index;
+}
 
 function categoryStyle(category: string): [LucideIcon, string] {
   return CATEGORY_STYLE[category] ?? [BookOpen, colors.cyanSoft];
@@ -115,7 +132,10 @@ export function GuidesScreen() {
 
       {!searching && category === null
         ? [...categories.entries()]
-            .sort(([a], [b]) => a.localeCompare(b, 'fr'))
+            .sort(
+              ([a], [b]) =>
+                folderRank(a) - folderRank(b) || a.localeCompare(b, 'fr'),
+            )
             .map(([name, guides]) => {
               const [Icon, color] = categoryStyle(name);
               return (
@@ -233,22 +253,86 @@ function GuideReader(props: { slug: string; onBack: () => void }) {
           </Text>
           {String(data.body)
             .split('\n')
-            .map((line, i) =>
-              line.startsWith('- ') ? (
-                <View key={i} style={styles.bullet}>
-                  <Text style={styles.bulletMark}>•</Text>
-                  <Text style={[text.body, styles.grow]}>{line.slice(2)}</Text>
-                </View>
-              ) : (
-                <Text key={i} style={text.body}>
-                  {line}
-                </Text>
-              ),
-            )}
+            .map((line, i) => (
+              <GuideLine key={i} line={line} />
+            ))}
         </View>
       ) : null}
     </ScrollView>
   );
+}
+
+/**
+ * Une ligne de fiche : « ## » intertitre, « - » puce, « 1. » étape
+ * numérotée, « ! » mise en garde, « = » ligne de tableau (libellé puis
+ * valeur), « | » grille en chasse fixe (deux cases par ligne). Les cases
+ * sont séparées par au moins deux espaces.
+ */
+function cells(line: string): string[] {
+  return line
+    .slice(2)
+    .trim()
+    .split(/\s{2,}/);
+}
+
+function GuideLine({ line }: { line: string }) {
+  if (line.trim() === '') {
+    return null;
+  }
+  if (line.startsWith('## ')) {
+    return (
+      <Text accessibilityRole="header" style={styles.heading}>
+        {line.slice(3)}
+      </Text>
+    );
+  }
+  if (line.startsWith('! ')) {
+    return (
+      <View style={styles.warning}>
+        <Text style={styles.warningText}>{line.slice(2)}</Text>
+      </View>
+    );
+  }
+  if (line.startsWith('| ')) {
+    return (
+      <View style={styles.grid}>
+        {cells(line).map((cell, i) => (
+          <Text key={i} style={[styles.mono, styles.gridCell]}>
+            {cell}
+          </Text>
+        ))}
+      </View>
+    );
+  }
+  if (line.startsWith('= ')) {
+    const [label, ...rest] = cells(line);
+    return (
+      <View style={styles.tableRow}>
+        <Text style={styles.tableLabel}>{label}</Text>
+        {rest.length > 0 ? (
+          <Text style={[text.body, styles.grow]}>{rest.join(' ')}</Text>
+        ) : null}
+      </View>
+    );
+  }
+  const step = /^(\d+)\. (.*)$/.exec(line);
+  if (step) {
+    return (
+      <View style={styles.bullet}>
+        <Text style={styles.stepMark}>{step[1]}</Text>
+        <Text style={[text.body, styles.grow]}>{step[2]}</Text>
+      </View>
+    );
+  }
+  if (line.startsWith('- ')) {
+    return (
+      <View style={styles.bullet}>
+        <Text style={styles.bulletMark}>•</Text>
+        <Text style={[text.body, styles.grow]}>{line.slice(2)}</Text>
+      </View>
+    );
+  }
+  return <Text style={text.body}>{line}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -284,4 +368,45 @@ const styles = StyleSheet.create({
   },
   bullet: { flexDirection: 'row', gap: space.s },
   bulletMark: { color: colors.primary, fontSize: 16, lineHeight: 22 },
+  stepMark: {
+    minWidth: 22,
+    color: colors.primary,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '800',
+  },
+  heading: {
+    ...text.h3,
+    marginTop: space.s,
+    color: colors.text,
+  },
+  warning: {
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSurface,
+  },
+  warningText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  gridCell: { width: '50%' },
+  tableRow: {
+    flexDirection: 'row',
+    gap: space.m,
+    paddingVertical: space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  tableLabel: {
+    ...text.body,
+    width: '38%',
+    color: colors.primaryBright,
+    fontWeight: '600',
+  },
+  mono: {
+    ...text.mono,
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 22,
+  },
 });

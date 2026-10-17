@@ -13,7 +13,7 @@ import {
 import React from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { BUNDLED_GUIDES } from '../../src/content/guides';
+import { BUNDLED_GUIDES, GUIDE_FOLDERS } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
 import {
   ArmoryRepository,
@@ -577,10 +577,10 @@ describe('écrans', () => {
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
     const firstAid = BUNDLED_GUIDES.filter(
-      g => g.category === 'Secourisme',
+      g => g.category === 'Médical',
     ).length;
     await fireEvent.press(
-      await screen.findByLabelText(`Secourisme, ${firstAid} fiches`),
+      await screen.findByLabelText(`Médical, ${firstAid} fiches`),
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
@@ -845,6 +845,23 @@ describe('écrans', () => {
         'Mettre la victime à l’abri du vent et l’isoler du sol.',
       ),
     ).toBeTruthy();
+  });
+
+  it('range les fiches par dossier et met en forme le morse', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await screen.findByLabelText(/^Survie, \d+ fiches$/);
+    const folders = screen
+      .getAllByRole('button')
+      .map(b => String(b.props.accessibilityLabel ?? ''))
+      .filter(label => / fiches?$/.test(label))
+      .map(label => label.replace(/, \d+ fiches?$/, ''));
+    expect(folders).toEqual([...GUIDE_FOLDERS]);
+
+    await fireEvent.press(screen.getByLabelText(/^Communication, /));
+    await fireEvent.press(await screen.findByText('Code morse'));
+    expect(await screen.findByText('Lettres')).toBeTruthy();
+    expect(screen.getByText('SOS ···–––···')).toBeTruthy();
   });
 });
 
