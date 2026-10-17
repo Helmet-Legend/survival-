@@ -1154,9 +1154,9 @@ describe('fiche médicale', () => {
     await fireEvent.press(
       await screen.findByRole('button', { name: 'Médical' }),
     );
-    for (const [packaging, n, unit] of cases) {
+    for (const [packaging, n, unitLabel] of cases) {
       expect(
-        await screen.findByLabelText(`Produit ${packaging}, ${n} ${unit}`),
+        await screen.findByLabelText(`Produit ${packaging}, ${n} ${unitLabel}`),
       ).toBeTruthy();
     }
     await fireEvent.press(screen.getByLabelText('Produit Boîte, 2 boîtes'));
