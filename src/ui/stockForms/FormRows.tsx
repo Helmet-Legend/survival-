@@ -3,10 +3,12 @@
  * la catégorie, libellé au-dessus de la valeur, erreur sous la ligne.
  * Cibles tactiles ≥ 54 px ; chaque saisie porte un libellé accessible.
  */
-import { CalendarDays, Check } from 'lucide-react-native';
+import { CalendarDays, Check, ChevronDown } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,11 +17,12 @@ import {
 } from 'react-native';
 import type { Icon } from '../icons';
 
-import { colors, space, tint } from '../theme';
+import { colors, radius, space, tint } from '../theme';
 import type { Option } from './config';
 
 function Row(props: {
-  icon: Icon;
+  /** Absente : champ étroit (deux colonnes), toute la place au texte. */
+  icon?: Icon;
   color: string;
   focused?: boolean;
   error?: string;
@@ -38,7 +41,7 @@ function Row(props: {
             props.error ? styles.rowError : null,
           ]}
         >
-          <Icon color={props.color} size={22} strokeWidth={2} />
+          {Icon ? <Icon color={props.color} size={22} strokeWidth={2} /> : null}
           <View style={styles.body}>{props.children}</View>
         </View>
         {props.side}
@@ -66,11 +69,12 @@ export function TextRow(props: {
   maxLength?: number;
   keyboardType?: KeyboardTypeOptions;
   suffix?: string;
+  hideIcon?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
     <Row
-      icon={props.icon}
+      icon={props.hideIcon ? undefined : props.icon}
       color={props.color}
       focused={focused}
       error={props.error}
@@ -107,6 +111,7 @@ export function DateRow(props: {
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  placeholder?: string;
 }) {
   const [focused, setFocused] = useState(false);
   const format = (raw: string) => {
@@ -132,7 +137,7 @@ export function DateRow(props: {
           accessibilityHint="Date au format jour, mois, année"
           value={props.value}
           onChangeText={v => props.onChange(format(v))}
-          placeholder="JJ/MM/AAAA"
+          placeholder={props.placeholder ?? 'JJ/MM/AAAA'}
           placeholderTextColor={colors.textSubtle}
           selectionColor={props.color}
           keyboardType="number-pad"
@@ -218,6 +223,103 @@ export function ChoiceRow(props: {
         })}
       </View>
     </Row>
+  );
+}
+
+/** Liste déroulante : la valeur choisie, la liste s'ouvre en feuille. */
+export function DropdownRow(props: {
+  icon: Icon;
+  color: string;
+  label: string;
+  value: string;
+  options: readonly Option[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  error?: string;
+  hideIcon?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = props.options.find(x => x.value === props.value);
+  const name = bare(props.label);
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${name} : ${current?.label ?? 'non renseigné'}`}
+        onPress={() => setOpen(true)}
+      >
+        <Row
+          icon={props.hideIcon ? undefined : props.icon}
+          color={props.color}
+          error={props.error}
+        >
+          <Text style={styles.label} numberOfLines={1}>
+            {props.label}
+          </Text>
+          <View style={styles.inputLine}>
+            <Text
+              style={[
+                styles.value,
+                styles.grow,
+                !current && styles.placeholder,
+              ]}
+              numberOfLines={1}
+            >
+              {current?.label ?? props.placeholder ?? 'Choisir…'}
+            </Text>
+            <ChevronDown color={colors.textMuted} size={20} />
+          </View>
+        </Row>
+      </Pressable>
+      <Modal
+        visible={open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Fermer la liste"
+          style={styles.backdrop}
+          onPress={() => setOpen(false)}
+        />
+        <View style={styles.sheet}>
+          <Text accessibilityRole="header" style={styles.sheetTitle}>
+            {name}
+          </Text>
+          <ScrollView contentContainerStyle={styles.sheetOptions}>
+            {props.options.map(option => {
+              const selected = option.value === props.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={option.label}
+                  onPress={() => {
+                    props.onChange(option.value);
+                    setOpen(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.sheetOption,
+                    selected && {
+                      borderColor: props.color,
+                      backgroundColor: tint(props.color, '18'),
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.value, styles.grow]}>
+                    {option.label}
+                  </Text>
+                  {selected ? <Check color={props.color} size={20} /> : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -436,5 +538,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   stepText: { fontSize: 24, lineHeight: 28, fontWeight: '600' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet: {
+    maxHeight: '70%',
+    backgroundColor: colors.bgElevated,
+    borderTopLeftRadius: radius.panel,
+    borderTopRightRadius: radius.panel,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: space.l,
+    gap: space.m,
+  },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  sheetOptions: { gap: space.s, paddingBottom: space.xl },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
+    paddingHorizontal: space.l,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   pressed: { opacity: 0.8 },
 });

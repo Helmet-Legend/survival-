@@ -92,8 +92,15 @@ async function openDetails() {
   }
 }
 
-/** Choisit une pastille d'un champ à choix de fiche. */
+/** Choisit une valeur d'un champ à choix (pastilles ou liste déroulante). */
 async function pick(field: string, option: string) {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const dropdown = screen.queryByLabelText(new RegExp(`^${escaped} : `));
+  if (dropdown) {
+    await fireEvent.press(dropdown);
+    await fireEvent.press(await screen.findByRole('radio', { name: option }));
+    return;
+  }
   if (screen.queryByLabelText(field) === null) {
     await openDetails();
   }
@@ -1103,7 +1110,7 @@ describe('fiche médicale', () => {
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
     await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
     await fireEvent.press(screen.getByLabelText('Ajouter : Médical'));
-    await screen.findByText('Ajouter un produit médical');
+    await screen.findByText('Ajouter du médical');
   }
 
   const save = () =>
@@ -1111,26 +1118,91 @@ describe('fiche médicale', () => {
   const count = (value: string) =>
     fireEvent.changeText(screen.getByLabelText('Nombre, obligatoire'), value);
 
-  it('ne montre que les six champs prévus, sans contenance ni dosage', async () => {
+  it('reprend exactement les libellés, l’ordre et le récapitulatif', async () => {
     await openMedical();
-    for (const label of [
+    const order = [
       'Nom du produit, obligatoire',
-      'Catégorie',
-      'Conditionnement',
+      'Catégorie : non renseigné',
+      'Conditionnement : non renseigné',
       'Nombre, obligatoire',
       'Date de péremption',
       'Emplacement',
-    ]) {
-      expect(screen.getByLabelText(label)).toBeTruthy();
-    }
-    expect(screen.queryByLabelText(/Dosage|Contenance/)).toBeNull();
-    expect(screen.queryByLabelText('Plus de détails')).toBeNull();
-    // Aucun conditionnement choisi d'office.
+      'Stock total : —',
+      'Enregistrer le stock',
+    ];
+    // Ordre d'apparition dans l'arbre rendu.
+    const seen: string[] = [];
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      if (node === null || typeof node !== 'object') {
+        return;
+      }
+      const { props, children } = node as {
+        props?: { accessibilityLabel?: unknown };
+        children?: unknown;
+      };
+      const label = props?.accessibilityLabel;
+      if (
+        typeof label === 'string' &&
+        order.includes(label) &&
+        !seen.includes(label)
+      ) {
+        seen.push(label);
+      }
+      walk(children);
+    };
+    walk(screen.toJSON());
+    expect(seen).toEqual(order);
     expect(
-      within(screen.getByLabelText('Conditionnement')).queryByRole('radio', {
-        selected: true,
-      }),
+      screen.getByLabelText('Nom du produit, obligatoire').props.placeholder,
+    ).toBe('Ex. Compresses stériles');
+    expect(screen.getByLabelText('Date de péremption').props.placeholder).toBe(
+      'Facultative — choisir une date',
+    );
+    expect(screen.getByLabelText('Emplacement').props.placeholder).toBe(
+      'Ex. Armoire médicale',
+    );
+    // Aucun champ ni ajout hors spécification.
+    expect(
+      screen.queryByLabelText(/Dosage|Contenance|Poids|Volume/),
     ).toBeNull();
+    expect(screen.queryByLabelText('Plus de détails')).toBeNull();
+    expect(screen.queryByLabelText('Saisie rapide')).toBeNull();
+    expect(screen.queryByLabelText('Ajouter une photo (optionnel)')).toBeNull();
+
+    // Options de catégorie, dans l'ordre.
+    await fireEvent.press(screen.getByLabelText('Catégorie : non renseigné'));
+    expect(
+      screen.getAllByRole('radio').map(r => r.props.accessibilityLabel),
+    ).toEqual([
+      'Pansements',
+      'Médicaments',
+      'Antiseptiques',
+      'Protection',
+      'Diagnostic',
+      'Hygiène',
+      'Autre',
+    ]);
+    await fireEvent.press(screen.getByRole('radio', { name: 'Pansements' }));
+
+    // « Stock total » suit la saisie, avec les pluriels français.
+    for (const [packaging, n, expected] of [
+      ['Boîte', '1', '1 boîte'],
+      ['Boîte', '3', '3 boîtes'],
+      ['Pièce', '1', '1 pièce'],
+      ['Pièce', '2', '2 pièces'],
+      ['Flacon', '1', '1 flacon'],
+      ['Flacon', '4', '4 flacons'],
+      ['Paquet', '1', '1 paquet'],
+      ['Paquet', '5', '5 paquets'],
+    ]) {
+      await pick('Conditionnement', packaging);
+      await count(n);
+      expect(screen.getByLabelText(`Stock total : ${expected}`)).toBeTruthy();
+    }
   });
 
   it('exige nom, catégorie, conditionnement et un nombre entier positif', async () => {
@@ -1233,11 +1305,79 @@ describe('fiche médicale', () => {
     // La fiche rouverte garde son conditionnement.
     await fireEvent.press(screen.getByText('Modifier la fiche'));
     expect(
-      within(await screen.findByLabelText('Conditionnement')).getByRole(
-        'radio',
-        { name: 'Pièce', selected: true },
+      await screen.findByLabelText('Conditionnement : Pièce'),
+    ).toBeTruthy();
+  });
+
+  it('garde la saisie et prévient en français si l’enregistrement échoue', async () => {
+    await openMedical();
+    jest
+      .spyOn(InventoryRepository.prototype, 'createItem')
+      .mockRejectedValueOnce(new Error('espace de stockage plein'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom du produit, obligatoire'),
+      'Gants nitrile',
+    );
+    await pick('Catégorie', 'Protection');
+    await pick('Conditionnement', 'Boîte');
+    await count('2');
+    await save();
+    expect(
+      await screen.findByText(
+        'Enregistrement impossible : espace de stockage plein',
       ),
     ).toBeTruthy();
+    expect(
+      screen.getByLabelText('Nom du produit, obligatoire').props.value,
+    ).toBe('Gants nitrile');
+    expect(screen.getByLabelText('Conditionnement : Boîte')).toBeTruthy();
+    expect(screen.getByLabelText('Nombre, obligatoire').props.value).toBe('2');
+    // Nouvel essai : la vraie sauvegarde aboutit.
+    await save();
+    expect(
+      await screen.findByText('« Gants nitrile » enregistré.'),
+    ).toBeTruthy();
+  });
+
+  it('lit les anciens articles médicaux sans conditionnement', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    const repo = new InventoryRepository(db);
+    await repo.createItem(
+      { name: 'Ancien paracétamol', category: 'medical', unit: 'unit' },
+      { quantity: 3 },
+    );
+    await repo.createItem(
+      {
+        name: 'Ancien sérum',
+        category: 'medical',
+        unit: 'unit',
+        attributes: { countUnit: 'dose', dosage: '5 mL' },
+      },
+      { quantity: 10 },
+    );
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Médical' }),
+    );
+    // Sans conditionnement enregistré : « pièce » par défaut.
+    await fireEvent.press(
+      await screen.findByLabelText('Ancien paracétamol, 3 pièces'),
+    );
+    await fireEvent.press(screen.getByText('Modifier la fiche'));
+    expect(
+      await screen.findByLabelText('Conditionnement : Pièce'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retour'));
+    // Unité retirée (dose) : toujours lisible, ancien dosage conservé.
+    await fireEvent.press(
+      await screen.findByLabelText('Ancien sérum, 10 doses'),
+    );
+    expect(await screen.findByText('5 mL')).toBeTruthy();
   });
 });
 
