@@ -999,20 +999,34 @@ describe('fiches par type de produit', () => {
     expect(screen.getByText('1 200 kcal')).toBeTruthy();
   });
 
-  it('calcule le volume de plusieurs bidons identiques', async () => {
+  it('saisit l’eau en nombre de contenants × contenance', async () => {
     await openForm('Eau');
-    await fireEvent.press(
-      await screen.findByLabelText('Plusieurs contenants : calculer le total'),
-    );
-    await fireEvent.changeText(screen.getByLabelText('Nombre'), '4');
-    await fireEvent.changeText(screen.getByLabelText('Contenance'), '20');
-    expect(screen.getByLabelText('Quantité, obligatoire').props.value).toBe(
-      '80',
-    );
+    // Plus de ligne « Quantité » : seulement nombre × contenance.
+    expect(
+      await screen.findByLabelText('Contenance, obligatoire'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText('Quantité, obligatoire')).toBeNull();
+    expect(screen.getByLabelText('Nombre, obligatoire').props.value).toBe('1');
     await fireEvent.changeText(
       screen.getByLabelText('Nom / Description, obligatoire'),
       'Jerricans garage',
     );
+    // Contenance manquante : erreur, rien d'enregistré.
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(
+      await screen.findByText(
+        'Indiquez le nombre et la contenance (en litres)',
+      ),
+    ).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Nombre, obligatoire'),
+      '4',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Contenance, obligatoire'),
+      '20',
+    );
+    expect(screen.getByText('80 L')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(await screen.findByLabelText('Jerricans garage, 80 L')).toBeTruthy();
   });

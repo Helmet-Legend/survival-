@@ -490,16 +490,38 @@ function StockForm(props: {
           />
         );
         if (category === 'water' && !isEdit) {
+          // Eau : la quantité se déduit du nombre de contenants × contenance.
+          const count = values.containerCount ?? '1';
+          const size = values.containerSize ?? '';
+          const update = (nextCount: string, nextSize: string) => {
+            const total = parseDecimal(nextCount) * parseDecimal(nextSize);
+            setValues(v => ({
+              ...v,
+              containerCount: nextCount,
+              containerSize: nextSize,
+              unit: 'L',
+              quantity:
+                Number.isFinite(total) && total > 0
+                  ? String(Math.round(total * 100) / 100).replace('.', ',')
+                  : '',
+            }));
+            if (errors.quantity) {
+              setErrors(e => ({ ...e, quantity: '' }));
+            }
+          };
           return (
-            <View key={key} style={styles.withSuggestions}>
-              {quantityRow}
-              <ContainerCalculator
-                color={color}
-                onTotal={liters =>
-                  setValues(v => ({ ...v, quantity: liters, unit: 'L' }))
-                }
-              />
-            </View>
+            <ContainerCalculator
+              key={key}
+              color={color}
+              count={count}
+              size={size}
+              onChange={update}
+              error={
+                errors.quantity
+                  ? 'Indiquez le nombre et la contenance (en litres)'
+                  : undefined
+              }
+            />
           );
         }
         return quantityRow;
@@ -871,49 +893,33 @@ function FoodEnergyHelp(props: {
   return null;
 }
 
-/** Plusieurs contenants identiques : nombre × contenance = litres. */
+/** Eau : nombre de contenants × contenance = litres enregistrés. */
 function ContainerCalculator(props: {
   color: string;
-  onTotal: (liters: string) => void;
+  count: string;
+  size: string;
+  onChange: (count: string, size: string) => void;
+  error?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [count, setCount] = useState('');
-  const [size, setSize] = useState('');
-  const update = (nextCount: string, nextSize: string) => {
-    setCount(nextCount);
-    setSize(nextSize);
-    const total = parseDecimal(nextCount) * parseDecimal(nextSize);
-    if (Number.isFinite(total) && total > 0) {
-      props.onTotal(String(Math.round(total * 100) / 100).replace('.', ','));
-    }
-  };
-  const total = parseDecimal(count) * parseDecimal(size);
-  if (!open) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Plusieurs contenants : calculer le total"
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.calcLink, pressed && styles.pressed]}
-      >
-        <Text style={[styles.helpButtonText, { color: props.color }]}>
-          Plusieurs bidons ou bouteilles ? Calculer le total
-        </Text>
-      </Pressable>
-    );
-  }
+  const total = parseDecimal(props.count) * parseDecimal(props.size);
   return (
-    <View style={[styles.help, { borderColor: tint(props.color, '55') }]}>
+    <View
+      style={[
+        styles.help,
+        { borderColor: props.error ? colors.danger : tint(props.color, '55') },
+      ]}
+    >
       <View style={styles.calc}>
         <View style={styles.grow}>
           <TextRow
             icon={QuantityIcon}
             color={props.color}
-            label="Nombre"
-            value={count}
-            onChange={v => update(v, size)}
+            label="Nombre *"
+            value={props.count}
+            onChange={v => props.onChange(v, props.size)}
             placeholder="Ex : 4"
-            keyboardType="decimal-pad"
+            keyboardType="number-pad"
+            hideIcon
           />
         </View>
         <Text style={styles.times}>×</Text>
@@ -921,25 +927,27 @@ function ContainerCalculator(props: {
           <TextRow
             icon={VolumeIcon}
             color={props.color}
-            label="Contenance"
-            value={size}
-            onChange={v => update(count, v)}
+            label="Contenance *"
+            value={props.size}
+            onChange={v => props.onChange(props.count, v)}
             placeholder="Ex : 20"
             keyboardType="decimal-pad"
             suffix="L"
+            hideIcon
           />
         </View>
       </View>
-      <Text style={text.body}>
+      <Text style={text.body} accessibilityLiveRegion="polite">
         {Number.isFinite(total) && total > 0 ? (
           <>
-            = <Text style={styles.helpStrong}>{formatNumber(total)} L</Text>{' '}
-            reportés dans la quantité
+            Total :{' '}
+            <Text style={styles.helpStrong}>{formatNumber(total)} L</Text>
           </>
         ) : (
           'Exemple : 4 jerricans de 20 L = 80 L.'
         )}
       </Text>
+      {props.error ? <Text style={styles.calcError}>{props.error}</Text> : null}
     </View>
   );
 }
@@ -1035,9 +1043,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   helpButtonText: { fontSize: 15, fontWeight: '700' },
-  calcLink: { minHeight: 40, justifyContent: 'center' },
   calc: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   times: { color: colors.textMuted, fontSize: 20 },
+  calcError: { color: colors.danger, fontSize: 13 },
   more: {
     flexDirection: 'row',
     alignItems: 'center',
