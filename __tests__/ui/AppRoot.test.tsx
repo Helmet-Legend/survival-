@@ -754,6 +754,83 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('supprime un lot puis tout un article, après confirmation', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    const repo = new InventoryRepository(db);
+    const item = await repo.createItem(
+      { name: 'Bidons cave', category: 'water', unit: 'L' },
+      { quantity: 10, expirationDate: '2030-01-31' },
+    );
+    await repo.addLot(item.id, { quantity: 5 });
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
+    await fireEvent.press(await screen.findByLabelText('Bidons cave, 15 L'));
+
+    // Un lot : confirmation, puis seul ce lot disparaît.
+    await fireEvent.press(
+      await screen.findByLabelText('Supprimer le lot 5 L, non périssable'),
+    );
+    await fireEvent.press(screen.getByText('Supprimer ce lot'));
+    expect(
+      await screen.findByText('Lot supprimé : 5 L, non périssable.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Bidons cave, 10 L')).toBeTruthy();
+
+    // L'article entier : « Annuler » ne supprime rien.
+    await fireEvent.press(screen.getByLabelText('Supprimer « Bidons cave »'));
+    expect(screen.getByText(/Cette action est définitive/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Annuler'));
+    expect(screen.getByLabelText('Bidons cave, 10 L')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Supprimer « Bidons cave »'));
+    await fireEvent.press(screen.getByText('Oui, supprimer'));
+    expect(await screen.findByText('« Bidons cave » supprimé.')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Bidons cave,/)).toBeNull();
+  });
+
+  it('supprime depuis la fiche modifiée et efface une fiche d’ajout', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+
+    // Fiche d'ajout : la corbeille efface la saisie, sans rien enregistrer.
+    await fireEvent.press(screen.getByLabelText('+ Ajouter : Nourriture'));
+    await fireEvent.changeText(
+      await screen.findByLabelText('Nom / Description, obligatoire'),
+      'Pâtes',
+    );
+    await fireEvent.press(screen.getByLabelText('Effacer la saisie'));
+    await fireEvent.press(screen.getByLabelText('Oui, tout effacer'));
+    expect(
+      screen.getByLabelText('Nom / Description, obligatoire').props.value,
+    ).toBe('');
+    await fireEvent.press(screen.getByLabelText('Retour'));
+
+    // Fiche existante : suppression après confirmation.
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    await fireEvent.press(await screen.findByText('Modifier la fiche'));
+    await fireEvent.press(
+      await screen.findByLabelText('Supprimer cette fiche'),
+    );
+    expect(
+      screen.getByText(
+        'Supprimer « Riz » et tout son stock ? Cette action est définitive.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Annuler'));
+    expect(screen.queryByText(/Cette action est définitive/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Supprimer cette fiche'));
+    await fireEvent.press(screen.getByLabelText('Oui, supprimer'));
+    expect(await screen.findByText('« Riz » supprimé.')).toBeTruthy();
+    expect(screen.queryByLabelText('Riz, 10 kg')).toBeNull();
+  });
+
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));

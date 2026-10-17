@@ -540,6 +540,7 @@ export function StockScreen() {
                         <ItemDetail
                           item={data.detail.item}
                           lots={data.detail.lots}
+                          onDeleted={() => setExpanded(null)}
                           onChanged={async message => {
                             setFeedback(message);
                             await reload();
@@ -643,6 +644,8 @@ function ItemDetail(props: {
   item: InventoryItem;
   lots: InventoryLot[];
   onChanged: (feedback: Feedback) => Promise<void>;
+  /** L'article n'existe plus : refermer sa fiche. */
+  onDeleted: () => void;
 }) {
   const { repo } = useSession();
   const { item } = props;
@@ -678,6 +681,37 @@ function ItemDetail(props: {
       ? 0
       : totalQuantity(addCount, item.packageSize, container !== null);
   const navigation = useNavigation();
+
+  const [confirm, setConfirm] = useState<
+    { kind: 'item' } | { kind: 'lot'; lotId: string } | null
+  >(null);
+
+  const removeItem = async () => {
+    setConfirm(null);
+    try {
+      await repo.deleteItem(item.id);
+      props.onDeleted();
+      await props.onChanged({
+        message: `« ${item.name} » supprimé.`,
+        tone: 'ok',
+      });
+    } catch (e) {
+      await props.onChanged({ message: errorMessage(e), tone: 'error' });
+    }
+  };
+
+  const removeLot = async (lotId: string, label: string) => {
+    setConfirm(null);
+    try {
+      await repo.deleteLot(lotId);
+      await props.onChanged({
+        message: `Lot supprimé : ${label}.`,
+        tone: 'ok',
+      });
+    } catch (e) {
+      await props.onChanged({ message: errorMessage(e), tone: 'error' });
+    }
+  };
 
   const consume = async (amount: number) => {
     try {
@@ -774,26 +808,107 @@ function ItemDetail(props: {
           navigation.openStockForm({ category: item.category, itemId: item.id })
         }
       />
+      <Button
+        compact
+        variant="danger"
+        icon={Trash2}
+        label="Supprimer l’article"
+        accessibilityLabel={`Supprimer « ${item.name} »`}
+        onPress={() => setConfirm({ kind: 'item' })}
+      />
+      {confirm?.kind === 'item' ? (
+        <Panel accent={colors.danger} style={styles.dialog}>
+          <Text style={text.body}>
+            Supprimer « {item.name} » et tout son stock
+            {props.lots.length > 0
+              ? ` (${props.lots.length} lot${props.lots.length > 1 ? 's' : ''})`
+              : ''}{' '}
+            ? Cette action est définitive.
+          </Text>
+          <View style={styles.wrap}>
+            <Button
+              variant="danger"
+              label="Oui, supprimer"
+              onPress={() => {
+                void removeItem();
+              }}
+            />
+            <Button
+              variant="ghost"
+              label="Annuler"
+              onPress={() => setConfirm(null)}
+            />
+          </View>
+        </Panel>
+      ) : null}
       <PhotoStrip owner="item" ownerId={item.id} label={item.name} />
 
       <Text style={text.label}>Lots, du premier au dernier consommé</Text>
       {props.lots.length === 0 ? (
         <Text style={text.muted}>Aucun lot.</Text>
       ) : null}
-      {props.lots.map(lot => (
-        <View key={lot.id} style={styles.lot}>
-          <Text style={[text.mono, lot.isExpired && styles.expired]}>
-            {formatNumber(lot.quantity)} {unit}
-          </Text>
-          <Text style={[text.muted, lot.isExpired && styles.expired]}>
-            {lot.expirationDate
-              ? `${lot.isExpired ? 'périmé le' : 'jusqu’au'} ${formatDate(
-                  lot.expirationDate,
-                )}`
-              : 'non périssable'}
-          </Text>
-        </View>
-      ))}
+      {props.lots.map(lot => {
+        const label = `${formatNumber(lot.quantity)} ${unit}, ${
+          lot.expirationDate
+            ? `${lot.isExpired ? 'périmé le' : 'jusqu’au'} ${formatDate(
+                lot.expirationDate,
+              )}`
+            : 'non périssable'
+        }`;
+        return (
+          <View key={lot.id}>
+            <View style={styles.lot}>
+              <Text style={[text.mono, lot.isExpired && styles.expired]}>
+                {formatNumber(lot.quantity)} {unit}
+              </Text>
+              <Text
+                style={[
+                  text.muted,
+                  styles.grow,
+                  styles.lotDate,
+                  lot.isExpired && styles.expired,
+                ]}
+              >
+                {lot.expirationDate
+                  ? `${lot.isExpired ? 'périmé le' : 'jusqu’au'} ${formatDate(
+                      lot.expirationDate,
+                    )}`
+                  : 'non périssable'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Supprimer le lot ${label}`}
+                hitSlop={8}
+                onPress={() => setConfirm({ kind: 'lot', lotId: lot.id })}
+                style={({ pressed }) => [
+                  styles.lotDelete,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Trash2 color={colors.danger} size={18} />
+              </Pressable>
+            </View>
+            {confirm?.kind === 'lot' && confirm.lotId === lot.id ? (
+              <View style={styles.row}>
+                <Button
+                  compact
+                  variant="danger"
+                  label="Supprimer ce lot"
+                  onPress={() => {
+                    void removeLot(lot.id, label);
+                  }}
+                />
+                <Button
+                  compact
+                  variant="ghost"
+                  label="Annuler"
+                  onPress={() => setConfirm(null)}
+                />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
 
       <View style={[styles.panel, { borderColor: tint(color, '55') }]}>
         <Text style={[text.label, { color }]}>Ajouter du stock</Text>
@@ -949,6 +1064,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   inline: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s },
+  lotDate: { textAlign: 'right' },
+  lotDelete: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   panel: {
     gap: space.m,
     padding: space.m,
@@ -1007,7 +1129,12 @@ const styles = StyleSheet.create({
     paddingTop: space.m,
   },
   section: { marginTop: space.s },
-  lot: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
+  lot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.m,
+  },
   expired: { color: colors.danger },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   sheet: {
