@@ -754,6 +754,44 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('supprime un lot puis tout un article, après confirmation', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, { masterPin: MASTER });
+    const repo = new InventoryRepository(db);
+    const item = await repo.createItem(
+      { name: 'Bidons cave', category: 'water', unit: 'L' },
+      { quantity: 10, expirationDate: '2030-01-31' },
+    );
+    await repo.addLot(item.id, { quantity: 5 });
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Eau' }));
+    await fireEvent.press(await screen.findByLabelText('Bidons cave, 15 L'));
+
+    // Un lot : confirmation, puis seul ce lot disparaît.
+    await fireEvent.press(
+      await screen.findByLabelText('Supprimer le lot 5 L, non périssable'),
+    );
+    await fireEvent.press(screen.getByText('Supprimer ce lot'));
+    expect(
+      await screen.findByText('Lot supprimé : 5 L, non périssable.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Bidons cave, 10 L')).toBeTruthy();
+
+    // L'article entier : « Annuler » ne supprime rien.
+    await fireEvent.press(screen.getByLabelText('Supprimer « Bidons cave »'));
+    expect(screen.getByText(/Cette action est définitive/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Annuler'));
+    expect(screen.getByLabelText('Bidons cave, 10 L')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Supprimer « Bidons cave »'));
+    await fireEvent.press(screen.getByText('Oui, supprimer'));
+    expect(await screen.findByText('« Bidons cave » supprimé.')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Bidons cave,/)).toBeNull();
+  });
+
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
@@ -1067,7 +1105,7 @@ describe('fiches par type de produit', () => {
     await openForm('Nourriture');
     await fireEvent.press(await screen.findByLabelText('Retour'));
     await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
-    await fireEvent.press(await screen.findByText('Modifier la fiche'));
+    await fireEvent.press(await screen.findByLabelText('Modifier la fiche'));
     expect(await screen.findByText('Modifier l’aliment')).toBeTruthy();
     expect(screen.queryByLabelText('Quantité, obligatoire')).toBeNull();
     await fireEvent.changeText(
@@ -1317,7 +1355,7 @@ describe('fiche médicale', () => {
     expect(screen.queryByText('Trousse principale')).toBeNull();
 
     // La fiche rouverte garde son conditionnement.
-    await fireEvent.press(screen.getByText('Modifier la fiche'));
+    await fireEvent.press(screen.getByLabelText('Modifier la fiche'));
     expect(
       await screen.findByLabelText('Conditionnement : Pièce'),
     ).toBeTruthy();
@@ -1382,7 +1420,7 @@ describe('fiche médicale', () => {
     await fireEvent.press(
       await screen.findByLabelText('Ancien paracétamol, 3 pièces'),
     );
-    await fireEvent.press(screen.getByText('Modifier la fiche'));
+    await fireEvent.press(screen.getByLabelText('Modifier la fiche'));
     expect(
       await screen.findByLabelText('Conditionnement : Pièce'),
     ).toBeTruthy();
