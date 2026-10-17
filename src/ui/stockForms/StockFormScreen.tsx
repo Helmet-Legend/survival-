@@ -57,6 +57,7 @@ import {
 import {
   ChoiceRow,
   DateRow,
+  DropdownRow,
   MeasureRow,
   Suggestions,
   TextRow,
@@ -146,7 +147,8 @@ function StockForm(props: {
   const [saving, setSaving] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
   const color = config.color;
-  const Icon = config.icon;
+  const Icon = config.headerIcon ?? config.icon;
+  const medical = config.variant === 'medical';
 
   const set = (key: string) => (value: string) => {
     setValues(v => ({ ...v, [key]: value }));
@@ -191,6 +193,15 @@ function StockForm(props: {
     k => k !== 'unit' && k !== 'energyBasis' && (values[k] ?? '') !== '',
   ).length;
   const picks = isEdit ? [] : QUICK_PICKS[category];
+  // Récapitulatif médical : le nombre de conditionnements, rien d'autre.
+  const stockTotal = (() => {
+    const n = Number((values.quantity ?? '').trim());
+    const names = COUNT_UNIT_LABELS[values.unit ?? ''];
+    if (!names || !Number.isInteger(n) || n <= 0) {
+      return '—';
+    }
+    return `${n} ${n > 1 ? names[1] : names[0]}`;
+  })();
 
   const takePhoto = async () => {
     try {
@@ -308,6 +319,20 @@ function StockForm(props: {
           />
         );
       case 'select':
+        if (field.dropdown) {
+          return (
+            <DropdownRow
+              key={key}
+              icon={field.icon}
+              color={color}
+              label={field.label}
+              value={values[field.key] ?? ''}
+              options={field.options}
+              onChange={set(field.key)}
+              error={errors[field.key]}
+            />
+          );
+        }
         return (
           <ChoiceRow
             key={key}
@@ -329,6 +354,7 @@ function StockForm(props: {
             label={field.label}
             value={values[field.key] ?? ''}
             onChange={set(field.key)}
+            placeholder={field.placeholder}
             error={errors[field.key]}
           />
         );
@@ -376,6 +402,41 @@ function StockForm(props: {
           />
         );
       case 'packaging':
+        if (medical) {
+          // Conditionnement et nombre côte à côte (pack fiche médicale).
+          return (
+            <View key={key} style={styles.pair}>
+              <View style={styles.pairCell}>
+                <DropdownRow
+                  icon={field.icon}
+                  color={color}
+                  label={`${field.label} *`}
+                  value={values.unit ?? ''}
+                  options={field.options}
+                  onChange={set('unit')}
+                  error={errors.unit}
+                  hideIcon
+                />
+              </View>
+              {isEdit ? null : (
+                <View style={styles.pairCell}>
+                  <TextRow
+                    icon={QuantityIcon}
+                    color={color}
+                    label="Nombre *"
+                    value={values.quantity ?? ''}
+                    onChange={set('quantity')}
+                    placeholder="Ex. 3"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    error={errors.quantity}
+                    hideIcon
+                  />
+                </View>
+              )}
+            </View>
+          );
+        }
         return (
           <ChoiceRow
             key={key}
@@ -389,6 +450,9 @@ function StockForm(props: {
           />
         );
       case 'quantity':
+        if (medical) {
+          return null; // rendu avec le conditionnement, sur la même rangée
+        }
         if (isEdit && separateUnit) {
           return null; // l'unité se choisit dans « Conditionnement »
         }
@@ -606,6 +670,16 @@ function StockForm(props: {
 
         <View style={styles.fields}>{main.map(renderField)}</View>
 
+        {medical && !isEdit ? (
+          <View
+            style={styles.summary}
+            accessibilityLabel={`Stock total : ${stockTotal}`}
+          >
+            <Text style={styles.summaryLabel}>Stock total</Text>
+            <Text style={styles.summaryValue}>{stockTotal}</Text>
+          </View>
+        ) : null}
+
         {details.length > 0 ? (
           <>
             <Pressable
@@ -645,7 +719,7 @@ function StockForm(props: {
           </>
         ) : null}
 
-        {photoButton}
+        {medical ? null : photoButton}
 
         {isEdit ? (
           <Text style={text.subtle}>
@@ -929,6 +1003,18 @@ const styles = StyleSheet.create({
   quick: { gap: space.s },
   quickTitle: { color: colors.textMuted, fontSize: 13 },
   withSuggestions: { gap: space.s },
+  pair: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  pairCell: { flexGrow: 1, flexBasis: 150, minWidth: 0 },
+  summary: {
+    gap: 4,
+    padding: space.l,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: tint(colors.health, '55'),
+    backgroundColor: '#2A1019',
+  },
+  summaryLabel: { color: colors.textMuted, fontSize: 14 },
+  summaryValue: { color: '#FF8A96', fontSize: 22, fontWeight: '800' },
   help: {
     gap: space.s,
     padding: space.m,

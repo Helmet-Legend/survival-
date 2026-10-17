@@ -4,7 +4,13 @@
  * `StockFormScreen` lit cette configuration, `mapping.ts` la traduit en
  * données.
  */
-import { FlaskConical, Hash, Ruler, Thermometer } from 'lucide-react-native';
+import {
+  BriefcaseMedical,
+  FlaskConical,
+  Hash,
+  Ruler,
+  Thermometer,
+} from 'lucide-react-native';
 
 import type { ItemCategory, ItemUnit } from '../../inventory';
 import type { CountUnit } from '../../inventory/attributes';
@@ -68,10 +74,12 @@ export type Field =
       options: readonly Option[];
       placeholder?: string;
       required?: boolean;
+      /** Liste déroulante plutôt que pastilles. */
+      dropdown?: boolean;
     })
   /** Choix de l'unité de comptage, en champ à part (fiche médicale). */
   | (Base & { type: 'packaging'; options: readonly Option[] })
-  | (Base & { type: 'date'; key: string })
+  | (Base & { type: 'date'; key: string; placeholder?: string })
   | (Base & {
       type: 'measure';
       key: string;
@@ -99,6 +107,14 @@ export interface FormConfig {
   requireUnit?: boolean;
   /** Quantité en nombre entier (conditionnements). */
   integerQuantity?: boolean;
+  /**
+   * Mise en page stricte de la fiche médicale : listes déroulantes,
+   * conditionnement et nombre côte à côte, carte « Stock total », sans
+   * saisie rapide ni photo.
+   */
+  variant?: 'medical';
+  /** Icône de l'en-tête (sinon celle de la catégorie). */
+  headerIcon?: Icon;
 }
 
 const u = (
@@ -479,10 +495,11 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
   // Fiche médicale corrigée : stock compté en conditionnements (boîtes,
   // pièces, flacons, paquets), sans contenance ni dosage.
   medical: {
-    title: 'Ajouter un produit médical',
+    title: 'Ajouter du médical',
     editTitle: 'Modifier le produit médical',
     subtitle: 'Enregistrez un médicament ou du matériel de premiers secours.',
     icon: CATEGORY_ICONS.medical,
+    headerIcon: BriefcaseMedical,
     color: CATEGORY_COLORS.medical,
     units: [
       UNIT_OPTIONS.box,
@@ -492,13 +509,14 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
     ],
     requireUnit: true,
     integerQuantity: true,
+    variant: 'medical',
     fields: [
       {
         type: 'text',
         key: 'name',
         label: 'Nom du produit',
         icon: TagIcon,
-        placeholder: 'Ex : Compresses stériles',
+        placeholder: 'Ex. Compresses stériles',
         required: true,
         maxLength: 120,
       },
@@ -508,9 +526,10 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         label: 'Catégorie',
         icon: BoxIcon,
         required: true,
+        dropdown: true,
         options: options('medical.subtype', [
-          o('medicine', 'Médicaments'),
           o('dressing', 'Pansements'),
+          o('medicine', 'Médicaments'),
           o('antiseptic', 'Antiseptiques'),
           o('protection', 'Protection'),
           o('diagnostic', 'Diagnostic'),
@@ -535,8 +554,9 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         key: 'expiry',
         label: 'Date de péremption',
         icon: ExpiryIcon,
+        placeholder: 'Facultative — choisir une date',
       },
-      location('Ex : Trousse principale'),
+      location('Ex. Armoire médicale'),
     ],
   },
   tool: {
@@ -762,13 +782,8 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
     pick('Ration lyophilisée', { subtype: 'freeze_dried', unit: 'portion' }),
   ],
   weapon: [],
-  medical: [
-    pick('Paracétamol', { subtype: 'medicine', unit: 'box' }),
-    pick('Pansements', { subtype: 'dressing', unit: 'box' }),
-    pick('Compresses', { subtype: 'dressing', unit: 'box' }),
-    pick('Désinfectant', { subtype: 'antiseptic', unit: 'bottle' }),
-    pick('Gants', { subtype: 'protection', unit: 'box' }),
-  ],
+  // Fiche médicale stricte : pas de saisie rapide.
+  medical: [],
   tool: [
     pick('Couteau', { subtype: 'cutting', unit: 'piece' }),
     pick('Hache', { subtype: 'cutting', unit: 'piece' }),
