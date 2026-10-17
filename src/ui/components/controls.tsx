@@ -238,6 +238,10 @@ export function MetricCard(props: {
   value: string;
   unit?: string;
   caption: string;
+  /** Part de l'objectif couverte (0 à 1) : barre sous la valeur. */
+  progress?: number;
+  /** Ligne sous la barre (ex. besoin par jour). */
+  detail?: string;
   onPress?: () => void;
 }) {
   const Icon = props.icon;
@@ -259,9 +263,17 @@ export function MetricCard(props: {
           <Text style={styles.metricUnit}> {props.unit}</Text>
         ) : null}
       </Text>
+      {props.progress !== undefined ? (
+        <Gauge value={props.progress} color={props.color} height={6} />
+      ) : null}
       <Text style={text.subtle} numberOfLines={2}>
         {props.caption}
       </Text>
+      {props.detail ? (
+        <Text style={text.subtle} numberOfLines={1}>
+          {props.detail}
+        </Text>
+      ) : null}
     </Panel>
   );
 }

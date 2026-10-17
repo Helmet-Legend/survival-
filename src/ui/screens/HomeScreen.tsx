@@ -1,12 +1,12 @@
 /**
- * Accueil : jauge d'autonomie du foyer, ressource limitante, eau, vivres,
- * cartographie et péremptions, accès au plan d'action.
+ * Accueil : jauge d'autonomie du foyer, ressource limitante, eau et vivres
+ * rapportés à l'objectif, péremptions les plus proches, accès au plan
+ * d'action.
  */
 import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
-  MapPinned,
   Users,
 } from 'lucide-react-native';
 import React from 'react';
@@ -26,11 +26,20 @@ import {
   Button,
   MetricCard,
   Notice,
+  Panel,
   StatusChip,
   Stepper,
 } from '../components/controls';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
-import { autonomyStatus, formatDate, formatNumber } from '../format';
+import {
+  autonomyStatus,
+  BUCKET_LABELS,
+  BUCKET_TONES,
+  formatDate,
+  formatNumber,
+  formatRelativeDays,
+  UNIT_LABELS,
+} from '../format';
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
@@ -39,6 +48,8 @@ import { useLoader } from '../useLoader';
 
 /** Même borne que dans les Réglages. */
 const MAX_MEMBERS = 12;
+/** Péremptions affichées sur l'accueil ; la liste complète est au plan. */
+const HOME_ALERTS = 3;
 
 export function HomeScreen() {
   const { db } = useSession();
@@ -75,9 +86,6 @@ export function HomeScreen() {
     await saveHousehold(db, { ...report.household, members: members + delta });
     await reload();
   };
-  const urgent = alerts.filter(
-    a => a.bucket === 'expired' || a.bucket === 'within30',
-  ).length;
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -157,6 +165,8 @@ export function HomeScreen() {
           value={formatNumber(report.water.available)}
           unit="L"
           caption={`${report.water.days} j d’autonomie`}
+          progress={report.water.days / targetDays}
+          detail={`${formatNumber(report.water.dailyNeed)} L / jour`}
           onPress={() => navigation.goTo('stock', { category: 'water' })}
         />
         <MetricCard
@@ -166,6 +176,8 @@ export function HomeScreen() {
           value={formatNumber(report.food.available, 0)}
           unit="kcal"
           caption={`${report.food.days} j d’autonomie`}
+          progress={report.food.days / targetDays}
+          detail={`${formatNumber(report.food.dailyNeed, 0)} kcal / jour`}
           onPress={() => navigation.goTo('stock', { category: 'food' })}
         />
       </View>
@@ -193,30 +205,47 @@ export function HomeScreen() {
           <ChevronRight color={colors.text} size={20} />
         </Pressable>
       ) : null}
-      <View style={styles.grid}>
-        <MetricCard
-          icon={MapPinned}
-          color={colors.success}
-          label="Cartographie"
-          value="Hors ligne"
-          caption="Coordonnées & azimuts"
-          onPress={() => navigation.goTo('map')}
-        />
-        <MetricCard
-          icon={CalendarClock}
-          color={colors.purple}
-          label="Péremptions"
-          value={alerts.length === 0 ? 'Aucune' : String(alerts.length)}
-          caption={
-            alerts.length === 0
-              ? 'dans les 90 jours'
-              : urgent > 0
-              ? `dont ${urgent} sous 30 j`
-              : 'lots à surveiller'
-          }
-          onPress={() => navigation.open('plan')}
-        />
-      </View>
+      <Panel
+        title="Péremptions à surveiller"
+        right={
+          alerts.length > HOME_ALERTS ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Voir les ${alerts.length} péremptions`}
+              onPress={() => navigation.open('plan')}
+              hitSlop={12}
+            >
+              <Text style={styles.link}>Tout voir ({alerts.length}) ›</Text>
+            </Pressable>
+          ) : (
+            <CalendarClock color={colors.purple} size={20} />
+          )
+        }
+      >
+        {alerts.length === 0 ? (
+          <Text style={text.muted}>
+            Aucune péremption dans les 90 prochains jours.
+          </Text>
+        ) : (
+          alerts.slice(0, HOME_ALERTS).map(alert => (
+            <View key={alert.lotId} style={styles.alert}>
+              <View style={styles.grow}>
+                <Text style={text.body} numberOfLines={1}>
+                  {alert.itemName}
+                </Text>
+                <Text style={text.subtle}>
+                  {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
+                  {formatRelativeDays(alert.daysLeft)}
+                </Text>
+              </View>
+              <StatusChip
+                tone={BUCKET_TONES[alert.bucket]}
+                label={BUCKET_LABELS[alert.bucket]}
+              />
+            </View>
+          ))
+        )}
+      </Panel>
 
       <Button
         variant="primary"
@@ -288,4 +317,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.82 },
   grow: { flex: 1, minWidth: 0 },
   grid: { flexDirection: 'row', gap: space.m },
+  alert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    paddingVertical: space.s,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  link: { color: colors.cyan, fontSize: 14, fontWeight: '600' },
 });

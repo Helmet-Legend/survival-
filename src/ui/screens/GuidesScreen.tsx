@@ -130,8 +130,9 @@ export function GuidesScreen() {
         </View>
       ) : null}
 
-      {!searching && category === null
-        ? [...categories.entries()]
+      {!searching && category === null ? (
+        <View style={styles.folders}>
+          {[...categories.entries()]
             .sort(
               ([a], [b]) =>
                 folderRank(a) - folderRank(b) || a.localeCompare(b, 'fr'),
@@ -145,44 +146,38 @@ export function GuidesScreen() {
                   accessibilityLabel={`${name}, ${fiches(guides.length)}`}
                   onPress={() => setCategory(name)}
                   style={({ pressed }) => [
-                    styles.card,
+                    styles.folder,
                     pressed && styles.pressed,
                   ]}
                 >
                   <IconTile icon={Icon} color={color} />
-                  <View style={styles.grow}>
-                    <Text style={text.h3}>{name}</Text>
-                    <Text style={styles.count}>{fiches(guides.length)}</Text>
-                    <Text style={text.subtle} numberOfLines={1}>
-                      {guides.map(g => g.title).join(', ')}
-                    </Text>
-                  </View>
-                  <ChevronRight color={colors.text} size={22} />
+                  <Text style={styles.folderName}>{name}</Text>
+                  <Text style={styles.count}>{fiches(guides.length)}</Text>
                 </Pressable>
               );
-            })
-        : shown.map(guide => {
-            const [Icon, color] = categoryStyle(guide.category);
-            return (
-              <Pressable
-                key={guide.slug}
-                accessibilityRole="button"
-                onPress={() => setSlug(guide.slug)}
-                style={({ pressed }) => [
-                  styles.card,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Icon color={color} size={22} />
-                <View style={styles.grow}>
-                  <Text style={[text.label, { color }]}>{guide.category}</Text>
-                  <Text style={styles.title}>{guide.title}</Text>
-                  {guide.snippet ? <Snippet text={guide.snippet} /> : null}
-                </View>
-                <ChevronRight color={colors.textMuted} size={20} />
-              </Pressable>
-            );
-          })}
+            })}
+        </View>
+      ) : (
+        shown.map(guide => {
+          const [Icon, color] = categoryStyle(guide.category);
+          return (
+            <Pressable
+              key={guide.slug}
+              accessibilityRole="button"
+              onPress={() => setSlug(guide.slug)}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            >
+              <Icon color={color} size={22} />
+              <View style={styles.grow}>
+                <Text style={[text.label, { color }]}>{guide.category}</Text>
+                <Text style={styles.title}>{guide.title}</Text>
+                {guide.snippet ? <Snippet text={guide.snippet} /> : null}
+              </View>
+              <ChevronRight color={colors.textMuted} size={20} />
+            </Pressable>
+          );
+        })
+      )}
 
       {data?.length === 0 ? (
         <EmptyState
@@ -352,6 +347,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.card,
   },
+  folders: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: space.m,
+  },
+  folder: {
+    width: '48%',
+    gap: space.s,
+    padding: space.m,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.card,
+  },
+  folderName: { ...text.body, fontWeight: '700' },
   pressed: { opacity: 0.82 },
   grow: { flex: 1, minWidth: 0 },
   count: { color: colors.text, fontSize: 15 },
