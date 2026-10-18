@@ -7,7 +7,7 @@
  * - pendant la transition (sélecteur d'applications iOS), un écran noir
  *   masque le contenu pour que l'aperçu système ne le capture pas.
  */
-import { Lock, Settings } from 'lucide-react-native';
+import { Lock, Settings, TriangleAlert } from 'lucide-react-native';
 import React, {
   useCallback,
   useEffect,
@@ -19,6 +19,7 @@ import {
   AppState,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -68,9 +69,11 @@ import {
   type StockFocus,
   type StockFormTarget,
   type Tab,
+  backLabelFor,
 } from './navigation';
 import { CalculatorsScreen } from './screens/CalculatorsScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
+import { PrepareScreen } from './screens/PrepareScreen';
 import { PurchasePlanScreen } from './screens/PurchasePlanScreen';
 import { ReadinessScreen } from './screens/ReadinessScreen';
 import { CrisisScreen } from './screens/CrisisScreen';
@@ -95,7 +98,7 @@ import { SetupScreen } from './screens/SetupScreen';
 import { StockScreen } from './screens/StockScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
-import { colors, sizes, space, text } from './theme';
+import { colors, fonts, radius, sizes, space, text } from './theme';
 
 type Phase =
   | { kind: 'loading' }
@@ -145,6 +148,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('home');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
+  // Écrans secondaires ouverts avant l'écran courant : le retour y revient.
+  const [overlayStack, setOverlayStack] = useState<Overlay[]>([]);
   const [formTarget, setFormTarget] = useState<StockFormTarget | null>(null);
   const [stockFocus, setStockFocus] = useState<StockFocus | undefined>();
   const [covered, setCovered] = useState(false);
@@ -196,6 +201,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     syncReminders(db, reminders).catch(() => undefined);
     setTab('home');
     setOverlay(null);
+    setOverlayStack([]);
     setPhase({ kind: 'open', session });
   };
 
@@ -231,16 +237,31 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         setStockFocus(focus);
         setTab(next);
         setOverlay(null);
+        setOverlayStack([]);
       },
-      open: setOverlay,
+      open: next => {
+        // La fiche d'ajout se referme par sa propre navigation.
+        if (overlay !== null && overlay !== 'stockForm' && overlay !== next) {
+          setOverlayStack(stack => [...stack, overlay]);
+        }
+        setOverlay(next);
+      },
       openStockForm: target => {
         setFormTarget(target);
         setOverlay('stockForm');
       },
-      close: () => setOverlay(null),
+      close: () => {
+        setOverlay(
+          overlayStack.length > 0
+            ? overlayStack[overlayStack.length - 1]
+            : null,
+        );
+        setOverlayStack(stack => stack.slice(0, -1));
+      },
+      backLabel: backLabelFor(overlayStack[overlayStack.length - 1], tab),
       stockFocus,
     }),
-    [stockFocus],
+    [stockFocus, overlay, overlayStack, tab],
   );
 
   useEffect(() => {
@@ -303,13 +324,32 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                   label="Verrouiller"
                   onPress={() => lock()}
                 />
-                <Brand size={26} tagline />
+                <View style={styles.brandBox}>
+                  <Brand size={24} />
+                  <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="SOS : ouvrir l’écran Urgence"
+                  onPress={() => navigation.open('emergency')}
+                  hitSlop={4}
+                  style={({ pressed }) => [
+                    styles.sos,
+                    overlay === 'emergency' && styles.sosOn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <TriangleAlert color={SOS_TEXT} size={18} strokeWidth={2.4} />
+                  <Text style={styles.sosText}>SOS</Text>
+                </Pressable>
                 <IconButton
                   icon={Settings}
                   label="Réglages"
                   color={overlay === 'settings' ? colors.primary : colors.text}
                   onPress={() =>
-                    setOverlay(overlay === 'settings' ? null : 'settings')
+                    overlay === 'settings'
+                      ? navigation.close()
+                      : navigation.open('settings')
                   }
                 />
               </View>
@@ -346,6 +386,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <>
                   {tab === 'home' ? <HomeScreen /> : null}
                   {tab === 'stock' ? <StockScreen /> : null}
+                  {tab === 'prepare' ? <PrepareScreen /> : null}
                   {tab === 'map' ? <MapScreen /> : null}
                   {tab === 'guides' ? <GuidesScreen /> : null}
                 </>
@@ -439,9 +480,35 @@ function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
   );
 }
 
+/** Rouge clair lisible sur le fond rouge sombre du bouton SOS. */
+const SOS_TEXT = '#FF8A96';
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
+  brandBox: { flex: 1, alignItems: 'center', gap: 2 },
+  vaultBadge: { color: colors.success, fontSize: 11, fontWeight: '600' },
+  sos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: sizes.touch - 4,
+    paddingHorizontal: space.m,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSurface,
+    marginRight: space.xs,
+  },
+  sosOn: { backgroundColor: '#4A121D' },
+  sosText: {
+    color: SOS_TEXT,
+    fontFamily: fonts.display,
+    fontWeight: '800',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  pressed: { opacity: 0.8 },
   bar: {
     flexDirection: 'row',
     justifyContent: 'space-between',

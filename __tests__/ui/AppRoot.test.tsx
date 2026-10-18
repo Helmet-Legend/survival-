@@ -403,7 +403,7 @@ describe('cycle de vie', () => {
     expect(shared.message).toContain('- Paul : 06 12 34 56 78 · hors zone');
     expect(shared.message).toContain('Près du domicile : Parking de l’école');
     share.mockRestore();
-    await fireEvent.press(screen.getByLabelText('Retour'));
+    await fireEvent.press(screen.getByLabelText('Retour à l’urgence'));
     expect(await screen.findByText('Parking de l’école')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Appeler Paul'));
     expect(open).toHaveBeenLastCalledWith('tel:0612345678');
@@ -870,6 +870,41 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('range la préparation dans son onglet et revient à l’écran d’origine', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    expect(
+      await screen.findByLabelText(/^Indice de préparation : \d+ sur 100/),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Ouvrir le simulateur de crise'),
+    );
+    await screen.findByText('Simulateur de crise');
+    await fireEvent.press(screen.getByLabelText('Retour à Préparer'));
+    // Plan d’action puis calculateurs : chaque retour remonte d’un écran.
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir le plan d’action'),
+    );
+    await fireEvent.press(
+      await screen.findByText('Calculateurs eau et électricité'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Retour au plan d’action'),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retour à Préparer'));
+    expect(
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
+    ).toBeTruthy();
+    // SOS dans l’en-tête, depuis n’importe quelle section.
+    await fireEvent.press(
+      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retour à Préparer'));
+    expect(
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
+    ).toBeTruthy();
+  });
+
   it('affiche l’indice de préparation et ses actions', async () => {
     await openApp();
     const card = await screen.findByLabelText(
@@ -913,7 +948,9 @@ describe('écrans', () => {
         }).props.accessibilityState,
       ).toEqual({ checked: true }),
     );
-    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    // Ouvert depuis le plan d’action : le retour y ramène, puis à l’accueil.
+    await fireEvent.press(screen.getByLabelText('Retour au plan d’action'));
+    await fireEvent.press(await screen.findByLabelText('Retour à l’accueil'));
     expect(
       await screen.findByLabelText(
         /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
@@ -952,7 +989,9 @@ describe('écrans', () => {
       screen.getByRole('checkbox', { name: radioName }).props
         .accessibilityState,
     ).toEqual({ checked: true });
-    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    // Ouvert depuis le plan d’action : le retour y ramène, puis à l’accueil.
+    await fireEvent.press(screen.getByLabelText('Retour au plan d’action'));
+    await fireEvent.press(await screen.findByLabelText('Retour à l’accueil'));
     expect(
       await screen.findByLabelText(
         /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
@@ -1219,7 +1258,7 @@ describe('écrans', () => {
       screen.getByLabelText('Armement : 0 munition, 0 arme, 0 article'),
     ).toBeTruthy();
 
-    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     const firstAid = BUNDLED_GUIDES.filter(g => g.category === 'Santé').length;
     await fireEvent.press(
       await screen.findByLabelText(`Santé, ${firstAid} fiches`),
@@ -1513,7 +1552,7 @@ describe('écrans', () => {
 
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await fireEvent.changeText(
       await screen.findByLabelText('Rechercher un guide'),
       'severe',
@@ -1529,7 +1568,7 @@ describe('écrans', () => {
 
   it('ouvre la fiche balistique et coche sa liste de contrôle', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await fireEvent.press(
       await screen.findByLabelText(/^Équipement et protection, \d+ fiches?$/),
     );
@@ -1579,7 +1618,7 @@ describe('écrans', () => {
 
   it('range les fiches par dossier et met en forme le morse', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await screen.findByLabelText(/^Gestion de crise, \d+ fiches$/);
     const folders = screen
       .getAllByRole('button')

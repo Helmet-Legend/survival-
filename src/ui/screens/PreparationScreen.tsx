@@ -69,7 +69,7 @@ export function PreparationScreen() {
     <ScreenTitle
       title="Préparation"
       onBack={navigation.close}
-      backLabel="Retour à l’accueil"
+      backLabel={navigation.backLabel}
     />
   );
   if (data === null) {

@@ -80,7 +80,7 @@ export function PlanScreen() {
     <ScreenTitle
       title="Plan d’action"
       onBack={navigation.close}
-      backLabel="Retour à l’accueil"
+      backLabel={navigation.backLabel}
     />
   );
 

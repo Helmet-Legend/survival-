@@ -198,7 +198,7 @@ export function PurchasePlanScreen() {
     <ScreenTitle
       title="Plan d’achats"
       onBack={navigation.close}
-      backLabel="Retour à l’accueil"
+      backLabel={navigation.backLabel}
     />
   );
   if (error) {

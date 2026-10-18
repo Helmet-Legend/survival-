@@ -56,7 +56,8 @@ export function FamilyPlanScreen() {
   const title = (
     <ScreenTitle
       title="Plan familial"
-      onBack={() => navigation.open('emergency')}
+      onBack={navigation.close}
+      backLabel={navigation.backLabel}
     />
   );
   if (error || data === null) {

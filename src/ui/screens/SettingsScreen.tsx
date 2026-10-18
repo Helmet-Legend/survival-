@@ -79,7 +79,13 @@ export function SettingsScreen(props: { onLock: () => void }) {
     };
   });
 
-  const title = <ScreenTitle title="Réglages" onBack={navigation.close} />;
+  const title = (
+    <ScreenTitle
+      title="Réglages"
+      onBack={navigation.close}
+      backLabel={navigation.backLabel}
+    />
+  );
   if (error) {
     return (
       <View style={styles.page}>
