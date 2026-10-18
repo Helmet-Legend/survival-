@@ -101,7 +101,11 @@ export function EmergencyScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <ScreenTitle title="Urgence" onBack={navigation.close} />
+      <ScreenTitle
+        title="Urgence"
+        onBack={navigation.close}
+        backLabel={navigation.backLabel}
+      />
 
       <View style={styles.numbers}>
         {NUMBERS.map(([number, label]) => (

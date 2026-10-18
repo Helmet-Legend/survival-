@@ -69,8 +69,8 @@ export function CalculatorsScreen() {
   const title = (
     <ScreenTitle
       title="Calculateurs"
-      onBack={() => navigation.open('plan')}
-      backLabel="Retour au plan d’action"
+      onBack={navigation.close}
+      backLabel={navigation.backLabel}
     />
   );
   if (error) {

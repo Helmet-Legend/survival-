@@ -1,9 +1,10 @@
-/** Barre de navigation basse : quatre entrées fixes, l'active en orange. */
+/** Barre de navigation basse : cinq entrées fixes, l'active en orange. */
 import {
   BookOpen,
   Box,
   House,
   Map as MapIcon,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react-native';
 import React from 'react';
@@ -15,8 +16,9 @@ import { colors, sizes } from '../theme';
 const TABS: Array<[Tab, string, LucideIcon]> = [
   ['home', 'Accueil', House],
   ['stock', 'Stocks', Box],
+  ['prepare', 'Préparer', ShieldCheck],
+  ['guides', 'Fiches', BookOpen],
   ['map', 'Carte', MapIcon],
-  ['guides', 'Guides', BookOpen],
 ];
 
 export function BottomNav(props: {

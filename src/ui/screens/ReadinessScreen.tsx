@@ -88,7 +88,7 @@ export function ReadinessScreen() {
     <ScreenTitle
       title="Indice de préparation"
       onBack={navigation.close}
-      backLabel="Retour à l’accueil"
+      backLabel={navigation.backLabel}
     />
   );
   if (error) {

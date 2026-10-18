@@ -201,7 +201,7 @@ export function CrisisScreen() {
       <ScreenTitle
         title="Simulateur de crise"
         onBack={navigation.close}
-        backLabel="Retour à l’accueil"
+        backLabel={navigation.backLabel}
       />
       <Panel title="Scénario">
         <View style={styles.chips}>
