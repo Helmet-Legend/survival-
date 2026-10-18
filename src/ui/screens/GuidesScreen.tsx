@@ -5,7 +5,9 @@
 import {
   ArrowLeft,
   BookOpen,
+  CheckCircle2,
   ChevronRight,
+  Circle,
   ClipboardList,
   Compass,
   DoorOpen,
@@ -14,6 +16,7 @@ import {
   House,
   Radio,
   SearchX,
+  Shield,
   Siren,
   Trees,
   Utensils,
@@ -30,7 +33,15 @@ import {
   readMeta,
   type Priority,
 } from '../../content/fiches/fiche';
+import {
+  CHECK_PREFIX,
+  checkId,
+  clearGuideChecks,
+  loadGuideChecks,
+  setGuideCheck,
+} from '../../content/guideChecks';
 import { searchGuides } from '../../db/guides';
+import { isoToFr } from '../../lib/dates';
 import {
   Button,
   EmptyState,
@@ -66,6 +77,7 @@ const CATEGORY_STYLE: Record<string, [LucideIcon, string]> = {
   [F.energie]: [Zap, colors.energy],
   [F.habitat]: [House, colors.tools],
   [F.evacuation]: [DoorOpen, colors.warning],
+  [F.protection]: [Shield, colors.purple],
   [F.communication]: [Radio, colors.cyan],
   [F.orientation]: [Compass, colors.equipment],
   [F.nature]: [Trees, colors.success],
@@ -280,16 +292,100 @@ export function GuideReader(props: { slug: string; onBack: () => void }) {
           <Text accessibilityRole="header" style={text.h1}>
             {String(data.title)}
           </Text>
-          {String(data.body)
-            .split('\n')
-            .filter(line => !line.startsWith(META_PREFIX))
-            .map((line, i) => (
-              <GuideLine key={i} line={line} />
-            ))}
+          {blocks(String(data.body)).map((block, i) =>
+            typeof block === 'string' ? (
+              <GuideLine key={i} line={block} />
+            ) : (
+              <GuideChecklist key={i} slug={props.slug} items={block} />
+            ),
+          )}
           <MetaFooter body={String(data.body)} />
         </View>
       ) : null}
     </ScrollView>
+  );
+}
+
+/**
+ * Lignes affichables d'une fiche, métadonnées retirées ; les lignes « ☐ »
+ * consécutives forment une liste de contrôle.
+ */
+function blocks(body: string): Array<string | string[]> {
+  const out: Array<string | string[]> = [];
+  for (const line of body.split('\n')) {
+    if (line.startsWith(META_PREFIX)) {
+      continue;
+    }
+    if (line.startsWith(CHECK_PREFIX)) {
+      const label = line.slice(CHECK_PREFIX.length);
+      const last = out[out.length - 1];
+      if (Array.isArray(last)) {
+        last.push(label);
+      } else {
+        out.push([label]);
+      }
+    } else {
+      out.push(line);
+    }
+  }
+  return out;
+}
+
+/** Liste de contrôle cochable ; la date du dernier contrôle est conservée. */
+function GuideChecklist(props: { slug: string; items: string[] }) {
+  const { db } = useSession();
+  const { data, reload } = useLoader(
+    () => loadGuideChecks(db, props.slug),
+    [props.slug],
+  );
+  const checks = data ?? new Map<string, string>();
+  const done = props.items.filter(label => checks.has(checkId(label))).length;
+  const last = [...checks.values()].sort().pop();
+  const toggle = async (label: string, checked: boolean) => {
+    await setGuideCheck(db, props.slug, checkId(label), checked);
+    await reload();
+  };
+  return (
+    <View style={styles.checklist}>
+      {props.items.map(label => {
+        const checked = checks.has(checkId(label));
+        const Icon = checked ? CheckCircle2 : Circle;
+        return (
+          <Pressable
+            key={label}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked }}
+            accessibilityLabel={label}
+            onPress={() => {
+              void toggle(label, !checked);
+            }}
+            style={({ pressed }) => [styles.check, pressed && styles.pressed]}
+          >
+            <Icon
+              color={checked ? colors.success : colors.textMuted}
+              size={22}
+              strokeWidth={2}
+            />
+            <Text style={[text.body, styles.grow]}>{label}</Text>
+          </Pressable>
+        );
+      })}
+      <Text style={text.subtle}>
+        {done} sur {props.items.length} vérifiés
+        {last ? ` · dernier contrôle le ${isoToFr(last.slice(0, 10))}` : ''}
+      </Text>
+      {done > 0 ? (
+        <Button
+          compact
+          variant="ghost"
+          label="Nouveau contrôle"
+          accessibilityLabel="Nouveau contrôle : tout décocher"
+          onPress={() => {
+            void clearGuideChecks(db, props.slug).then(reload);
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -499,6 +595,20 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   metaKey: { fontWeight: '700', color: colors.textMuted },
+  checklist: {
+    gap: space.xs,
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  check: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: 44,
+  },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridCell: { width: '50%' },
   tableRow: {

@@ -1312,6 +1312,50 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('ouvre la fiche balistique et coche sa liste de contrôle', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(
+      await screen.findByLabelText(/^Équipement et protection, 1 fiche$/),
+    );
+    await fireEvent.press(
+      await screen.findByText(
+        'Protections balistiques — NIJ IIIA, III, IV et casque FAST',
+      ),
+    );
+    expect(await screen.findByText('Tableau comparatif')).toBeTruthy();
+    expect(screen.getByText('Sources et références')).toBeTruthy();
+    expect(screen.getByText('0 sur 9 vérifiés')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByRole('checkbox', {
+        name: 'Étiquette et traçabilité lisibles',
+      }),
+    );
+    expect(
+      await screen.findByText(
+        /^1 sur 9 vérifiés · dernier contrôle le \d{2}\/\d{2}\/\d{4}$/,
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Nouveau contrôle : tout décocher'),
+    );
+    expect(await screen.findByText('0 sur 9 vérifiés')).toBeTruthy();
+    // Fermeture : retour à la liste du dossier.
+    await fireEvent.press(screen.getByText('Toutes les fiches'));
+    expect(await screen.findByText('Équipement et protection')).toBeTruthy();
+    expect(screen.queryByText('Tableau comparatif')).toBeNull();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Rechercher un guide'),
+      'casque FAST',
+    );
+    expect(
+      await screen.findByText(
+        'Protections balistiques — NIJ IIIA, III, IV et casque FAST',
+      ),
+    ).toBeTruthy();
+  });
+
   it('range les fiches par dossier et met en forme le morse', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));

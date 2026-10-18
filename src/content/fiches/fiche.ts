@@ -10,6 +10,7 @@ export const F = {
   energie: 'Énergie',
   habitat: 'Habitat',
   evacuation: 'Évacuation',
+  protection: 'Équipement et protection',
   communication: 'Communication',
   orientation: 'Orientation',
   nature: 'Autonomie en nature',
@@ -27,6 +28,8 @@ export interface FicheMeta {
   sources?: readonly string[];
   /** Fiche de santé : rappel qu'elle n'a pas été relue par un soignant. */
   medical?: boolean;
+  /** Mots-clés supplémentaires pour la recherche. */
+  keywords?: readonly string[];
 }
 
 /** Mois de rédaction ou de dernière révision du guide embarqué. */
@@ -55,6 +58,9 @@ export function fiche(
       ? [`${META_PREFIX}Références : ${meta.sources.join(' ; ')}`]
       : []),
     `${META_PREFIX}Mise à jour : ${GUIDE_UPDATED}`,
+    ...(meta.keywords && meta.keywords.length > 0
+      ? [`${META_PREFIX}Mots-clés : ${meta.keywords.join(', ')}`]
+      : []),
     ...(meta.medical
       ? [
           `${META_PREFIX}Relecture : non relue par un professionnel de santé. Ne remplace pas une formation aux premiers secours (PSC1).`,
@@ -107,5 +113,6 @@ export const REF = {
   anses: 'Agence nationale de sécurité sanitaire (ANSES), fiches botulisme',
   cyber: 'Cybermalveillance.gouv.fr (bonnes pratiques de sauvegarde)',
   sphere: 'Manuel Sphère (2018), normes minimales en approvisionnement en eau',
+  nij: 'National Institute of Justice (NIJ) : normes 0101.06, 0101.07 et 0123.00, liste des produits conformes',
   usda: 'Département de l’Agriculture des États-Unis (USDA, sécurité des aliments en cas de coupure)',
 } as const;
