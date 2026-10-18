@@ -458,7 +458,7 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
       detail: [...new Set(expired.map(a => a.itemName))].join(', '),
       action: 'Voir',
       accessibilityLabel: `${n} lot${s} périmé${s}. Ouvrir le stock`,
-      onPress: () => navigation.goTo('stock'),
+      onPress: () => navigation.goTo('stock', { category: 'watch' }),
     });
   }
   if (data.incompleteFood > 0) {

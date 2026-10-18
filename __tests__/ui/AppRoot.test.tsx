@@ -1055,6 +1055,7 @@ describe('écrans', () => {
     );
     await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
     expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Plus d’actions'));
     await fireEvent.press(screen.getByLabelText('Historique des mouvements'));
     expect(await screen.findByText('Aujourd’hui')).toBeTruthy();
     expect(
@@ -1333,6 +1334,24 @@ describe('écrans', () => {
     expect(screen.queryByText('Lait')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Voir les 4 péremptions'));
     expect(await screen.findByText('Lait')).toBeTruthy();
+
+    // « À surveiller » dans les stocks : périmé d’abord, puis sous 30 jours.
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    await fireEvent.press(
+      await screen.findByLabelText('1 lot périmé. Ouvrir le stock'),
+    );
+    const watched = await screen.findAllByLabelText(
+      /^(Bouteilles|Compote|Pâtes|Lait), /,
+    );
+    expect(watched.map(w => w.props.accessibilityLabel.split(',')[0])).toEqual([
+      'Bouteilles',
+      'Compote',
+      'Pâtes',
+    ]);
+    expect(
+      screen.getByRole('button', { name: 'À surveiller · 3' }).props
+        .accessibilityState,
+    ).toEqual({ selected: true });
   });
 
   it('retire bidon par bidon l’eau saisie avant les fiches', async () => {

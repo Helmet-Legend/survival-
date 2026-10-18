@@ -36,7 +36,7 @@ export interface StockFormTarget {
 
 /** Catégorie et message à afficher en arrivant sur les Stocks. */
 export interface StockFocus {
-  category?: ItemCategory | 'documents' | 'bags';
+  category?: ItemCategory | 'watch' | 'documents' | 'bags';
   message?: string;
   /** Sac d'évacuation à rouvrir (retour de fiche). */
   bagId?: string;

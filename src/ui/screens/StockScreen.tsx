@@ -1,6 +1,7 @@
 /**
  * Stocks : catégories, recherche, état de chaque article, lots,
- * consommation, réglages et ajout.
+ * consommation, réglages et ajout. Le filtre « À surveiller » réunit les
+ * lots périmés, bientôt périmés et sous le stock minimal.
  */
 import {
   Backpack,
@@ -9,6 +10,7 @@ import {
   FolderLock,
   History,
   Minus,
+  MoreHorizontal,
   PackageOpen,
   Pencil,
   Plus,
@@ -106,6 +108,13 @@ function optionalNumber(value: string): number | null {
 }
 
 /** État le plus urgent d'un article, pour la bande de couleur et la pastille. */
+/** Gravité d'un état, pour trier « À surveiller » : le plus urgent d'abord. */
+const STATE_RANK: Record<string, number> = {
+  'Lot périmé': 0,
+  'Bientôt périmé': 1,
+  'Sous le minimum': 2,
+};
+
 function itemState(
   item: ItemSummary,
   today: string,
@@ -185,20 +194,28 @@ function articles(count: number): string {
   return `${count} article${count > 1 ? 's' : ''}`;
 }
 
+type StockFilter = ItemCategory | 'all' | 'watch' | 'documents' | 'bags';
+
+/** Articles du stock général à surveiller (périmés, bientôt, sous le minimum). */
+function watchCount(items: readonly ItemSummary[]): number {
+  const today = localToday();
+  return items.filter(i => itemState(i, today) !== null).length;
+}
+
 export function StockScreen() {
   const { repo, armory, documents, bags } = useSession();
   const navigation = useNavigation();
   const focus = navigation.stockFocus;
-  const [filter, setFilter] = useState<
-    ItemCategory | 'all' | 'documents' | 'bags'
-  >(focus?.category ?? 'all');
+  const [filter, setFilter] = useState<StockFilter>(focus?.category ?? 'all');
   // Sac d'évacuation ouvert (dossier « Sacs »), sinon null.
   const [bagId, setBagId] = useState<string | null>(focus?.bagId ?? null);
   const [choosing, setChoosing] = useState(false);
   const isDocs = filter === 'documents';
   const isBags = filter === 'bags';
   const inBag = isBags && bagId !== null;
-  const showFilter = (next: ItemCategory | 'all' | 'documents' | 'bags') => {
+  const isWatch = filter === 'watch';
+  const [menuOpen, setMenuOpen] = useState(false);
+  const showFilter = (next: StockFilter) => {
     setFilter(next);
     setBagId(null);
   };
@@ -220,14 +237,27 @@ export function StockScreen() {
   const { data, error, reload } = useLoader(async () => {
     // Le contenu des sacs d'évacuation reste dans son dossier.
     const all = (await repo.listItems({ bag: 'none' })) as ItemSummary[];
+    const today = localToday();
     const items = isDocs
       ? []
+      : isWatch
+      ? ((await repo.listItems({ query, bag: 'none' })) as ItemSummary[])
+          .map(item => ({ item, state: itemState(item, today) }))
+          .filter(x => x.state !== null)
+          .sort(
+            (a, b) =>
+              STATE_RANK[a.state!.label] - STATE_RANK[b.state!.label] ||
+              (a.item.nextExpiration ?? '9999').localeCompare(
+                b.item.nextExpiration ?? '9999',
+              ),
+          )
+          .map(x => x.item)
       : isBags
       ? bagId === null
         ? []
         : ((await repo.listItems({ bag: bagId, query })) as ItemSummary[])
       : ((await repo.listItems({
-          category: filter === 'all' ? undefined : filter,
+          category: filter === 'all' || isWatch ? undefined : filter,
           query,
           bag: 'none',
         })) as ItemSummary[]);
@@ -301,6 +331,15 @@ export function StockScreen() {
           label="Tous"
           selected={filter === 'all'}
           onPress={() => showFilter('all')}
+        />
+        <Chip
+          label={
+            data && watchCount(data.all) > 0
+              ? `À surveiller · ${watchCount(data.all)}`
+              : 'À surveiller'
+          }
+          selected={isWatch}
+          onPress={() => showFilter('watch')}
         />
         {STOCK_ORDER.map(c => (
           <Chip
@@ -390,9 +429,12 @@ export function StockScreen() {
               compact
               variant="primary"
               icon={Plus}
-              label="Ajouter"
+              label={
+                filter === 'all' || isWatch ? 'Ajouter un article' : 'Ajouter'
+              }
+              style={styles.grow}
               accessibilityLabel={
-                filter === 'all'
+                filter === 'all' || isWatch
                   ? '+ Ajouter un article'
                   : filter === 'bags'
                   ? '+ Ajouter dans le sac'
@@ -400,7 +442,7 @@ export function StockScreen() {
               }
               onPress={() => {
                 setFeedback(null);
-                if (filter === 'all' || filter === 'bags') {
+                if (filter === 'all' || filter === 'bags' || isWatch) {
                   setChoosing(true);
                 } else {
                   addInto(filter);
@@ -416,23 +458,38 @@ export function StockScreen() {
                 onPress={() => navigation.open('scan')}
               />
             )}
-            {inBag ? null : (
-              <IconButton
-                icon={History}
-                label="Historique des mouvements"
-                onPress={() => navigation.open('history')}
-              />
-            )}
-            <Button
-              compact
-              variant="danger"
-              icon={Trash2}
-              label="Jeter les périmés"
-              style={styles.grow}
-              disabled={!data?.hasExpired}
-              onPress={() => setConfirmDiscard(true)}
+            <IconButton
+              icon={MoreHorizontal}
+              label="Plus d’actions"
+              color={menuOpen ? colors.primary : colors.text}
+              onPress={() => setMenuOpen(!menuOpen)}
             />
           </View>
+          {menuOpen ? (
+            <View style={styles.menu}>
+              {inBag ? null : (
+                <Button
+                  variant="ghost"
+                  icon={History}
+                  label="Historique des mouvements"
+                  onPress={() => {
+                    setMenuOpen(false);
+                    navigation.open('history');
+                  }}
+                />
+              )}
+              <Button
+                variant="danger"
+                icon={Trash2}
+                label="Jeter les périmés"
+                disabled={!data?.hasExpired}
+                onPress={() => {
+                  setMenuOpen(false);
+                  setConfirmDiscard(true);
+                }}
+              />
+            </View>
+          ) : null}
 
           {confirmDiscard ? (
             <Panel accent={colors.danger} style={styles.dialog}>
@@ -612,6 +669,8 @@ export function StockScreen() {
                   ? 'Aucun article ne correspond.'
                   : inBag
                   ? 'Ce sac est vide.'
+                  : isWatch
+                  ? 'Rien à surveiller : aucun lot périmé, bientôt périmé ou sous le minimum.'
                   : 'Aucun article dans cette catégorie.'
               }
               message={
@@ -1263,6 +1322,14 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: 'row', gap: space.s },
   row: { flexDirection: 'row', gap: space.s },
+  menu: {
+    gap: space.xs,
+    padding: space.s,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.borderActive,
+    backgroundColor: colors.overlay,
+  },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   inline: { flexDirection: 'row', alignItems: 'flex-end', gap: space.s },
   lotDate: { textAlign: 'right' },
