@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
+  ListChecks,
   Siren,
   TriangleAlert,
   Users,
@@ -279,6 +280,14 @@ export function HomeScreen() {
           ))
         )}
       </Panel>
+
+      <Button
+        icon={ListChecks}
+        chevron
+        label="PRÉPARATION · kit 72 h, maison et sacs"
+        accessibilityLabel="Ouvrir la préparation par paliers"
+        onPress={() => navigation.open('preparation')}
+      />
 
       <Button
         variant="primary"

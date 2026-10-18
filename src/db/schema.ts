@@ -532,6 +532,24 @@ const migration10: Migration = {
   ],
 };
 
+/**
+ * Préparation par paliers : éléments du kit cochés à la main parce que le
+ * stock ne les suit pas (argent liquide, double des clés…), pour la maison
+ * (`home`) ou pour un sac (son identifiant).
+ */
+const migration11: Migration = {
+  version: 11,
+  name: 'préparation par paliers',
+  statements: [
+    `CREATE TABLE preparation_marks (
+       scope      TEXT NOT NULL CHECK (length(scope) BETWEEN 1 AND 64),
+       item       TEXT NOT NULL CHECK (length(item) BETWEEN 1 AND 40),
+       checked_at TEXT NOT NULL DEFAULT ${NOW},
+       PRIMARY KEY (scope, item)
+     ) STRICT`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -543,6 +561,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration8,
   migration9,
   migration10,
+  migration11,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -33,6 +33,7 @@ describe('migrations', () => {
         'inventory_items',
         'inventory_lots',
         'poi_locations',
+        'preparation_marks',
         'settings',
         'survival_guides',
         'survival_guides_fts',

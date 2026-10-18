@@ -385,14 +385,19 @@ export async function saveHousehold(
  * calcul d'autonomie. Le contenu des sacs d'évacuation est réservé au
  * départ : il n'entre pas dans l'autonomie du foyer.
  */
-export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
+export async function loadConsumableLots(
+  db: SqlDatabase,
+  /** Sac dont on veut le contenu ; absent : le stock général. */
+  bagId?: string,
+): Promise<StockLot[]> {
   const { rows } = await db.execute(
     `SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
             l.quantity, i.calories_per_unit, i.attributes, l.expiration_date
        FROM inventory_lots AS l
        JOIN inventory_items AS i ON i.id = l.item_id
       WHERE l.quantity > 0 AND i.category IN ('water', 'food')
-        AND i.bag_id IS NULL`,
+        AND ${bagId === undefined ? 'i.bag_id IS NULL' : 'i.bag_id = ?'}`,
+    bagId === undefined ? [] : [bagId],
   );
   return rows.map(r => ({
     lotId: String(r.lot_id),
