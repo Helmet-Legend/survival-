@@ -860,11 +860,9 @@ describe('écrans', () => {
     ).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
-    const firstAid = BUNDLED_GUIDES.filter(
-      g => g.category === 'Médical',
-    ).length;
+    const firstAid = BUNDLED_GUIDES.filter(g => g.category === 'Santé').length;
     await fireEvent.press(
-      await screen.findByLabelText(`Médical, ${firstAid} fiches`),
+      await screen.findByLabelText(`Santé, ${firstAid} fiches`),
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
@@ -1172,7 +1170,7 @@ describe('écrans', () => {
   it('range les fiches par dossier et met en forme le morse', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
-    await screen.findByLabelText(/^Survie, \d+ fiches$/);
+    await screen.findByLabelText(/^Gestion de crise, \d+ fiches$/);
     const folders = screen
       .getAllByRole('button')
       .map(b => String(b.props.accessibilityLabel ?? ''))
