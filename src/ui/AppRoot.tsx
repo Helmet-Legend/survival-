@@ -69,6 +69,13 @@ import {
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
 import { PreparationScreen } from './screens/PreparationScreen';
+import {
+  loadRedLight,
+  RED_LIGHT_SUPPORTED,
+  RedLightContext,
+  saveRedLight,
+  type RedLight,
+} from './redLight';
 import { GuidesScreen } from './screens/GuidesScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LockScreen } from './screens/LockScreen';
@@ -124,6 +131,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [formTarget, setFormTarget] = useState<StockFormTarget | null>(null);
   const [stockFocus, setStockFocus] = useState<StockFocus | undefined>();
   const [covered, setCovered] = useState(false);
+  const [redLightOn, setRedLightOn] = useState(false);
   const sessionRef = useRef<Session | null>(null);
 
   useEffect(() => {
@@ -162,6 +170,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       backupCrypto,
     };
     sessionRef.current = session;
+    loadRedLight(db)
+      .then(setRedLightOn)
+      .catch(() => undefined);
     // Les rappels suivent le coffre ouvert (stock modifié ailleurs, date…).
     syncReminders(db, reminders).catch(() => undefined);
     setTab('home');
@@ -180,6 +191,20 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         .finally(() => session.db.close());
     }
   }, []);
+
+  const redLight = useMemo<RedLight>(
+    () => ({
+      on: redLightOn,
+      set: async on => {
+        const session = sessionRef.current;
+        if (session !== null) {
+          await saveRedLight(session.db, on);
+        }
+        setRedLightOn(on);
+      },
+    }),
+    [redLightOn],
+  );
 
   const navigation = useMemo<Navigation>(
     () => ({
@@ -250,60 +275,62 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   } else if (phase.kind === 'open') {
     body = (
       <SessionContext.Provider value={phase.session}>
-        <NavigationContext.Provider value={navigation}>
-          {overlay === 'stockForm' ? null : (
-            <View style={styles.bar}>
-              <IconButton
-                icon={Lock}
-                label="Verrouiller"
-                onPress={() => lock()}
-              />
-              <Brand size={26} tagline />
-              <IconButton
-                icon={Settings}
-                label="Réglages"
-                color={overlay === 'settings' ? colors.primary : colors.text}
-                onPress={() =>
-                  setOverlay(overlay === 'settings' ? null : 'settings')
-                }
-              />
-            </View>
-          )}
-          <KeyboardAvoidingView
-            style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            {overlay === 'settings' ? (
-              <SettingsScreen onLock={() => lock()} />
-            ) : overlay === 'plan' ? (
-              <PlanScreen />
-            ) : overlay === 'emergency' ? (
-              <EmergencyScreen />
-            ) : overlay === 'familyPlan' ? (
-              <FamilyPlanScreen />
-            ) : overlay === 'preparation' ? (
-              <PreparationScreen />
-            ) : overlay === 'stockForm' && formTarget !== null ? (
-              <StockFormScreen target={formTarget} />
-            ) : (
-              <>
-                {tab === 'home' ? <HomeScreen /> : null}
-                {tab === 'stock' ? <StockScreen /> : null}
-                {tab === 'map' ? <MapScreen /> : null}
-                {tab === 'guides' ? <GuidesScreen /> : null}
-              </>
+        <RedLightContext.Provider value={redLight}>
+          <NavigationContext.Provider value={navigation}>
+            {overlay === 'stockForm' ? null : (
+              <View style={styles.bar}>
+                <IconButton
+                  icon={Lock}
+                  label="Verrouiller"
+                  onPress={() => lock()}
+                />
+                <Brand size={26} tagline />
+                <IconButton
+                  icon={Settings}
+                  label="Réglages"
+                  color={overlay === 'settings' ? colors.primary : colors.text}
+                  onPress={() =>
+                    setOverlay(overlay === 'settings' ? null : 'settings')
+                  }
+                />
+              </View>
             )}
-          </KeyboardAvoidingView>
-          {overlay === 'stockForm' ? (
-            <View style={{ height: insets.bottom }} />
-          ) : (
-            <BottomNav
-              current={overlay === null ? tab : null}
-              onSelect={navigation.goTo}
-              bottomInset={insets.bottom}
-            />
-          )}
-        </NavigationContext.Provider>
+            <KeyboardAvoidingView
+              style={styles.flex}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              {overlay === 'settings' ? (
+                <SettingsScreen onLock={() => lock()} />
+              ) : overlay === 'plan' ? (
+                <PlanScreen />
+              ) : overlay === 'emergency' ? (
+                <EmergencyScreen />
+              ) : overlay === 'familyPlan' ? (
+                <FamilyPlanScreen />
+              ) : overlay === 'preparation' ? (
+                <PreparationScreen />
+              ) : overlay === 'stockForm' && formTarget !== null ? (
+                <StockFormScreen target={formTarget} />
+              ) : (
+                <>
+                  {tab === 'home' ? <HomeScreen /> : null}
+                  {tab === 'stock' ? <StockScreen /> : null}
+                  {tab === 'map' ? <MapScreen /> : null}
+                  {tab === 'guides' ? <GuidesScreen /> : null}
+                </>
+              )}
+            </KeyboardAvoidingView>
+            {overlay === 'stockForm' ? (
+              <View style={{ height: insets.bottom }} />
+            ) : (
+              <BottomNav
+                current={overlay === null ? tab : null}
+                onSelect={navigation.goTo}
+                bottomInset={insets.bottom}
+              />
+            )}
+          </NavigationContext.Provider>
+        </RedLightContext.Provider>
       </SessionContext.Provider>
     );
   }
@@ -327,6 +354,16 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         <UpdateBanner updater={updater} />
       ) : null}
       {body}
+      {redLightOn && RED_LIGHT_SUPPORTED ? (
+        <>
+          <View pointerEvents="none" style={styles.grayLayer} />
+          <View
+            pointerEvents="none"
+            style={styles.redLight}
+            testID="red-light"
+          />
+        </>
+      ) : null}
       {covered && phase.kind === 'open' ? (
         <View style={styles.cover} testID="privacy-cover">
           <AppIcon size={140} />
@@ -391,6 +428,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Deux calques : le gris retire les couleurs (garde la luminosité), puis
+  // le rouge ne garde que la composante rouge. Le blanc devient rouge, le
+  // noir reste noir, et un texte cyan reste lisible.
+  grayLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: '#808080',
+    mixBlendMode: 'saturation',
+  },
+  redLight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: '#FF0000',
+    mixBlendMode: 'multiply',
   },
   fatal: { flex: 1, justifyContent: 'center', padding: space.xl, gap: space.l },
 });

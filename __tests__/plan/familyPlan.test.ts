@@ -5,6 +5,7 @@ import {
   loadFamilyPlan,
   PlanError,
   planText,
+  PMR446_CHANNELS,
   saveFamilyPlan,
 } from '../../src/plan/familyPlan';
 import { NodeSqliteDb } from '../db/sqlite';
@@ -86,5 +87,37 @@ describe('plan familial', () => {
         'Urgences : 112 · SAMU 15 · Pompiers 18 · Police 17 · SMS 114',
       ].join('\n\n'),
     );
+  });
+
+  it('garde le plan PACE et liste les 16 canaux PMR446', async () => {
+    const db = await freshDb();
+    await saveFamilyPlan(db, {
+      ...emptyPlan(),
+      comms: {
+        ...emptyPlan().comms,
+        primary: ' Téléphone ',
+        contingency: 'Talkie PMR446',
+        radio: 'Canal 8, CTCSS 12',
+      },
+    });
+    const plan = await loadFamilyPlan(db);
+    expect(plan.comms.primary).toBe('Téléphone');
+    expect(isPlanEmpty(plan)).toBe(false);
+    expect(planText(plan)).toContain(
+      'COMMUNICATION\n1. Principal : Téléphone\n3. Secours : Talkie PMR446\nRadio : Canal 8, CTCSS 12',
+    );
+    expect(PMR446_CHANNELS).toHaveLength(16);
+    expect(PMR446_CHANNELS[0]).toEqual({ channel: 1, mhz: '446,00625' });
+    expect(PMR446_CHANNELS[15]).toEqual({ channel: 16, mhz: '446,19375' });
+  });
+
+  it('relit un ancien plan sans communication', async () => {
+    const db = await freshDb();
+    await db.execute('INSERT INTO family_plan (id, data) VALUES (1, ?)', [
+      JSON.stringify({ routes: 'Par la D12' }),
+    ]);
+    const plan = await loadFamilyPlan(db);
+    expect(plan.routes).toBe('Par la D12');
+    expect(plan.comms.primary).toBe('');
   });
 });

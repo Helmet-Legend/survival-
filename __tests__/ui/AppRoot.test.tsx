@@ -601,6 +601,25 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
+  it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
+    await openApp();
+    expect(screen.queryByTestId('red-light')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent(
+      await screen.findByLabelText('Mode lumière rouge'),
+      'valueChange',
+      true,
+    );
+    expect(await screen.findByTestId('red-light')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    expect(screen.getByTestId('red-light')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(await screen.findByText('Quitter la lumière rouge'));
+    expect(screen.queryByTestId('red-light')).toBeNull();
+  });
+
   it('retire une unité en un geste et règle l’eau à 2 L', async () => {
     await openApp();
     expect(

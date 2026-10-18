@@ -2,7 +2,7 @@
  * Réglages : composition du foyer, objectif d'autonomie, rappels de
  * péremption, confidentialité et verrouillage.
  */
-import { Bell, Lock, ShieldCheck, Users } from 'lucide-react-native';
+import { Bell, Lock, Moon, ShieldCheck, Users } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
@@ -29,6 +29,7 @@ import {
 import { formatDate, formatNumber, nextTarget } from '../format';
 import { localToday } from '../../lib/dates';
 import { useNavigation } from '../navigation';
+import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -38,6 +39,7 @@ const MAX_MEMBERS = 12;
 
 export function SettingsScreen(props: { onLock: () => void }) {
   const { db, screenCapture, reminders } = useSession();
+  const redLight = useRedLight();
   const navigation = useNavigation();
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const { data, error, reload } = useLoader(async () => {
@@ -203,6 +205,31 @@ export function SettingsScreen(props: { onLock: () => void }) {
           {reminderNotice ? (
             <Notice tone="error" message={reminderNotice} />
           ) : null}
+        </Panel>
+      ) : null}
+
+      {RED_LIGHT_SUPPORTED ? (
+        <Panel
+          title="Affichage de nuit"
+          right={<Moon color={colors.danger} size={20} />}
+        >
+          <View style={styles.settingRow}>
+            <Text style={[text.body, styles.grow]}>Mode lumière rouge</Text>
+            <Switch
+              accessibilityLabel="Mode lumière rouge"
+              value={redLight.on}
+              onValueChange={value => {
+                void redLight.set(value);
+              }}
+              trackColor={{ false: colors.border, true: colors.danger }}
+              thumbColor={colors.text}
+            />
+          </View>
+          <Text style={text.subtle}>
+            Tout l’écran passe en rouge : l’œil garde sa vision de nuit et
+            l’écran se voit moins de loin. Baissez aussi la luminosité du
+            téléphone.
+          </Text>
         </Panel>
       ) : null}
 

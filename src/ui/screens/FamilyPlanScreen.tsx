@@ -22,6 +22,8 @@ import {
   loadFamilyPlan,
   PlanError,
   planText,
+  PMR446_CHANNELS,
+  type CommsPlan,
   saveFamilyPlan,
   type FamilyPlan,
   type PlanContact,
@@ -37,6 +39,15 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+
+const COMMS_FIELDS: ReadonlyArray<[keyof CommsPlan, string, string]> = [
+  ['primary', '1. Principal', 'Ex : téléphone, SMS'],
+  ['alternate', '2. Repli', 'Ex : messagerie Signal, e-mail'],
+  ['contingency', '3. Secours', 'Ex : talkie-walkie PMR446'],
+  ['emergency', '4. Urgence', 'Ex : mot laissé au point de regroupement'],
+  ['radio', 'Canal et code radio', 'Ex : PMR446 canal 8, CTCSS 12'],
+  ['schedule', 'Vacations (heures d’écoute)', 'Ex : 5 min à chaque heure pile'],
+];
 
 export function FamilyPlanScreen() {
   const { db } = useSession();
@@ -70,6 +81,7 @@ function PlanForm(props: { initial: FamilyPlan; title: React.ReactNode }) {
     tone: 'ok' | 'error';
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showChannels, setShowChannels] = useState(false);
 
   const set = <K extends keyof FamilyPlan>(key: K, value: FamilyPlan[K]) =>
     setPlan(p => ({ ...p, [key]: value }));
@@ -298,6 +310,48 @@ function PlanForm(props: { initial: FamilyPlan; title: React.ReactNode }) {
         />
       </Panel>
 
+      <Panel title="Communication (PACE)">
+        <Text style={text.subtle}>
+          Du moyen habituel au dernier recours : si l’un tombe, chacun sait
+          lequel essayer ensuite.
+        </Text>
+        {COMMS_FIELDS.map(([key, label, placeholder]) => (
+          <Field
+            key={key}
+            label={label}
+            value={plan.comms[key]}
+            onChangeText={v => set('comms', { ...plan.comms, [key]: v })}
+            placeholder={placeholder}
+            maxLength={120}
+            error={errors[`comms.${key}`]}
+          />
+        ))}
+        <Button
+          variant="ghost"
+          compact
+          label={
+            showChannels
+              ? 'Masquer les canaux PMR446'
+              : 'Voir les canaux PMR446'
+          }
+          onPress={() => setShowChannels(v => !v)}
+        />
+        {showChannels ? (
+          <View style={styles.channels}>
+            {PMR446_CHANNELS.map(({ channel, mhz }) => (
+              <Text key={channel} style={[text.mono, styles.channel]}>
+                {String(channel).padStart(2, ' ')} · {mhz} MHz
+              </Text>
+            ))}
+            <Text style={text.subtle}>
+              Talkies-walkies sans licence en Europe. Convenez d’un canal et
+              d’un code CTCSS à l’avance : les talkies de marques différentes ne
+              numérotent pas toujours les codes de la même façon.
+            </Text>
+          </View>
+        ) : null}
+      </Panel>
+
       <Panel title="Organisation">
         <Field
           label="Qui fait quoi"
@@ -379,6 +433,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  channels: { gap: 2 },
+  channel: { color: colors.text },
   grow: { flex: 1, minWidth: 0 },
   warning: { ...text.subtle, color: colors.warning },
 });

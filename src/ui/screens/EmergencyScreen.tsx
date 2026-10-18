@@ -8,6 +8,7 @@ import {
   Crosshair,
   HeartPulse,
   MessageSquareText,
+  Moon,
   Phone,
   Users,
 } from 'lucide-react-native';
@@ -31,6 +32,7 @@ import { formatLatLon, formatMgrs, latLonToMgrs } from '../../geo/geoConverter';
 import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
 import { formatNumber } from '../format';
 import { useNavigation } from '../navigation';
+import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -69,6 +71,7 @@ export function EmergencyScreen() {
   const { db, location } = useSession();
   const { data: plan } = useLoader(() => loadFamilyPlan(db));
   const navigation = useNavigation();
+  const redLight = useRedLight();
   const [position, setPosition] = useState<Position | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +123,18 @@ export function EmergencyScreen() {
         dangereux). L’appel s’ouvre dans le téléphone : rien n’est composé sans
         vous.
       </Text>
+      {RED_LIGHT_SUPPORTED ? (
+        <Button
+          variant="ghost"
+          icon={Moon}
+          label={
+            redLight.on ? 'Quitter la lumière rouge' : 'Passer en lumière rouge'
+          }
+          onPress={() => {
+            void redLight.set(!redLight.on);
+          }}
+        />
+      ) : null}
 
       <Panel
         title="Ma position"
@@ -249,6 +264,7 @@ function FamilyPlanPanel(props: {
           ) : null}
         </View>
       ) : null}
+      {plan ? <CommsSummary plan={plan} /> : null}
       {plan?.contacts
         .filter(c => c.phone !== '')
         .map((c, i) => (
@@ -295,6 +311,31 @@ function FamilyPlanPanel(props: {
         onPress={props.onEdit}
       />
     </Panel>
+  );
+}
+
+/** Plan PACE : l'ordre des moyens à essayer, et le canal radio. */
+function CommsSummary({ plan }: { plan: FamilyPlan }) {
+  const c = plan.comms;
+  const steps = [c.primary, c.alternate, c.contingency, c.emergency]
+    .map((step, i) => (step ? `${i + 1}. ${step}` : ''))
+    .filter(Boolean);
+  if (steps.length === 0 && !c.radio && !c.schedule) {
+    return null;
+  }
+  return (
+    <View>
+      <Text style={text.label}>Communication</Text>
+      {steps.map(step => (
+        <Text key={step} style={text.body}>
+          {step}
+        </Text>
+      ))}
+      {c.radio ? <Text style={text.mono}>Radio : {c.radio}</Text> : null}
+      {c.schedule ? (
+        <Text style={text.subtle}>Vacations : {c.schedule}</Text>
+      ) : null}
+    </View>
   );
 }
 
