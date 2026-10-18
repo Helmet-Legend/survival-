@@ -118,7 +118,8 @@ const REAL_STOCK: Array<[ItemInput, Lot[]]> = [
   [
     {
       name: 'Piles AA',
-      category: 'energy',
+      category: 'power',
+      subtype: 'battery',
       unit: 'unit',
       location: 'Tiroir entrée',
     },
@@ -127,7 +128,8 @@ const REAL_STOCK: Array<[ItemInput, Lot[]]> = [
   [
     {
       name: 'Batterie externe 20 000 mAh',
-      category: 'energy',
+      category: 'power',
+      subtype: 'powerbank',
       unit: 'unit',
       location: 'Sac d’évacuation',
     },

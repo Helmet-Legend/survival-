@@ -529,3 +529,91 @@ describe('migration 7 (fiches détaillées)', () => {
     expect((await db.execute('SELECT id FROM photos')).rows).toEqual([]);
   });
 });
+
+describe('migration 8 (catégorie énergie)', () => {
+  it('déplace l’énergie du matériel sans perdre lots ni photos', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 7));
+    const item = (id: string, name: string, subtype: string) =>
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, subtype, attributes)
+         VALUES (?, ?, 'energy', 'unit', ?, '{"condition":"good"}')`,
+        [id, name, subtype],
+      );
+    await item('a', 'Piles AA', 'energy');
+    await item('b', 'Batterie externe 20 000 mAh', 'energy');
+    await item('c', 'Tente', 'shelter');
+    await item('d', 'Cartouche', 'gas');
+    await item('e', 'Réserve', 'energy');
+    await db.execute(
+      `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at, expiration_date)
+       VALUES ('l1', 'a', 4, '2026-01-01', '2030-01-01'),
+              ('l2', 'c', 1, '2026-01-01', NULL)`,
+    );
+    await db.execute(
+      `INSERT INTO photos (id, owner_type, owner_id, data_base64) VALUES ('p1', 'item', 'a', 'AAAA')`,
+    );
+
+    expect(await migrate(db)).toEqual({ from: 7, to: SCHEMA_VERSION });
+
+    const { rows } = await db.execute(
+      'SELECT id, category, subtype, attributes FROM inventory_items ORDER BY id',
+    );
+    expect(rows).toEqual([
+      {
+        id: 'a',
+        category: 'power',
+        subtype: 'battery',
+        attributes: '{"condition":"good"}',
+      },
+      {
+        id: 'b',
+        category: 'power',
+        subtype: 'powerbank',
+        attributes: '{"condition":"good"}',
+      },
+      {
+        id: 'c',
+        category: 'energy',
+        subtype: 'shelter',
+        attributes: '{"condition":"good"}',
+      },
+      {
+        id: 'd',
+        category: 'power',
+        subtype: 'gas',
+        attributes: '{"condition":"good"}',
+      },
+      {
+        id: 'e',
+        category: 'power',
+        subtype: 'other',
+        attributes: '{"condition":"good"}',
+      },
+    ]);
+    expect(
+      (
+        await db.execute(
+          'SELECT id, item_id, quantity FROM inventory_lots ORDER BY id',
+        )
+      ).rows,
+    ).toEqual([
+      { id: 'l1', item_id: 'a', quantity: 4 },
+      { id: 'l2', item_id: 'c', quantity: 1 },
+    ]);
+
+    // Contraintes, cascade et nettoyage des photos toujours en place.
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit) VALUES ('x', 'X', 'nope', 'unit')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await db.execute("DELETE FROM inventory_items WHERE id = 'a'");
+    expect((await db.execute('SELECT id FROM inventory_lots')).rows).toEqual([
+      { id: 'l2' },
+    ]);
+    expect((await db.execute('SELECT id FROM photos')).rows).toEqual([]);
+    expect((await db.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
+  });
+});

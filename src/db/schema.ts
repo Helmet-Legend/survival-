@@ -382,6 +382,115 @@ const migration7: Migration = {
   ],
 };
 
+/**
+ * Catégorie « Énergie » (`power`) distincte du matériel (`energy`, affiché
+ * « Matériel & équipements ») : piles, batteries, carburant, gaz, bougies…
+ *
+ * SQLite ne modifie pas un CHECK : `inventory_items` est reconstruite à
+ * l'identique, catégorie `power` en plus. Les lots sont mis de côté avant :
+ * supprimer les articles avec les clés étrangères actives effacerait leurs
+ * lots en cascade.
+ *
+ * Les articles de matériel de type énergie (y compris les anciens types
+ * piles, carburant, gaz) passent dans la nouvelle catégorie ; leur type est
+ * déduit du nom quand il est clair, « Autre » sinon.
+ */
+const migration8: Migration = {
+  version: 8,
+  name: 'catégorie énergie',
+  statements: [
+    'CREATE TABLE inventory_lots_backup AS SELECT * FROM inventory_lots',
+    'DROP TABLE inventory_lots',
+    'DROP TRIGGER trg_items_photos_ad',
+
+    `CREATE TABLE inventory_items_new (
+       id                TEXT PRIMARY KEY NOT NULL,
+       name              TEXT NOT NULL CHECK (length(trim(name)) > 0),
+       category          TEXT NOT NULL
+                         CHECK (category IN ('water', 'food', 'medical', 'energy', 'tool', 'weapon', 'power')),
+       unit              TEXT NOT NULL CHECK (unit IN ('L', 'mL', 'kg', 'g', 'unit')),
+       calories_per_unit INTEGER CHECK (calories_per_unit IS NULL OR calories_per_unit >= 0),
+       location          TEXT,
+       is_critical       INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean(
+         'is_critical',
+       )}),
+       notes             TEXT,
+       created_at        TEXT NOT NULL DEFAULT ${NOW},
+       updated_at        TEXT NOT NULL DEFAULT ${NOW},
+       min_stock         REAL CHECK (min_stock IS NULL OR min_stock >= 0),
+       alert_days        INTEGER CHECK (alert_days IS NULL OR alert_days BETWEEN 1 AND 3650),
+       -- Calibre des munitions (ex. « 12/70 »), réservé à la catégorie weapon.
+       caliber           TEXT CHECK (caliber IS NULL
+                                     OR (category = 'weapon' AND length(trim(caliber)) > 0)),
+       package_size      REAL CHECK (package_size IS NULL OR package_size > 0),
+       subtype           TEXT CHECK (subtype IS NULL OR (length(subtype) BETWEEN 1 AND 30)),
+       attributes        TEXT CHECK (attributes IS NULL OR json_valid(attributes)),
+       CHECK (category <> 'water' OR unit IN ('L', 'mL'))
+     ) STRICT`,
+    `INSERT INTO inventory_items_new (id, name, category, unit, calories_per_unit,
+       location, is_critical, notes, created_at, updated_at, min_stock, alert_days,
+       caliber, package_size, subtype, attributes)
+     SELECT id, name, category, unit, calories_per_unit, location, is_critical,
+       notes, created_at, updated_at, min_stock, alert_days, caliber,
+       package_size, subtype, attributes
+     FROM inventory_items`,
+    'DROP TABLE inventory_items',
+    'ALTER TABLE inventory_items_new RENAME TO inventory_items',
+    'CREATE INDEX idx_inventory_items_category ON inventory_items (category)',
+    touchTrigger('inventory_items'),
+    `CREATE TRIGGER trg_items_photos_ad AFTER DELETE ON inventory_items BEGIN
+       DELETE FROM photos WHERE owner_type = 'item' AND owner_id = OLD.id;
+     END`,
+
+    `CREATE TABLE inventory_lots (
+       id              TEXT PRIMARY KEY NOT NULL,
+       item_id         TEXT NOT NULL REFERENCES inventory_items (id) ON DELETE CASCADE,
+       quantity        REAL NOT NULL CHECK (quantity >= 0),
+       acquired_at     TEXT NOT NULL CHECK (${isIsoDate('acquired_at')}),
+       expiration_date TEXT CHECK (expiration_date IS NULL OR ${isIsoDate(
+         'expiration_date',
+       )}),
+       created_at      TEXT NOT NULL DEFAULT ${NOW},
+       updated_at      TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at,
+       expiration_date, created_at, updated_at)
+     SELECT id, item_id, quantity, acquired_at, expiration_date, created_at,
+       updated_at
+     FROM inventory_lots_backup`,
+    'DROP TABLE inventory_lots_backup',
+    `CREATE INDEX idx_inventory_lots_consumption
+       ON inventory_lots (item_id, expiration_date, acquired_at)`,
+    `CREATE INDEX idx_inventory_lots_expiration
+       ON inventory_lots (expiration_date)
+       WHERE expiration_date IS NOT NULL AND quantity > 0`,
+    touchTrigger('inventory_lots'),
+
+    // Le type « Énergie » du matériel devient la catégorie Énergie.
+    `UPDATE inventory_items
+     SET category = 'power',
+         subtype = CASE
+           WHEN subtype IN ('fuel', 'gas') THEN subtype
+           WHEN name LIKE '%powerbank%' OR name LIKE '%batterie externe%'
+             THEN 'powerbank'
+           WHEN name LIKE '%pile%' OR name LIKE '%accu%'
+             OR name LIKE '%batterie%' OR subtype = 'battery' THEN 'battery'
+           WHEN name LIKE '%gaz%' OR name LIKE '%butane%'
+             OR name LIKE '%propane%' THEN 'gas'
+           WHEN name LIKE '%essence%' OR name LIKE '%gazole%'
+             OR name LIKE '%gasoil%' OR name LIKE '%carburant%'
+             OR name LIKE '%fioul%' OR name LIKE '%alcool%' THEN 'fuel'
+           WHEN name LIKE '%bougie%' THEN 'candle'
+           WHEN name LIKE '%solaire%' THEN 'solar'
+           WHEN name LIKE '%groupe%' THEN 'generator'
+           WHEN name LIKE '%bois%' OR name LIKE '%charbon%' THEN 'wood'
+           ELSE 'other'
+         END
+     WHERE category = 'energy'
+       AND subtype IN ('energy', 'battery', 'fuel', 'gas')`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -390,6 +499,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration5,
   migration6,
   migration7,
+  migration8,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

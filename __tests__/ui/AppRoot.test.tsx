@@ -461,7 +461,7 @@ describe('écrans', () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
     await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
-    // Six fiches, une par catégorie.
+    // Sept fiches, une par catégorie.
     for (const title of [
       'Eau',
       'Nourriture',
@@ -469,6 +469,7 @@ describe('écrans', () => {
       'Médical',
       'Outils',
       'Matériel & équipements',
+      'Énergie',
     ]) {
       expect(screen.getByLabelText(`Ajouter : ${title}`)).toBeTruthy();
     }
@@ -1079,6 +1080,42 @@ describe('fiches par type de produit', () => {
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(await screen.findByText('« Lentilles » enregistré.')).toBeTruthy();
     expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
+  });
+
+  it('range piles et batteries dans la catégorie Énergie', async () => {
+    await openForm('Énergie');
+    expect(await screen.findByText('Ajouter de l’énergie')).toBeTruthy();
+    await fireEvent.press(
+      within(screen.getByLabelText('Saisie rapide')).getByRole('button', {
+        name: 'Piles AA',
+      }),
+    );
+    expect(
+      within(screen.getByLabelText('Type d’énergie')).getByRole('radio', {
+        name: 'Piles / accus',
+        selected: true,
+      }),
+    ).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '3',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Piles AA » enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(await screen.findByLabelText('Énergie : 1 article')).toBeTruthy();
+    // Le matériel ne propose plus de type « Énergie ».
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.press(
+      screen.getByLabelText('Ajouter : Matériel & équipements'),
+    );
+    await openDetails();
+    expect(
+      within(await screen.findByLabelText('Type de matériel')).queryByRole(
+        'radio',
+        { name: 'Énergie' },
+      ),
+    ).toBeNull();
   });
 
   it('propose une valeur énergétique habituelle, comptée après confirmation', async () => {

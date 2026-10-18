@@ -118,7 +118,9 @@ export function itemFacts(item: InventoryItem): Fact[] {
       facts,
       'Autonomie / capacité',
       `${formatNumber(a.capacityValue)} ${
-        optionLabel('capacityUnit', a.capacityUnit) ?? ''
+        optionLabel(`${item.category}.capacityUnit`, a.capacityUnit) ??
+        optionLabel('capacityUnit', a.capacityUnit) ??
+        ''
       }`,
     );
   }

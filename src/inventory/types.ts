@@ -6,6 +6,7 @@ export const ITEM_CATEGORIES = [
   'energy',
   'tool',
   'weapon',
+  'power',
 ] as const;
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 

@@ -5,6 +5,7 @@ import type { ItemCategory, ItemUnit } from '../inventory/types';
 import type { ExpiryBucket } from '../resilience/resilienceCalculator';
 import {
   AmmoIcon,
+  EnergyIcon,
   EquipmentIcon,
   FoodIcon,
   MedicalIcon,
@@ -16,8 +17,9 @@ import { colors, type StatusTone } from './theme';
 
 /**
  * Libellés courts (puces, listes). La catégorie technique `energy` est
- * présentée comme « Matériel & équipements » (énergie, éclairage, abri…) :
- * les données existantes restent valides.
+ * présentée comme « Matériel & équipements » (éclairage, abri…) : les
+ * données existantes restent valides. L'énergie (piles, carburant, gaz…)
+ * a sa propre catégorie, `power`.
  */
 export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   water: 'Eau',
@@ -26,6 +28,7 @@ export const CATEGORY_LABELS: Record<ItemCategory, string> = {
   energy: 'Matériel',
   tool: 'Outils',
   weapon: 'Armement',
+  power: 'Énergie',
 };
 
 /** Libellés complets (titres de fiches et de catégories). */
@@ -36,6 +39,7 @@ export const CATEGORY_TITLES: Record<ItemCategory, string> = {
   energy: 'Matériel & équipements',
   tool: 'Outils',
   weapon: 'Armement & munitions',
+  power: 'Énergie',
 };
 
 /** Ordre d'affichage des catégories (celui du pack de fiches). */
@@ -46,6 +50,7 @@ export const STOCK_ORDER: readonly ItemCategory[] = [
   'medical',
   'tool',
   'energy',
+  'power',
 ];
 
 export const CATEGORY_ICONS: Record<ItemCategory, Icon> = {
@@ -55,6 +60,7 @@ export const CATEGORY_ICONS: Record<ItemCategory, Icon> = {
   energy: EquipmentIcon,
   tool: ToolIcon,
   weapon: AmmoIcon,
+  power: EnergyIcon,
 };
 
 export const CATEGORY_COLORS: Record<ItemCategory, string> = {
@@ -64,6 +70,7 @@ export const CATEGORY_COLORS: Record<ItemCategory, string> = {
   energy: colors.equipment,
   tool: colors.tools,
   weapon: colors.weapons,
+  power: colors.energy,
 };
 
 export const WEAPON_KIND_LABELS: Record<WeaponKind, string> = {
