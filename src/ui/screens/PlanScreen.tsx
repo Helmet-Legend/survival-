@@ -2,7 +2,7 @@
  * Plan d'action : objectif d'autonomie, liste de réapprovisionnement,
  * péremptions et détail du calcul pour l'eau et les vivres.
  */
-import { CalendarClock, ShoppingCart } from 'lucide-react-native';
+import { Calculator, CalendarClock, ShoppingCart } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -20,6 +20,7 @@ import {
 } from '../../resilience/resilienceCalculator';
 import { getRestockPlan } from '../../resilience/restock';
 import {
+  Button,
   Chip,
   Gauge,
   Notice,
@@ -153,6 +154,13 @@ export function PlanScreen() {
           />
         </View>
       </Panel>
+
+      <Button
+        icon={Calculator}
+        chevron
+        label="Calculateurs eau et électricité"
+        onPress={() => navigation.open('calculators')}
+      />
 
       {/* Scénarios */}
       <Panel title="Scénarios de consommation">

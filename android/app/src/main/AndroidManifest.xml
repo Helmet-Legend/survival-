@@ -9,6 +9,9 @@
     <!-- Écran Urgence : position GPS à la demande, jamais en arrière-plan. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Lecture de codes-barres dans l'application ; rien n'est enregistré. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
       android:name=".MainApplication"
@@ -31,6 +34,11 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+      <activity
+        android:name=".scanner.ScanActivity"
+        android:exported="false"
+        android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+        android:theme="@style/AppTheme" />
       <receiver
         android:name=".reminders.ReminderReceiver"
         android:exported="false">

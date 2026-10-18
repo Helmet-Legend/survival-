@@ -104,4 +104,8 @@ export const REF = {
   meteo: 'Météo-France (vigilance)',
   antipoison: 'Centres antipoison',
   anfr: 'Agence nationale des fréquences (ANFR)',
+  anses: 'Agence nationale de sécurité sanitaire (ANSES), fiches botulisme',
+  cyber: 'Cybermalveillance.gouv.fr (bonnes pratiques de sauvegarde)',
+  sphere: 'Manuel Sphère (2018), normes minimales en approvisionnement en eau',
+  usda: 'Département de l’Agriculture des États-Unis (USDA, sécurité des aliments en cas de coupure)',
 } as const;

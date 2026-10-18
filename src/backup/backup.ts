@@ -98,6 +98,8 @@ const TABLE_ORDER = [
   'crisis_checklist_items',
   'family_plan',
   'preparation_marks',
+  'barcode_products',
+  'barcode_basket',
 ];
 
 /** Tables sauvegardées : tout sauf les guides (réinstallés) et l'index FTS. */

@@ -385,6 +385,17 @@ export async function saveHousehold(
  * calcul d'autonomie. Le contenu des sacs d'évacuation est réservé au
  * départ : il n'entre pas dans l'autonomie du foyer.
  */
+/**
+ * Eau comptée pour boire : potable, ou sans potabilité renseignée (fiches
+ * antérieures au champ). L'eau à traiter, non potable ou de potabilité
+ * inconnue n'entre pas dans l'autonomie.
+ */
+export function isDrinkable(attributes: ItemAttributes): boolean {
+  return (
+    attributes.potability === undefined || attributes.potability === 'potable'
+  );
+}
+
 export async function loadConsumableLots(
   db: SqlDatabase,
   /** Sac dont on veut le contenu ; absent : le stock général. */
@@ -399,23 +410,31 @@ export async function loadConsumableLots(
         AND ${bagId === undefined ? 'i.bag_id IS NULL' : 'i.bag_id = ?'}`,
     bagId === undefined ? [] : [bagId],
   );
-  return rows.map(r => ({
-    lotId: String(r.lot_id),
-    itemId: String(r.item_id),
-    itemName: String(r.name),
-    category: r.category as ItemCategory,
-    unit: r.unit as ItemUnit,
-    quantity: Number(r.quantity),
-    // kcal saisies, ou calculées depuis la valeur énergétique saisie ;
-    // rien n'est deviné (sinon : données incomplètes).
-    caloriesPerUnit: caloriesPerUnit(
-      r.unit as ItemUnit,
-      r.calories_per_unit === null ? null : Number(r.calories_per_unit),
-      parseAttributes<ItemAttributes>(r.attributes),
-    ),
-    expirationDate:
-      r.expiration_date === null ? null : String(r.expiration_date),
-  }));
+  return rows
+    .map(r => ({
+      r,
+      attributes: parseAttributes<ItemAttributes>(r.attributes),
+    }))
+    .filter(
+      ({ r, attributes }) => r.category !== 'water' || isDrinkable(attributes),
+    )
+    .map(({ r, attributes }) => ({
+      lotId: String(r.lot_id),
+      itemId: String(r.item_id),
+      itemName: String(r.name),
+      category: r.category as ItemCategory,
+      unit: r.unit as ItemUnit,
+      quantity: Number(r.quantity),
+      // kcal saisies, ou calculées depuis la valeur énergétique saisie ;
+      // rien n'est deviné (sinon : données incomplètes).
+      caloriesPerUnit: caloriesPerUnit(
+        r.unit as ItemUnit,
+        r.calories_per_unit === null ? null : Number(r.calories_per_unit),
+        attributes,
+      ),
+      expirationDate:
+        r.expiration_date === null ? null : String(r.expiration_date),
+    }));
 }
 
 /**

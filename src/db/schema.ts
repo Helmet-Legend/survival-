@@ -550,6 +550,31 @@ const migration11: Migration = {
   ],
 };
 
+/**
+ * Codes-barres : base locale des produits reconnus (fiche liée, données
+ * Open Food Facts mises en cache) et panier des articles scannés en attente
+ * de confirmation, conservé hors ligne.
+ */
+const migration12: Migration = {
+  version: 12,
+  name: 'codes-barres',
+  statements: [
+    `CREATE TABLE barcode_products (
+       code       TEXT PRIMARY KEY NOT NULL CHECK (code GLOB '[0-9]*' AND length(code) BETWEEN 8 AND 14),
+       item_id    TEXT REFERENCES inventory_items (id) ON DELETE SET NULL,
+       status     TEXT NOT NULL CHECK (status IN ('pending', 'found', 'not_found', 'local')),
+       data       TEXT CHECK (data IS NULL OR json_valid(data)),
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    'CREATE INDEX barcode_products_item ON barcode_products (item_id)',
+    `CREATE TABLE barcode_basket (
+       code       TEXT PRIMARY KEY NOT NULL REFERENCES barcode_products (code) ON DELETE CASCADE,
+       count      INTEGER NOT NULL CHECK (count BETWEEN 1 AND 999),
+       scanned_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -562,6 +587,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration9,
   migration10,
   migration11,
+  migration12,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -10,6 +10,7 @@ import com.resilios.files.FilesPackage
 import com.resilios.location.LocationPackage
 import com.resilios.photo.PhotoPackage
 import com.resilios.reminders.ReminderPackage
+import com.resilios.scanner.ScannerPackage
 import com.resilios.screen.ScreenPackage
 import com.resilios.update.UpdatePackage
 
@@ -32,6 +33,8 @@ class MainApplication : Application(), ReactApplication {
           add(FilesPackage())
           // Position GPS à la demande (écran Urgence).
           add(LocationPackage())
+          // Lecture de codes-barres (caméra et décodage dans le téléphone).
+          add(ScannerPackage())
         },
     )
   }

@@ -570,9 +570,15 @@ describe('cycle de vie', () => {
 });
 
 describe('écrans', () => {
-  async function openApp() {
+  async function openApp(
+    extra: Partial<
+      Pick<Parameters<typeof AppRoot>[0], 'scanSource' | 'productFetch'>
+    > = {},
+  ) {
     const ctx = await existingVault();
-    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await render(
+      <AppRoot manager={ctx.manager} content={content} {...extra} />,
+    );
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
     return ctx;
@@ -622,6 +628,122 @@ describe('écrans', () => {
       await screen.findByText(/Autonomie du foyer dans ce scénario : 6 j/),
     ).toBeTruthy();
     expect(screen.getByText('4,5 L / jour')).toBeTruthy();
+  });
+
+  it('calcule les besoins en eau par usage et les besoins électriques', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      await screen.findByText('Calculateurs eau et électricité'),
+    );
+    expect(await screen.findByText('Eau du foyer')).toBeTruthy();
+    // 1 personne, 3 L de boisson, objectif de 14 jours : 42 L, 30 L en stock.
+    expect(screen.getByText('42 L')).toBeTruthy();
+    expect(screen.getByText('12 L')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByText('Repères Sphère : 2,5 L · 3 L · 2 L'),
+    );
+    // 2,5 + 3 + 2 = 7,5 L par jour, 105 L pour 14 jours.
+    expect(await screen.findByText('7,5 L')).toBeTruthy();
+    expect(screen.getByText('105 L')).toBeTruthy();
+    expect(screen.getByText('75 L')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Appareil'), 'Lampe LED');
+    await fireEvent.changeText(screen.getByLabelText('Puissance (W)'), '5');
+    await fireEvent.press(screen.getByText('Ajouter l’appareil'));
+    expect(await screen.findByText(/Durée invalide/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Heures par jour'), '4');
+    await fireEvent.press(screen.getByText('Ajouter l’appareil'));
+    expect(await screen.findByText('Lampe LED')).toBeTruthy();
+    expect(screen.getByText('20 Wh')).toBeTruthy();
+    // 20 Wh × 1,2 ÷ 0,8 = 30 Wh.
+    expect(screen.getByText('30 Wh')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retirer Lampe LED'));
+    expect(
+      await screen.findByText('Aucun appareil pour l’instant.'),
+    ).toBeTruthy();
+  });
+
+  it('scanne en série, reconnaît en ligne et complète le stock', async () => {
+    const LENTILS = '3017620422003';
+    const UNKNOWN = '96385074';
+    const reads: string[][] = [[LENTILS, LENTILS, UNKNOWN], [LENTILS]];
+    const scanSource = {
+      available: true,
+      scan: jest.fn(async () => reads.shift() ?? null),
+    };
+    const requested: string[] = [];
+    const productFetch = jest.fn(async (url: string) => {
+      requested.push(url);
+      const found = url.includes(LENTILS);
+      return {
+        ok: found,
+        status: found ? 200 : 404,
+        json: async () => ({
+          status: 1,
+          product: {
+            product_name_fr: 'Lentilles cuisinées',
+            brands: 'Cassegrain',
+            quantity: '400 g',
+            product_quantity: 400,
+            product_quantity_unit: 'g',
+            nutriments: { 'energy-kcal_100g': 99 },
+          },
+        }),
+      };
+    });
+    await openApp({ scanSource, productFetch });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner des codes-barres'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner plusieurs articles à la suite'),
+    );
+    expect(
+      await screen.findByText('3 lectures ajoutées au panier.'),
+    ).toBeTruthy();
+    // Rien n'est envoyé avant l'accord.
+    expect(productFetch).not.toHaveBeenCalled();
+    expect(screen.getByText('Panier · 2')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Autoriser la recherche'));
+    expect(await screen.findByText('Lentilles cuisinées')).toBeTruthy();
+    expect(
+      screen.getByText('Inconnu d’Open Food Facts : fiche à compléter.'),
+    ).toBeTruthy();
+    expect(requested.every(u => /product\/\d+\.json/.test(u))).toBe(true);
+
+    await fireEvent.press(screen.getByText('Créer la fiche préremplie'));
+    expect(
+      await screen.findByDisplayValue('Lentilles cuisinées (Cassegrain)'),
+    ).toBeTruthy();
+    expect(screen.getByDisplayValue('99')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    // Retour au scanner : le produit a quitté le panier.
+    expect(await screen.findByText('Panier · 1')).toBeTruthy();
+
+    // Le même code est désormais reconnu sans réseau.
+    await fireEvent.press(screen.getByText('Scanner un article'));
+    expect(
+      await screen.findByLabelText(
+        'Ajouter au stock : Lentilles cuisinées (Cassegrain)',
+      ),
+    ).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Péremption'),
+      '31/12/2028',
+    );
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Ajouter au stock : Lentilles cuisinées (Cassegrain)',
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'Stock de « Lentilles cuisinées (Cassegrain) » complété : +1 pièce.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Panier · 1')).toBeTruthy();
   });
 
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {

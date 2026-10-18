@@ -46,6 +46,9 @@ import {
   nativePhotoSource,
   type PhotoSource,
 } from '../photo/photoSource';
+import { defaultProductFetch } from '../scanner/fetch';
+import type { ProductFetch } from '../scanner/products';
+import { nativeScanSource, type ScanSource } from '../scanner/scanSource';
 import type { Updater } from '../update/updater';
 import {
   createVault,
@@ -66,6 +69,8 @@ import {
   type StockFormTarget,
   type Tab,
 } from './navigation';
+import { CalculatorsScreen } from './screens/CalculatorsScreen';
+import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
 import { PreparationScreen } from './screens/PreparationScreen';
@@ -112,6 +117,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   files?: FileAccess;
   /** Chiffrement des sauvegardes ; sans lui, la sauvegarde est masquée. */
   backupCrypto?: BackupCrypto;
+  /** Lecteur de codes-barres ; le module natif Android par défaut. */
+  scanSource?: ScanSource;
+  /** Recherche en ligne des produits ; `fetch` par défaut. */
+  productFetch?: ProductFetch;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
@@ -123,6 +132,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [reminders] = useState(() => props.reminders ?? nativeReminders());
   const [files] = useState(() => props.files ?? nativeFiles());
   const [location] = useState(() => props.location ?? nativeLocation());
+  const [scanSource] = useState(() => props.scanSource ?? nativeScanSource());
+  const [productFetch] = useState<ProductFetch>(
+    () => props.productFetch ?? defaultProductFetch,
+  );
   const backupCrypto = props.backupCrypto ?? null;
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -168,6 +181,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       files,
       location,
       backupCrypto,
+      scanSource,
+      productFetch,
     };
     sessionRef.current = session;
     loadRedLight(db)
@@ -309,6 +324,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <FamilyPlanScreen />
               ) : overlay === 'preparation' ? (
                 <PreparationScreen />
+              ) : overlay === 'calculators' ? (
+                <CalculatorsScreen />
+              ) : overlay === 'scan' ? (
+                <ScanScreen />
               ) : overlay === 'stockForm' && formTarget !== null ? (
                 <StockFormScreen target={formTarget} />
               ) : (
