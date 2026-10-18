@@ -53,6 +53,7 @@ import {
 } from '../vault';
 import { AppIcon } from './components/AppIcon';
 import { BottomNav } from './components/BottomNav';
+import { HomeBackdrop } from './components/HomeBackdrop';
 import { Brand, Button, IconButton } from './components/controls';
 import { UpdateBanner } from './components/UpdateBanner';
 import {
@@ -296,6 +297,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         phase.kind !== 'open' && { paddingBottom: insets.bottom },
       ]}
     >
+      {phase.kind === 'open' && tab === 'home' && overlay === null ? (
+        <HomeBackdrop />
+      ) : null}
       {updater && phase.kind !== 'loading' ? (
         <UpdateBanner updater={updater} />
       ) : null}
