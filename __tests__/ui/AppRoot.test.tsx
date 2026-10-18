@@ -493,6 +493,29 @@ describe('écrans', () => {
     return ctx;
   }
 
+  it('retire une unité en un geste et règle l’eau à 2 L', async () => {
+    await openApp();
+    expect(
+      screen.getByLabelText('Eau disponible : 30 L, 10 j d’autonomie'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText(/périmé. Ouvrir le stock/)).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('2 L'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(
+      await screen.findByLabelText('Eau disponible : 30 L, 15 j d’autonomie'),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
+    expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
+  });
+
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
     // Directement depuis l'accueil.
@@ -741,7 +764,8 @@ describe('écrans', () => {
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
 
-    expect(screen.getByText('Bouteilles')).toBeTruthy();
+    expect(screen.getByLabelText('1 lot périmé. Ouvrir le stock')).toBeTruthy();
+    expect(screen.getAllByText('Bouteilles').length).toBeGreaterThan(0);
     expect(screen.getByText('Compote')).toBeTruthy();
     expect(screen.getByText('Pâtes')).toBeTruthy();
     expect(screen.queryByText('Lait')).toBeNull();

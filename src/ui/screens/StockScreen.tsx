@@ -165,6 +165,13 @@ function renewCount(docs: readonly DocumentSummary[]): number {
   return docs.filter(d => documentStatus(d) !== null).length;
 }
 
+/** Quantité retirée par le bouton « − » : un contenant, sinon une unité. */
+function quickStep(item: ItemSummary): number {
+  return item.packageSize !== null && item.packageSize > 0
+    ? item.packageSize
+    : 1;
+}
+
 /** Lots périmés ou à moins de 30 jours, tous sacs confondus. */
 function bagAlerts(list: readonly BagSummary[]): number {
   return list.reduce((sum, b) => sum + b.expiredLots + b.soonLots, 0);
@@ -250,6 +257,26 @@ export function StockScreen() {
       setFeedback({ message: errorMessage(e), tone: 'error' });
     }
     setConfirmDiscard(false);
+    await reload();
+  };
+
+  // Consommer en un geste : un contenant (bidon, boîte) ou une unité, pris
+  // dans le lot qui périme le plus tôt.
+  const quickConsume = async (item: ItemSummary) => {
+    try {
+      const step = quickStep(item);
+      const result = await repo.consume(item.id, step);
+      setFeedback({
+        message: `${item.name} : ${formatNumber(step)} ${itemUnitLabel(
+          item,
+        )} retiré${step > 1 ? 's' : ''}. Reste ${formatNumber(
+          result.remaining,
+        )}.`,
+        tone: 'ok',
+      });
+    } catch (e) {
+      setFeedback({ message: errorMessage(e), tone: 'error' });
+    }
     await reload();
   };
 
@@ -641,6 +668,24 @@ export function StockScreen() {
                             </Text>
                           ) : null}
                         </View>
+                        {item.usableQuantity >= quickStep(item) ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Retirer ${formatNumber(
+                              quickStep(item),
+                            )} ${itemUnitLabel(item)} de ${item.name}`}
+                            hitSlop={6}
+                            onPress={() => {
+                              void quickConsume(item);
+                            }}
+                            style={({ pressed }) => [
+                              styles.quick,
+                              pressed && styles.pressed,
+                            ]}
+                          >
+                            <Minus color={colors.text} size={18} />
+                          </Pressable>
+                        ) : null}
                         <Chevron color={colors.textMuted} size={20} />
                       </Pressable>
                       {open && data.detail ? (
@@ -1222,6 +1267,15 @@ const styles = StyleSheet.create({
   },
   itemName: { ...text.body, fontWeight: '600' },
   itemSide: { alignItems: 'flex-end', gap: 4 },
+  quick: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.borderActive,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   qty: { ...text.mono, fontSize: 18, fontWeight: '700' },
   qtyUnit: { color: colors.textMuted, fontSize: 13, fontWeight: '400' },
   grow: { flex: 1, minWidth: 0 },
