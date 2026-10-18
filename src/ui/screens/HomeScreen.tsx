@@ -29,6 +29,7 @@ import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import {
   Button,
+  Gauge,
   MetricCard,
   Notice,
   Panel,
@@ -46,7 +47,9 @@ import {
 } from '../format';
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
+import { getReadiness } from '../../plan/readiness';
 import { useSession } from '../session';
+import { scoreColor } from './ReadinessScreen';
 import { colors, radius, sizes, space, solidTint, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
 
@@ -330,6 +333,7 @@ export function HomeScreen() {
         )}
       </Panel>
 
+      <ReadinessCard />
       <Button
         icon={ListChecks}
         chevron
@@ -350,7 +354,68 @@ export function HomeScreen() {
   );
 }
 
+/** Indice de préparation, résumé ; le détail s'ouvre en plein écran. */
+function ReadinessCard() {
+  const { db, repo, documents, bags } = useSession();
+  const navigation = useNavigation();
+  const { data } = useLoader(async () => {
+    const [items, docs, bagList] = await Promise.all([
+      repo.listItems({ bag: 'none' }),
+      documents.list(),
+      bags.list(),
+    ]);
+    return getReadiness(db, {
+      items,
+      documentCount: docs.length,
+      bags: bagList,
+      asOf: localToday(),
+    });
+  });
+  if (data === null) {
+    return null;
+  }
+  const color = scoreColor(data.score);
+  const next = data.next[0];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Indice de préparation : ${data.score} sur 100, ${data.level}. Voir le détail`}
+      onPress={() => navigation.open('readiness')}
+      style={({ pressed }) => [
+        styles.readiness,
+        pressed && styles.readinessPressed,
+      ]}
+    >
+      <View style={styles.readinessHead}>
+        <Text style={[text.label, styles.readinessGrow]}>
+          Indice de préparation
+        </Text>
+        <Text style={[text.mono, styles.readinessScore, { color }]}>
+          {data.score}/100
+        </Text>
+      </View>
+      <Gauge value={data.score / 100} color={color} />
+      <Text style={text.subtle}>
+        {data.level}
+        {next ? ` · Prochaine action : ${next.todo}` : ''}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  readiness: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.card,
+    padding: space.m,
+    gap: space.s,
+  },
+  readinessPressed: { opacity: 0.82 },
+  readinessHead: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  readinessGrow: { flex: 1 },
+  readinessScore: { fontSize: 18, fontWeight: '800' },
   assumptions: {
     marginTop: -space.s,
     paddingHorizontal: space.m,

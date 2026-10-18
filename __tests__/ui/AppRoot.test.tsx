@@ -814,6 +814,28 @@ describe('écrans', () => {
     expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
   });
 
+  it('affiche l’indice de préparation et ses actions', async () => {
+    await openApp();
+    const card = await screen.findByLabelText(
+      /^Indice de préparation : \d+ sur 100, .+\. Voir le détail$/,
+    );
+    await fireEvent.press(card);
+    expect(await screen.findByText('Détail des critères')).toBeTruthy();
+    expect(screen.getByText('Prochaines actions')).toBeTruthy();
+    // Aucun document ni plan familial dans le coffre de test.
+    expect(
+      screen.getByLabelText(/^Documents : 0 sur 10 points\./),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        /^Plan familial : 0 sur 10 points\. Plan familial vide\./,
+      ),
+    ).toBeTruthy();
+    // Première action : la radio, préremplie dans la fiche d'ajout habituelle.
+    await fireEvent.press(screen.getByLabelText('Ajouter au stock : Radio'));
+    expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
+  });
+
   it('trace chaque mouvement dans l’historique', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
