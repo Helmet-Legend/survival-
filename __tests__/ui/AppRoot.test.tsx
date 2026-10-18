@@ -601,6 +601,29 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
+  it('montre les hypothèses du calcul et simule des scénarios', async () => {
+    await openApp();
+    expect(
+      screen.getByText(/Calcul : 3 L d’eau et 2 000 kcal par personne/),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        /^Énergie stockée : 0 Wh utiles, Capacités non renseignées/,
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    expect(await screen.findByText('Scénarios de consommation')).toBeTruthy();
+    expect(
+      screen.getByText(/Autonomie du foyer dans ce scénario : 10 j/),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Canicule'));
+    // 30 L à 4,5 L par jour : 6 jours.
+    expect(
+      await screen.findByText(/Autonomie du foyer dans ce scénario : 6 j/),
+    ).toBeTruthy();
+    expect(screen.getByText('4,5 L / jour')).toBeTruthy();
+  });
+
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
     await openApp();
     expect(screen.queryByTestId('red-light')).toBeNull();
