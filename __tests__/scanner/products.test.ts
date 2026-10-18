@@ -1,6 +1,12 @@
 import { prepareDatabase } from '../../src/db/connection';
 import { InventoryRepository } from '../../src/inventory';
-import { expandUpcE, normalizeBarcode } from '../../src/scanner/barcode';
+import {
+  expandUpcE,
+  normalizeBarcode,
+  parseGs1,
+  readFromScanner,
+} from '../../src/scanner/barcode';
+import { setMedicineTable } from '../../src/scanner/medicines';
 import {
   addScans,
   getProduct,
@@ -10,6 +16,7 @@ import {
   lookupPending,
   lookupProduct,
   nameKey,
+  obfUrl,
   offUrl,
   parseOffProduct,
   prefillFor,
@@ -170,9 +177,11 @@ describe('Open Food Facts', () => {
     expect(fetcher.calls[0]).toBe(offUrl(NUTELLA));
     expect((await getProduct(db, NUTELLA))?.status).toBe('found');
     expect((await getProduct(db, '96385074'))?.status).toBe('not_found');
+    // Inconnu d'Open Food Facts : Open Beauty Facts est interrogé ensuite.
+    expect(fetcher.calls[2]).toBe(obfUrl('96385074'));
     // Plus rien en attente : aucune nouvelle requête.
     await lookupPending(db, fetcher);
-    expect(fetcher.calls).toHaveLength(2);
+    expect(fetcher.calls).toHaveLength(3);
   });
 
   it('garde les codes en attente sans réseau', async () => {
@@ -222,5 +231,101 @@ describe('Open Food Facts', () => {
 
   it('compare les noms sans accents ni casse', () => {
     expect(nameKey('Pâtes  Complètes !')).toBe(nameKey('pates complètes'));
+  });
+});
+
+const GS = String.fromCharCode(29);
+// GTIN-14 d'un médicament (CIP 13 3400930000007 précédé de 0).
+const CIP = '3400930000007';
+
+describe('Data Matrix des médicaments', () => {
+  it('lit le CIP, la péremption et le lot, dans n’importe quel ordre', () => {
+    expect(parseGs1(`010${CIP}17271231103AB45${GS}21XYZ987`)).toEqual({
+      code: CIP,
+      expiry: '2027-12-31',
+      lot: '3AB45',
+    });
+    expect(parseGs1(`]d2010${CIP}21SER1${GS}10LOT7${GS}17280200`)).toEqual({
+      code: CIP,
+      expiry: '2028-02-29',
+      lot: 'LOT7',
+    });
+    expect(parseGs1(`${GS}010${CIP}`)).toEqual({ code: CIP });
+    expect(parseGs1('texte quelconque')).toBeNull();
+    expect(parseGs1('0103400930000001')).toBeNull();
+    expect(readFromScanner(`010${CIP}17271231`, 'DATA_MATRIX')).toEqual({
+      code: CIP,
+      expiry: '2027-12-31',
+    });
+    expect(readFromScanner('3017620422003', 'EAN_13')).toEqual({
+      code: '3017620422003',
+    });
+  });
+
+  it('garde la péremption la plus proche au panier et reconnaît le médicament', async () => {
+    setMedicineTable({
+      generated: '2026-10-18',
+      cip: { [CIP]: 'DOLIPRANE 1000 mg — boîte de 8' },
+    });
+    try {
+      const { db } = await setup();
+      await addScans(db, [
+        { code: CIP, expiry: '2028-05-31', lot: 'B' },
+        { code: CIP, expiry: '2027-03-31', lot: 'A' },
+      ]);
+      await addScans(db, [{ code: CIP, expiry: '2029-01-31', lot: 'C' }]);
+      const [entry] = await listBasket(db);
+      expect([entry.count, entry.expiry, entry.lot]).toEqual([
+        3,
+        '2027-03-31',
+        'A',
+      ]);
+      // Reconnu sans réseau : rien n'est en attente de recherche.
+      expect(entry.product).toMatchObject({
+        status: 'found',
+        data: { name: 'DOLIPRANE 1000 mg — boîte de 8', category: 'medicine' },
+      });
+      expect(
+        prefillFor(entry.product, { expiry: entry.expiry, lot: entry.lot }),
+      ).toEqual({
+        category: 'medical',
+        prefill: {
+          subtype: 'medicine',
+          name: 'DOLIPRANE 1000 mg — boîte de 8',
+          notes: `Code-barres ${CIP} · Lot A`,
+          expiry: '31/03/2027',
+        },
+      });
+    } finally {
+      setMedicineTable(null);
+    }
+  });
+
+  it('range l’hygiène trouvée sur Open Beauty Facts dans Santé › Hygiène', async () => {
+    const { db } = await setup();
+    await addScans(db, ['96385074']);
+    const fetcher = fakeFetch({});
+    const beauty = async (url: string) =>
+      url.includes('openbeautyfacts')
+        ? {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              status: 1,
+              product: { product_name: 'Savon de Marseille' },
+            }),
+          }
+        : fetcher(url, { headers: {} });
+    expect(await lookupProduct(db, '96385074', beauty)).toBe('found');
+    const product = (await getProduct(db, '96385074'))!;
+    expect(product.data.category).toBe('hygiene');
+    expect(prefillFor(product)).toMatchObject({
+      category: 'medical',
+      prefill: { subtype: 'hygiene', name: 'Savon de Marseille' },
+    });
+    // Choix manuel de la catégorie pour un produit inconnu.
+    expect(
+      prefillFor({ ...product, data: {} }, { choice: 'tool' }).category,
+    ).toBe('tool');
   });
 });

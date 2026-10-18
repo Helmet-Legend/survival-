@@ -342,7 +342,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
         </View>
         <Text style={text.subtle}>
           {data.barcodeOnline === true
-            ? 'Activé : seul le code-barres d’un produit scanné est envoyé à Open Food Facts pour en trouver le nom et les calories.'
+            ? 'Activé : seul le code-barres d’un produit scanné est envoyé à Open Food Facts et Open Beauty Facts pour en trouver le nom et les calories. Les médicaments sont reconnus sans réseau.'
             : 'Désactivé : les codes scannés restent dans le téléphone ; les fiches se complètent à la main.'}
         </Text>
         {screenCapture.available ? (

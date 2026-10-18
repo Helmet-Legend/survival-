@@ -72,7 +72,9 @@ class ScanActivity : AppCompatActivity() {
                         BarcodeFormat.EAN_13,
                         BarcodeFormat.EAN_8,
                         BarcodeFormat.UPC_A,
-                        BarcodeFormat.UPC_E),
+                        BarcodeFormat.UPC_E,
+                        // Boîtes de médicaments : code, lot et péremption (GS1).
+                        BarcodeFormat.DATA_MATRIX),
                 DecodeHintType.TRY_HARDER to true))
       }
 
@@ -151,8 +153,8 @@ class ScanActivity : AppCompatActivity() {
           setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
           typeface = Typeface.DEFAULT_BOLD
           text =
-              if (series) "Visez les codes-barres l’un après l’autre."
-              else "Visez le code-barres du produit."
+              if (series) "Visez les codes-barres ou les carrés Data Matrix l’un après l’autre."
+              else "Visez le code-barres ou le carré Data Matrix."
         }
     panel.addView(status)
     val buttons =
