@@ -195,6 +195,11 @@ export const REF = {
   meteo: 'Météo-France (vigilance)',
   antipoison: 'Centres antipoison',
   anfr: 'Agence nationale des fréquences (ANFR)',
+  servicePublic:
+    'Service-Public.fr (armes : acquisition, détention, transport)',
+  legifrance: 'Légifrance (Code pénal, article 122-5)',
+  attaque: 'Gouvernement : « Réagir en cas d’attaque terroriste »',
+  inrs: 'INRS (appareils de protection respiratoire)',
   anses: 'Agence nationale de sécurité sanitaire (ANSES), fiches botulisme',
   cyber: 'Cybermalveillance.gouv.fr (bonnes pratiques de sauvegarde)',
   sphere: 'Manuel Sphère (2018), normes minimales en approvisionnement en eau',
