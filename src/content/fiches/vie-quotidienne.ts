@@ -35,6 +35,34 @@ export const ALIMENTATION = [
     '- Mûres, framboises sauvages : fruits bien mûrs.',
     'Éviter les bords de route, les champs traités et les terrains pollués.',
   ]),
+
+  fiche(
+    'allergies-intolerances-stock',
+    A,
+    'Adapter les stocks aux allergies et régimes',
+    [
+      '- Inscrire les allergies, intolérances, régimes médicaux et aliments refusés sur une fiche papier accessible aux adultes responsables.',
+      '- Lire la liste des ingrédients à chaque achat : les recettes et risques de contamination croisée peuvent changer.',
+      '- Séparer les aliments concernés, utiliser des ustensiles propres et conserver les emballages pour vérifier les ingrédients.',
+      '- Prévoir des équivalents longue conservation réellement tolérés, plutôt que de compter sur une substitution improvisée.',
+      '## Vérification du stock',
+      '= Besoin  Allergie ou régime identifié pour chaque personne',
+      '= Quantité  Stock adapté à la durée et au nombre de personnes',
+      '= Rotation  Dates vérifiées et produits consommés avant péremption',
+      '! Une réaction allergique avec difficulté respiratoire, gonflement de la langue/gorge ou malaise est une urgence : utiliser le traitement prescrit si disponible et appeler le 15 ou le 112.',
+    ],
+  ),
+  fiche('cuisson-sans-electricite', A, 'Préparer les repas sans électricité', [
+    '- Prévoir des aliments consommables sans cuisson et vérifier les dates de péremption.',
+    '- Utiliser un réchaud uniquement dehors, sur une surface stable, loin des matériaux combustibles et selon la notice.',
+    '- Ne jamais utiliser barbecue, brasero, réchaud à gaz ou groupe électrogène à l’intérieur, dans un garage ou près d’une fenêtre : risque de monoxyde de carbone.',
+    '- Garder une réserve de combustible compatible avec l’appareil et respecter les règles locales de stockage.',
+    '## Ordre de consommation pendant une panne',
+    '1. Aliments réfrigérés les plus périssables, seulement si leur température est restée sûre.',
+    '2. Produits surgelés encore congelés ou maintenus à température sûre.',
+    '3. Conserves intactes et aliments secs à longue conservation.',
+    '! En cas de doute sur la durée ou la température de conservation, jeter les aliments périssables. L’odeur ne permet pas toujours de détecter un danger.',
+  ]),
 ];
 
 export const HYGIENE = [
@@ -56,4 +84,21 @@ export const HYGIENE = [
     '- Réutiliser l’eau de vaisselle ou de lavage pour les toilettes.',
     '- Ne jamais rejeter d’eau sale près d’un puits, d’une source ou d’un stock d’eau.',
   ]),
+
+  fiche(
+    'eau-potable-hygiene',
+    H,
+    'Éviter les contaminations dans le campement',
+    [
+      '- Définir une zone propre pour cuisiner et une zone séparée pour les déchets et les toilettes.',
+      '- Se laver les mains au savon avant de préparer les repas, avant de manger et après les toilettes ou la manipulation des déchets.',
+      '- Utiliser des récipients distincts pour l’eau potable et l’eau non potable ; les identifier clairement.',
+      '- Nettoyer les surfaces de préparation et ne pas laisser les aliments à température ambiante plus longtemps que nécessaire.',
+      '- Protéger les plaies et ne pas partager serviettes, rasoirs ou matériel de soin.',
+      '## Organisation simple',
+      '= Zone propre  Eau potable, aliments fermés, ustensiles lavés',
+      '= Zone sale  Déchets fermés, nettoyage, matériel souillé',
+      '= Toilettes  À distance des eaux, du stockage et de la préparation des repas',
+    ],
+  ),
 ];

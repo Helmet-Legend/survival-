@@ -281,6 +281,20 @@ function GuideLine({ line }: { line: string }) {
       </Text>
     );
   }
+  if (line.startsWith('◇ ')) {
+    return (
+      <View style={styles.diagramNode}>
+        <Text style={styles.diagramNodeText}>{line.slice(2)}</Text>
+      </View>
+    );
+  }
+  if (line.trim() === '↓') {
+    return (
+      <View style={styles.diagramConnector}>
+        <Text style={styles.diagramArrow}>↓</Text>
+      </View>
+    );
+  }
   if (line.startsWith('! ')) {
     return (
       <View style={styles.warning}>
@@ -399,6 +413,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dangerSurface,
   },
   warningText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  diagramNode: {
+    alignSelf: 'stretch',
+    paddingVertical: space.s,
+    paddingHorizontal: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  diagramNodeText: {
+    ...text.body,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: colors.text,
+  },
+  diagramConnector: { alignItems: 'center', marginVertical: -space.s },
+  diagramArrow: { color: colors.primary, fontSize: 22, fontWeight: '800' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridCell: { width: '50%' },
   tableRow: {

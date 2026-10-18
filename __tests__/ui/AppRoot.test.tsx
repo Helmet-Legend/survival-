@@ -410,8 +410,8 @@ describe('cycle de vie', () => {
 
     await fireEvent.press(screen.getByText('Arrêt cardiaque'));
     expect(
-      await screen.findByText(/massage cardiaque|compressions/i),
-    ).toBeTruthy();
+      (await screen.findAllByText(/massage cardiaque|compressions/i)).length,
+    ).toBeGreaterThan(0);
     open.mockRestore();
   });
 
@@ -868,6 +868,14 @@ describe('écrans', () => {
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
+
+    // Schéma pas à pas : étapes encadrées reliées par des flèches.
+    await fireEvent.press(screen.getByText('Bilan rapide d’une victime'));
+    expect(
+      await screen.findByText('SÉCURISER la zone et se protéger'),
+    ).toBeTruthy();
+    expect(screen.getAllByText('↓')).toHaveLength(3);
+    expect(screen.queryByText(/^◇/)).toBeNull();
   });
 
   it('montre les trois péremptions les plus proches sur l’accueil', async () => {
