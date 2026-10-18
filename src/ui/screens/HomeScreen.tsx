@@ -4,8 +4,10 @@
  * d'action.
  */
 import {
+  BatteryCharging,
   CalendarClock,
   ChevronRight,
+  Flashlight,
   ClipboardList,
   ListChecks,
   Siren,
@@ -23,6 +25,7 @@ import {
   loadTargetDays,
   saveHousehold,
 } from '../../resilience/resilienceCalculator';
+import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import {
   Button,
@@ -53,17 +56,21 @@ const MAX_MEMBERS = 12;
 const HOME_ALERTS = 3;
 
 export function HomeScreen() {
-  const { db } = useSession();
+  const { db, repo } = useSession();
   const navigation = useNavigation();
   const { data, error, reload } = useLoader(async () => {
     const today = localToday();
-    const [report, alerts, targetDays, incompleteFood] = await Promise.all([
-      getResilienceReport(db, today),
-      getExpiryAlerts(db, today),
-      loadTargetDays(db),
-      countIncompleteFood(db, today),
-    ]);
-    return { today, report, alerts, targetDays, incompleteFood };
+    const [report, alerts, targetDays, incompleteFood, items, whPerPerson] =
+      await Promise.all([
+        getResilienceReport(db, today),
+        getExpiryAlerts(db, today),
+        loadTargetDays(db),
+        countIncompleteFood(db, today),
+        repo.listItems({ bag: 'none' }),
+        loadEnergyNeed(db),
+      ]);
+    const energy = computeEnergy(items, report.household.members, whPerPerson);
+    return { today, report, alerts, targetDays, incompleteFood, energy };
   });
 
   if (error) {
@@ -76,7 +83,8 @@ export function HomeScreen() {
   if (data === null) {
     return null;
   }
-  const { today, report, alerts, targetDays, incompleteFood } = data;
+  const { today, report, alerts, targetDays, incompleteFood, energy } = data;
+  const { household } = report;
   const status = autonomyStatus(report.days, targetDays);
   const limiting = report.limitingFactor === 'water' ? 'eau' : 'vivres';
   // Aucun vivre compté : le dire, plutôt qu'une date d'épuisement.
@@ -126,6 +134,19 @@ export function HomeScreen() {
           </View>
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Hypothèses du calcul. Modifier dans les réglages"
+        onPress={() => navigation.open('settings')}
+        style={({ pressed }) => [styles.assumptions, pressed && styles.pressed]}
+      >
+        <Text style={styles.assumptionsText}>
+          Calcul : {formatNumber(household.waterLitersPerPersonDay)} L d’eau et{' '}
+          {formatNumber(household.kcalPerPersonDay, 0)} kcal par personne et par
+          jour, péremptions comprises. Modifier ›
+        </Text>
+      </Pressable>
 
       <Button
         variant="danger"
@@ -212,6 +233,34 @@ export function HomeScreen() {
           progress={report.food.days / targetDays}
           detail={`${formatNumber(report.food.dailyNeed, 0)} kcal / jour`}
           onPress={() => navigation.goTo('stock', { category: 'food' })}
+        />
+      </View>
+      <View style={styles.grid}>
+        <MetricCard
+          icon={BatteryCharging}
+          color={colors.energy}
+          label="Énergie stockée"
+          value={formatNumber(energy.usableWh, 0)}
+          unit="Wh utiles"
+          caption={
+            energy.days === null
+              ? 'Capacités non renseignées'
+              : `${energy.days} j de recharge`
+          }
+          detail={`${formatNumber(energy.dailyNeed, 0)} Wh / jour`}
+          onPress={() => navigation.goTo('stock', { category: 'power' })}
+        />
+        <MetricCard
+          icon={Flashlight}
+          color={colors.equipment}
+          label="Éclairage"
+          value={String(energy.lights)}
+          unit={energy.lights > 1 ? 'lampes' : 'lampe'}
+          caption={`pour ${household.members} personne${
+            household.members > 1 ? 's' : ''
+          }`}
+          progress={Math.min(1, energy.lights / household.members)}
+          onPress={() => navigation.goTo('stock', { category: 'energy' })}
         />
       </View>
       {incompleteFood > 0 ? (
@@ -302,6 +351,14 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  assumptions: {
+    marginTop: -space.s,
+    paddingHorizontal: space.m,
+    paddingVertical: space.s,
+    borderRadius: radius.button,
+    backgroundColor: solidTint(colors.surface, 0.9),
+  },
+  assumptionsText: { ...text.subtle, color: colors.textMuted },
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,

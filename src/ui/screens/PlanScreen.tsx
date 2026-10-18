@@ -3,19 +3,24 @@
  * péremptions et détail du calcul pour l'eau et les vivres.
  */
 import { CalendarClock, ShoppingCart } from 'lucide-react-native';
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { localToday } from '../../lib/dates';
+import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
+import { SCENARIOS } from '../../resilience/scenarios';
 import {
+  computeResilience,
   getExpiryAlerts,
   getResilienceReport,
+  loadConsumableLots,
   loadTargetDays,
   saveTargetDays,
   type ResourceAutonomy,
 } from '../../resilience/resilienceCalculator';
 import { getRestockPlan } from '../../resilience/restock';
 import {
+  Chip,
   Gauge,
   Notice,
   Panel,
@@ -38,17 +43,31 @@ import { colors, fonts, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
 
 export function PlanScreen() {
-  const { db } = useSession();
+  const { db, repo } = useSession();
   const navigation = useNavigation();
+  const [scenarioId, setScenarioId] = useState('normal');
   const { data, error, reload } = useLoader(async () => {
     const today = localToday();
-    const [report, alerts, restock, targetDays] = await Promise.all([
-      getResilienceReport(db, today),
-      getExpiryAlerts(db, today),
-      getRestockPlan(db, today),
-      loadTargetDays(db),
-    ]);
-    return { report, alerts, restock, targetDays };
+    const [report, alerts, restock, targetDays, lots, items, whPerPerson] =
+      await Promise.all([
+        getResilienceReport(db, today),
+        getExpiryAlerts(db, today),
+        getRestockPlan(db, today),
+        loadTargetDays(db),
+        loadConsumableLots(db),
+        repo.listItems({ bag: 'none' }),
+        loadEnergyNeed(db),
+      ]);
+    return {
+      today,
+      report,
+      alerts,
+      restock,
+      targetDays,
+      lots,
+      items,
+      whPerPerson,
+    };
   });
 
   const title = (
@@ -70,7 +89,27 @@ export function PlanScreen() {
   if (data === null) {
     return <View style={styles.page}>{title}</View>;
   }
-  const { report, alerts, restock, targetDays } = data;
+  const {
+    today,
+    report,
+    alerts,
+    restock,
+    targetDays,
+    lots,
+    items,
+    whPerPerson,
+  } = data;
+  const scenario = SCENARIOS.find(s => s.id === scenarioId) ?? SCENARIOS[0];
+  const simulated = computeResilience(
+    lots,
+    scenario.apply(report.household),
+    today,
+  );
+  const energy = computeEnergy(
+    items,
+    simulated.household.members,
+    whPerPerson * (scenario.energyFactor ?? 1),
+  );
   const status = autonomyStatus(report.days, targetDays);
 
   const changeTarget = async (direction: 1 | -1) => {
@@ -113,6 +152,75 @@ export function PlanScreen() {
             increaseLabel="Augmenter l’objectif"
           />
         </View>
+      </Panel>
+
+      {/* Scénarios */}
+      <Panel title="Scénarios de consommation">
+        <View style={styles.chips}>
+          {SCENARIOS.map(s => (
+            <Chip
+              key={s.id}
+              label={s.label}
+              selected={s.id === scenario.id}
+              onPress={() => setScenarioId(s.id)}
+            />
+          ))}
+        </View>
+        <Text style={text.subtle}>{scenario.hint}</Text>
+        <ScenarioRow
+          label="Eau"
+          color={colors.water}
+          days={simulated.water.days}
+          need={`${formatNumber(simulated.water.dailyNeed)} L / jour`}
+          limiting={simulated.limitingFactor === 'water'}
+        />
+        <ScenarioRow
+          label="Vivres"
+          color={colors.food}
+          days={simulated.food.days}
+          need={`${formatNumber(simulated.food.dailyNeed, 0)} kcal / jour`}
+          limiting={simulated.limitingFactor === 'food'}
+        />
+        <ScenarioRow
+          label="Énergie"
+          color={colors.energy}
+          days={energy.days}
+          need={`${formatNumber(energy.dailyNeed, 0)} Wh / jour`}
+          limiting={false}
+        />
+        <Text style={text.muted}>
+          Autonomie du foyer dans ce scénario : {simulated.days} j (
+          {simulated.limitingFactor === 'water' ? 'eau' : 'vivres'} limitante
+          {simulated.limitingFactor === 'water' ? '' : 's'}).
+        </Text>
+        {energy.days === null && energy.unknown.length === 0 ? (
+          <Text style={text.subtle}>
+            Énergie : aucune capacité renseignée. Indiquez-la en Wh (ou en mAh
+            pour une batterie externe) dans les fiches Énergie.
+          </Text>
+        ) : null}
+        {energy.unknown.length > 0 ? (
+          <Text style={text.subtle}>
+            Capacité inconnue, non comptée : {energy.unknown.join(', ')}.
+            Indiquez-la en Wh (ou en mAh pour une batterie externe) dans la
+            fiche.
+          </Text>
+        ) : null}
+        {energy.fuels.length > 0 ? (
+          <Text style={text.subtle}>
+            Combustibles en stock, non convertis en jours (consommation propre à
+            chaque appareil) :{' '}
+            {energy.fuels
+              .map(
+                f =>
+                  `${f.name} ${formatNumber(f.quantity)} ${
+                    UNIT_LABELS[f.unit]
+                  }`,
+              )
+              .join(', ')}
+            .
+          </Text>
+        ) : null}
       </Panel>
 
       {/* Réapprovisionnement */}
@@ -231,6 +339,32 @@ export function PlanScreen() {
   );
 }
 
+function ScenarioRow(props: {
+  label: string;
+  color: string;
+  days: number | null;
+  need: string;
+  limiting: boolean;
+}) {
+  return (
+    <View style={styles.scenarioRow}>
+      <View style={[styles.dot, { backgroundColor: props.color }]} />
+      <View style={styles.grow}>
+        <Text style={text.body}>
+          {props.label}
+          {props.limiting ? (
+            <Text style={styles.limitingMark}> · limitant</Text>
+          ) : null}
+        </Text>
+        <Text style={text.subtle}>{props.need}</Text>
+      </View>
+      <Text style={styles.scenarioDays}>
+        {props.days === null ? '—' : `${props.days} j`}
+      </Text>
+    </View>
+  );
+}
+
 function ResourceTile(props: {
   label: string;
   color: string;
@@ -290,6 +424,11 @@ function RestockLine(props: {
 }
 
 const styles = StyleSheet.create({
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  scenarioRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  scenarioDays: { ...text.value, fontSize: 20, color: colors.text },
+  limitingMark: { color: colors.warning, fontSize: 13, fontWeight: '700' },
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,
