@@ -63,6 +63,8 @@ interface GuideRow {
   category: string;
   priority: Priority;
   minutes?: number | null;
+  /** « En bref » de la fiche, affiché sous le titre dans la liste. */
+  summary?: string | null;
   snippet?: string;
 }
 
@@ -120,6 +122,7 @@ export function GuidesScreen() {
           category: String(r.category),
           priority: readMeta(String(r.body)).priority,
           minutes: ficheInfo(String(r.body)).minutes,
+          summary: ficheInfo(String(r.body)).summary,
         }))
         .sort(
           (a, b) =>
@@ -156,10 +159,10 @@ export function GuidesScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <SearchField
-        label="Rechercher un guide"
+        label="Rechercher une fiche"
         value={query}
         onChangeText={setQuery}
-        placeholder="Rechercher un guide…"
+        placeholder="Rechercher une fiche…"
       />
       {error ? <Notice tone="error" message={error} /> : null}
 
@@ -224,7 +227,13 @@ export function GuidesScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.title}>{guide.title}</Text>
-                {guide.snippet ? <Snippet text={guide.snippet} /> : null}
+                {guide.snippet ? (
+                  <Snippet text={guide.snippet} />
+                ) : guide.summary ? (
+                  <Text style={text.subtle} numberOfLines={2}>
+                    {guide.summary}
+                  </Text>
+                ) : null}
               </View>
               <ChevronRight color={colors.textMuted} size={20} />
             </Pressable>

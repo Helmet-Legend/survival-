@@ -1,6 +1,6 @@
 /**
  * Préparer : la porte d'entrée de tout ce qui sert à se préparer, rangé en
- * quatre blocs (où j'en suis, planifier, s'entraîner). Chaque ligne ouvre
+ * quatre blocs (mon foyer, où j'en suis, planifier, s'entraîner). Chaque ligne ouvre
  * l'écran existant ; le retour y ramène.
  */
 import {
@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Hourglass,
+  House,
   ListChecks,
   ShoppingCart,
   Users,
@@ -25,6 +26,10 @@ import {
   monthTotal,
 } from '../../plan/purchasePlan';
 import { getReadiness } from '../../plan/readiness';
+import {
+  loadHousehold,
+  loadTargetDays,
+} from '../../resilience/resilienceCalculator';
 import { Gauge, ScreenTitle } from '../components/controls';
 import { formatEuros } from '../format';
 import { useNavigation, type Overlay } from '../navigation';
@@ -61,7 +66,18 @@ export function PrepareScreen() {
         plan.budget !== undefined ? ` / ${formatEuros(plan.budget)}` : ''
       }`;
     }
-    return { readiness, purchases };
+    const [household, targetDays] = await Promise.all([
+      loadHousehold(db),
+      loadTargetDays(db),
+    ]);
+    const n = household.members;
+    return {
+      readiness,
+      purchases,
+      household: `${n} personne${
+        n > 1 ? 's' : ''
+      } · objectif ${targetDays} jours`,
+    };
   });
 
   const open = (overlay: Overlay) => () => navigation.open(overlay);
@@ -94,6 +110,15 @@ export function PrepareScreen() {
           </Text>
         </Pressable>
       ) : null}
+
+      <Text style={[text.label, styles.section]}>Mon foyer</Text>
+      <NavRow
+        icon={House}
+        title={data?.household ?? 'Mon foyer'}
+        detail="Personnes, objectif, eau, calories et énergie"
+        accessibilityLabel="Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie"
+        onPress={open('household')}
+      />
 
       <Text style={[text.label, styles.section]}>Où j’en suis</Text>
       <NavRow

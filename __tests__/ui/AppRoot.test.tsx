@@ -617,7 +617,9 @@ describe('écrans', () => {
         /^Énergie stockée : 0 Wh utiles, Capacités non renseignées/,
       ),
     ).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+    );
     expect(await screen.findByText('Scénarios de consommation')).toBeTruthy();
     expect(
       screen.getByText(/Autonomie du foyer dans ce scénario : 10 j/),
@@ -632,7 +634,9 @@ describe('écrans', () => {
 
   it('calcule les besoins en eau par usage et les besoins électriques', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+    );
     await fireEvent.press(
       await screen.findByText('Calculateurs eau et électricité'),
     );
@@ -823,6 +827,7 @@ describe('écrans', () => {
     expect(screen.queryByLabelText(/périmé. Ouvrir le stock/)).toBeNull();
 
     await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Mon foyer et hypothèses'));
     await fireEvent.press(await screen.findByText('2 L'));
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(
@@ -896,17 +901,54 @@ describe('écrans', () => {
       await screen.findByLabelText('Ouvrir le plan d’achats'),
     ).toBeTruthy();
     // SOS dans l’en-tête, depuis n’importe quelle section.
-    await fireEvent.press(
-      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
-    );
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
     await fireEvent.press(await screen.findByLabelText('Retour à Préparer'));
     expect(
       await screen.findByLabelText('Ouvrir le plan d’achats'),
     ).toBeTruthy();
   });
 
+  it('montre sur l’accueil les actions prioritaires et les accès rapides', async () => {
+    await openApp();
+    // Prochaine action de l’indice : une lampe, dans la fiche d’ajout habituelle.
+    await fireEvent.press(
+      screen.getByLabelText('À faire : Une lampe par personne'),
+    );
+    expect(await screen.findByDisplayValue('Lampe frontale')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retour'));
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Accueil' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir les fiches pratiques'),
+    );
+    expect(
+      screen.getByRole('tab', { name: 'Fiches' }).props.accessibilityState,
+    ).toEqual({ selected: true });
+  });
+
+  it('règle le foyer dans Mon foyer et ouvre le kit depuis l’urgence', async () => {
+    await openApp();
+    await fireEvent.press(
+      screen.getByLabelText('Hypothèses du calcul. Modifier dans Mon foyer'),
+    );
+    expect(await screen.findByText('Mon foyer')).toBeTruthy();
+    await fireEvent.press(await screen.findByText('2 L'));
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    expect(
+      await screen.findByLabelText('Eau disponible : 30 L, 15 j d’autonomie'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la check-list du kit 72 heures'),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retour à l’urgence'));
+    expect(await screen.findByText('Ma position')).toBeTruthy();
+  });
+
   it('affiche l’indice de préparation et ses actions', async () => {
     await openApp();
+    // Prochaine action de l’indice : aussi dans « À faire en priorité ».
+    expect(screen.getByText('À faire en priorité')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
     const card = await screen.findByLabelText(
       /^Indice de préparation : \d+ sur 100, .+\. Voir le détail$/,
     );
@@ -929,7 +971,9 @@ describe('écrans', () => {
 
   it('échelonne les achats et les rappelle sur l’accueil', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+    );
     await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
     await fireEvent.press(await screen.findByText('6 mois'));
     await fireEvent.press(screen.getByText('Créer le plan'));
@@ -960,7 +1004,9 @@ describe('écrans', () => {
 
   it('chiffre les achats, applique un budget et met à jour sans perdre les coches', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+    );
     await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
     await fireEvent.press(await screen.findByText('Créer le plan'));
     await screen.findByText(/^Plan créé/);
@@ -1029,6 +1075,7 @@ describe('écrans', () => {
     );
     await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
     expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Plus d’actions'));
     await fireEvent.press(screen.getByLabelText('Historique des mouvements'));
     expect(await screen.findByText('Aujourd’hui')).toBeTruthy();
     expect(
@@ -1049,8 +1096,13 @@ describe('écrans', () => {
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
     expect(screen.getByText('2 pers.')).toBeTruthy();
 
-    // Et toujours depuis les réglages.
-    await fireEvent.press(screen.getByLabelText('Réglages'));
+    // Et depuis Mon foyer, dans l’onglet Préparer.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie',
+      ),
+    );
     await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
     expect(await screen.findByText('1 pers.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
@@ -1062,7 +1114,9 @@ describe('écrans', () => {
     // 10 jours d'eau pour un objectif de 14 : 12 L à racheter, vivres suffisants.
     expect(screen.getByText('Sous l’objectif')).toBeTruthy();
     expect(screen.getByText('Ressource limitante : eau')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+    );
     expect(await screen.findByText('À racheter pour 14 j')).toBeTruthy();
     expect(screen.getByText('+12 L')).toBeTruthy();
     expect(screen.queryByText(/^\+.*kcal$/)).toBeNull();
@@ -1107,7 +1161,9 @@ describe('écrans', () => {
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     await fireEvent.press(
-      await screen.findByLabelText('Accéder aux plans d’action'),
+      await screen.findByLabelText(
+        'Détail du calcul : ouvrir le plan d’action',
+      ),
     );
     expect(await screen.findByText('+5 kg')).toBeTruthy();
   });
@@ -1303,6 +1359,24 @@ describe('écrans', () => {
     expect(screen.queryByText('Lait')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Voir les 4 péremptions'));
     expect(await screen.findByText('Lait')).toBeTruthy();
+
+    // « À surveiller » dans les stocks : périmé d’abord, puis sous 30 jours.
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    await fireEvent.press(
+      await screen.findByLabelText('1 lot périmé. Ouvrir le stock'),
+    );
+    const watched = await screen.findAllByLabelText(
+      /^(Bouteilles|Compote|Pâtes|Lait), /,
+    );
+    expect(watched.map(w => w.props.accessibilityLabel.split(',')[0])).toEqual([
+      'Bouteilles',
+      'Compote',
+      'Pâtes',
+    ]);
+    expect(
+      screen.getByRole('button', { name: 'À surveiller · 3' }).props
+        .accessibilityState,
+    ).toEqual({ selected: true });
   });
 
   it('retire bidon par bidon l’eau saisie avant les fiches', async () => {
@@ -1554,7 +1628,7 @@ describe('écrans', () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await fireEvent.changeText(
-      await screen.findByLabelText('Rechercher un guide'),
+      await screen.findByLabelText('Rechercher une fiche'),
       'severe',
     );
     await fireEvent.press(await screen.findByText('Hypothermie'));
@@ -1606,7 +1680,7 @@ describe('écrans', () => {
     expect(screen.queryByText('Tableau comparatif')).toBeNull();
 
     await fireEvent.changeText(
-      screen.getByLabelText('Rechercher un guide'),
+      screen.getByLabelText('Rechercher une fiche'),
       'casque FAST',
     );
     expect(

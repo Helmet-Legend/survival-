@@ -12,16 +12,22 @@ import Svg, { Circle } from 'react-native-svg';
 import { formatNumber } from '../format';
 import { colors, fonts, space } from '../theme';
 
-const SIZE = 232;
-const STROKE = 14;
+const FULL_SIZE = 232;
+const FULL_STROKE = 14;
+const COMPACT_SIZE = 128;
+const COMPACT_STROKE = 11;
 
 export function AutonomyGauge(props: {
   days: number;
   targetDays: number;
   /** Couleur de l'anneau (orange par défaut, rouge si critique). */
   color?: string;
+  /** Version réduite de la carte de synthèse : chiffre et unité seuls. */
+  compact?: boolean;
 }) {
   const color = props.color ?? colors.primary;
+  const SIZE = props.compact ? COMPACT_SIZE : FULL_SIZE;
+  const STROKE = props.compact ? COMPACT_STROKE : FULL_STROKE;
   const fraction =
     props.targetDays > 0
       ? Math.max(0, Math.min(1, props.days / props.targetDays))
@@ -41,7 +47,7 @@ export function AutonomyGauge(props: {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { width: SIZE, height: SIZE }]}>
       <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
         <Circle
           cx={center}
@@ -71,27 +77,35 @@ export function AutonomyGauge(props: {
           </>
         ) : null}
       </Svg>
-      <Text style={styles.title}>Autonomie du foyer</Text>
+      {props.compact ? null : (
+        <Text style={styles.title}>Autonomie du foyer</Text>
+      )}
       <Text
-        style={[styles.days, { color: colors.primaryBright }]}
+        style={[
+          styles.days,
+          { color: colors.primaryBright, maxWidth: SIZE - STROKE * 4 },
+          props.compact && styles.daysCompact,
+        ]}
         accessibilityLabel={`${props.days} jours`}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
         {formatNumber(props.days, 0)}
       </Text>
-      <Text style={styles.unit}>{props.days > 1 ? 'jours' : 'jour'}</Text>
-      <View style={styles.drop}>
-        <Droplet color={colors.cyan} fill={colors.cyan} size={20} />
-      </View>
+      <Text style={[styles.unit, props.compact && styles.unitCompact]}>
+        {props.days > 1 ? 'jours' : 'jour'}
+      </Text>
+      {props.compact ? null : (
+        <View style={styles.drop}>
+          <Droplet color={colors.cyan} fill={colors.cyan} size={20} />
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    width: SIZE,
-    height: SIZE,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
@@ -112,9 +126,10 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '800',
     lineHeight: 70,
-    maxWidth: SIZE - STROKE * 4,
     fontVariant: ['tabular-nums'],
   },
+  daysCompact: { fontSize: 44, lineHeight: 48 },
+  unitCompact: { fontSize: 15, marginTop: -space.s },
   unit: {
     color: colors.primary,
     fontFamily: fonts.display,

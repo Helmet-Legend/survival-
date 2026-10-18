@@ -1,5 +1,5 @@
 /**
- * Réglages : composition du foyer, objectif d'autonomie, rappels de
+ * Réglages : accès à Mon foyer (hypothèses du calcul), rappels de
  * péremption, confidentialité et verrouillage.
  */
 import { Bell, Lock, Moon, ShieldCheck, Users } from 'lucide-react-native';
@@ -7,33 +7,15 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import {
-  loadHousehold,
-  loadTargetDays,
-  saveHousehold,
-  saveTargetDays,
-} from '../../resilience/resilienceCalculator';
-import {
   loadRemindersEnabled,
   reminderTimes,
   saveRemindersEnabled,
   syncReminders,
 } from '../../resilience/reminders';
-import {
-  Button,
-  Chip,
-  Notice,
-  Panel,
-  ScreenTitle,
-  Stepper,
-} from '../components/controls';
-import { formatDate, formatNumber, nextTarget } from '../format';
+import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
+import { formatDate } from '../format';
 import { localToday } from '../../lib/dates';
 import { useNavigation } from '../navigation';
-import {
-  ENERGY_NEED_CHOICES,
-  loadEnergyNeed,
-  saveEnergyNeed,
-} from '../../resilience/energy';
 import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
 import { loadOnlineLookup, saveOnlineLookup } from '../../scanner/products';
 import { useSession } from '../session';
@@ -41,42 +23,20 @@ import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
 import { BackupPanel } from './BackupPanel';
 
-const MAX_MEMBERS = 12;
-
-const KCAL_CHOICES = [1800, 2000, 2200, 2500] as const;
-
 export function SettingsScreen(props: { onLock: () => void }) {
   const { db, screenCapture, reminders } = useSession();
   const redLight = useRedLight();
   const navigation = useNavigation();
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const { data, error, reload } = useLoader(async () => {
-    const [
-      household,
-      targetDays,
-      captureAllowed,
-      remindersOn,
-      upcoming,
-      whPerPerson,
-      barcodeOnline,
-    ] = await Promise.all([
-      loadHousehold(db),
-      loadTargetDays(db),
-      screenCapture.isAllowed(),
-      loadRemindersEnabled(db),
-      reminderTimes(db),
-      loadEnergyNeed(db),
-      loadOnlineLookup(db),
-    ]);
-    return {
-      household,
-      targetDays,
-      captureAllowed,
-      remindersOn,
-      upcoming,
-      whPerPerson,
-      barcodeOnline,
-    };
+    const [captureAllowed, remindersOn, upcoming, barcodeOnline] =
+      await Promise.all([
+        screenCapture.isAllowed(),
+        loadRemindersEnabled(db),
+        reminderTimes(db),
+        loadOnlineLookup(db),
+      ]);
+    return { captureAllowed, remindersOn, upcoming, barcodeOnline };
   });
 
   const title = (
@@ -97,14 +57,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
   if (data === null) {
     return <View style={styles.page}>{title}</View>;
   }
-  const {
-    household,
-    targetDays,
-    captureAllowed,
-    remindersOn,
-    upcoming,
-    whPerPerson,
-  } = data;
+  const { captureAllowed, remindersOn, upcoming } = data;
   const toggleReminders = async (enabled: boolean) => {
     setReminderNotice(null);
     if (enabled && !(await reminders.requestPermission())) {
@@ -122,135 +75,16 @@ export function SettingsScreen(props: { onLock: () => void }) {
     await reload();
   };
 
-  const changeMembers = async (delta: number) => {
-    await saveHousehold(db, {
-      ...household,
-      members: household.members + delta,
-    });
-    await reload();
-  };
-  const changeWater = async (liters: number) => {
-    await saveHousehold(db, { ...household, waterLitersPerPersonDay: liters });
-    await reload();
-  };
-  const changeKcal = async (kcal: number) => {
-    await saveHousehold(db, { ...household, kcalPerPersonDay: kcal });
-    await reload();
-  };
-  const changeEnergy = async (wh: number) => {
-    await saveEnergyNeed(db, wh);
-    await reload();
-  };
-  const changeTarget = async (direction: 1 | -1) => {
-    await saveTargetDays(db, nextTarget(targetDays, direction));
-    await reload();
-  };
-
   return (
     <ScrollView contentContainerStyle={styles.page}>
       {title}
-      <Panel title="Foyer" right={<Users color={colors.cyan} size={20} />}>
-        <View style={styles.settingRow}>
-          <Text style={text.body}>Personnes</Text>
-          <Stepper
-            value={`${household.members} pers.`}
-            onDecrease={() => {
-              void changeMembers(-1);
-            }}
-            onIncrease={() => {
-              void changeMembers(1);
-            }}
-            canDecrease={household.members > 1}
-            canIncrease={household.members < MAX_MEMBERS}
-            decreaseLabel="Retirer une personne"
-            increaseLabel="Ajouter une personne"
-          />
-        </View>
-        <View style={styles.settingRow}>
-          <Text style={text.body}>Objectif</Text>
-          <Stepper
-            value={`${targetDays} j`}
-            onDecrease={() => {
-              void changeTarget(-1);
-            }}
-            onIncrease={() => {
-              void changeTarget(1);
-            }}
-            canDecrease={nextTarget(targetDays, -1) !== targetDays}
-            canIncrease={nextTarget(targetDays, 1) !== targetDays}
-            decreaseLabel="Réduire l’objectif"
-            increaseLabel="Augmenter l’objectif"
-          />
-        </View>
-        <View style={styles.settingRow}>
-          <Text style={[text.body, styles.grow]}>
-            Eau par personne et par jour
-          </Text>
-          <View style={styles.chips}>
-            {[2, 3].map(liters => (
-              <Chip
-                key={liters}
-                label={`${liters} L`}
-                selected={household.waterLitersPerPersonDay === liters}
-                onPress={() => {
-                  void changeWater(liters);
-                }}
-              />
-            ))}
-          </View>
-        </View>
-        <Text style={text.subtle}>
-          2 L : référence du guide officiel français (kit 72 h). 3 L : marge
-          pour la cuisine, l’hygiène et la chaleur.
-        </Text>
-        <View style={styles.settingRow}>
-          <Text style={[text.body, styles.grow]}>
-            Calories par personne et par jour
-          </Text>
-        </View>
-        <View style={styles.chips}>
-          {KCAL_CHOICES.map(kcal => (
-            <Chip
-              key={kcal}
-              label={formatNumber(kcal, 0)}
-              selected={household.kcalPerPersonDay === kcal}
-              onPress={() => {
-                void changeKcal(kcal);
-              }}
-            />
-          ))}
-        </View>
-        <Text style={text.subtle}>
-          2 000 kcal : adulte au repos. Effort physique : 2 500 à 3 500 kcal.
-          Enfant : 1 000 à 2 000 kcal selon l’âge.
-        </Text>
-        <View style={styles.settingRow}>
-          <Text style={[text.body, styles.grow]}>
-            Énergie par personne et par jour
-          </Text>
-        </View>
-        <View style={styles.chips}>
-          {ENERGY_NEED_CHOICES.map(wh => (
-            <Chip
-              key={wh}
-              label={`${wh} Wh`}
-              selected={whPerPerson === wh}
-              onPress={() => {
-                void changeEnergy(wh);
-              }}
-            />
-          ))}
-        </View>
-        <Text style={text.subtle}>
-          Une recharge de téléphone fait 10 à 20 Wh (ordre de grandeur). Sert à
-          compter les jours couverts par vos batteries.
-        </Text>
-        <Text style={text.muted}>
-          Besoins par personne :{' '}
-          {formatNumber(household.waterLitersPerPersonDay)} L d’eau et{' '}
-          {formatNumber(household.kcalPerPersonDay, 0)} kcal par jour.
-        </Text>
-      </Panel>
+      <Button
+        icon={Users}
+        chevron
+        label="Mon foyer et hypothèses"
+        accessibilityLabel="Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie"
+        onPress={() => navigation.open('household')}
+      />
 
       {reminders.available ? (
         <Panel
