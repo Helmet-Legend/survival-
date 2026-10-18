@@ -2,7 +2,8 @@
  * Rappels de péremption du téléphone (module natif Android
  * `ResiliosReminders`). Absent sur iOS, dans les tests et l'aperçu web.
  */
-import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import * as ReactNative from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 import type { ReminderScheduler } from '../resilience/reminders';
 
@@ -31,6 +32,8 @@ export function nativeReminders(): ReminderScheduler {
       if (typeof Platform.Version !== 'number' || Platform.Version < 33) {
         return true;
       }
+      // Accès par l'espace de noms : absent de react-native-web (aperçu).
+      const { PermissionsAndroid } = ReactNative;
       const result = await PermissionsAndroid.request(
         'android.permission.POST_NOTIFICATIONS',
       );

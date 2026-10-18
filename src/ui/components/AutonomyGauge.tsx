@@ -1,6 +1,7 @@
 /**
  * Jauge circulaire d'autonomie : anneau orange sur piste sombre, nombre de
- * jours au centre et goutte cyan. Le remplissage représente la part de
+ * jours au centre (sur fond noir plein, lisible sur la photo de l'accueil)
+ * et goutte cyan. Le remplissage représente la part de
  * l'objectif couverte (plafonnée à 100 %).
  */
 import { Droplet } from 'lucide-react-native';
@@ -49,7 +50,6 @@ export function AutonomyGauge(props: {
           stroke={colors.border}
           strokeWidth={1}
           fill={colors.bg}
-          fillOpacity={0.55}
         />
         <Circle
           cx={center}

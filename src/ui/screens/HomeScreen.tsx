@@ -22,7 +22,6 @@ import {
 } from '../../resilience/resilienceCalculator';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import {
-  Backdrop,
   Button,
   MetricCard,
   Notice,
@@ -30,7 +29,6 @@ import {
   StatusChip,
   Stepper,
 } from '../components/controls';
-import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import {
   autonomyStatus,
   BUCKET_LABELS,
@@ -43,7 +41,7 @@ import {
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
-import { colors, radius, sizes, space, text, tint } from '../theme';
+import { colors, radius, sizes, space, solidTint, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
 
 /** Même borne que dans les Réglages. */
@@ -90,7 +88,6 @@ export function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <View style={styles.hero}>
-        <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.55} />
         <AutonomyGauge
           days={report.days}
           targetDays={targetDays}
@@ -98,7 +95,9 @@ export function HomeScreen() {
         />
         <View style={styles.heroFoot}>
           <StatusChip tone={status.tone} label={status.label} />
-          <Text style={text.muted}>objectif {targetDays} j</Text>
+          <View style={styles.target}>
+            <Text style={styles.targetText}>objectif {targetDays} j</Text>
+          </View>
         </View>
       </View>
 
@@ -272,6 +271,14 @@ const styles = StyleSheet.create({
     paddingVertical: space.l,
     gap: space.m,
   },
+  // Pastille sombre : lisible sur la photo du fond.
+  target: {
+    paddingVertical: space.xs,
+    paddingHorizontal: space.m,
+    borderRadius: radius.pill,
+    backgroundColor: tint(colors.bg, 'cc'),
+  },
+  targetText: { color: colors.text, fontSize: 14 },
   heroFoot: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -300,7 +307,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: tint(colors.primary, '12'),
+    // Teinte opaque : la photo du fond ne passe pas au travers.
+    backgroundColor: solidTint(colors.primary, 0.07),
   },
   incomplete: {
     flexDirection: 'row',
@@ -312,7 +320,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     borderWidth: 1,
     borderColor: tint(colors.food, '66'),
-    backgroundColor: tint(colors.food, '12'),
+    backgroundColor: solidTint(colors.food, 0.07),
   },
   limitingText: { color: colors.cyanSoft, fontSize: 15, fontWeight: '600' },
   pressed: { opacity: 0.82 },

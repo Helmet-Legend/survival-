@@ -55,6 +55,21 @@ export function tint(color: string, alpha = '26'): string {
   return `${color}${alpha}`;
 }
 
+/**
+ * Comme `tint`, mais opaque : la couleur mélangée au fond de l'application
+ * (`alpha` de 0 à 1). Pour les éléments posés sur une photo.
+ */
+export function solidTint(color: string, alpha: number): string {
+  const mix = (i: number) => {
+    const fg = parseInt(color.slice(i, i + 2), 16);
+    const bg = parseInt(colors.bg.slice(i, i + 2), 16);
+    return Math.round(bg + (fg - bg) * alpha)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${mix(1)}${mix(3)}${mix(5)}`;
+}
+
 export const fonts = {
   /** Titres et chiffres : condensée si l'appareil en dispose. */
   display: Platform.select({
