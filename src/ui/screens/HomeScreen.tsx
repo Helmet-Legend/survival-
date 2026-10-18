@@ -43,6 +43,7 @@ import {
   BUCKET_LABELS,
   BUCKET_TONES,
   formatDate,
+  formatEuros,
   formatNumber,
   formatRelativeDays,
   UNIT_LABELS,
@@ -385,14 +386,17 @@ function MonthPurchases() {
   if (pending.length === 0) {
     return null;
   }
+  const cost = pending.reduce((sum, e) => sum + (e.price ?? 0), 0);
   return (
     <Button
       icon={ShoppingCart}
       chevron
       label={`ACHATS · ${monthLabel(monthOf(today))} · ${
         pending.length
-      } à faire`}
-      accessibilityLabel={`Achats du mois : ${pending.length} à faire. Ouvrir le plan d’achats`}
+      } à faire${cost > 0 ? ` · ${formatEuros(cost)}` : ''}`}
+      accessibilityLabel={`Achats du mois : ${pending.length} à faire${
+        cost > 0 ? `, ${formatEuros(cost)}` : ''
+      }. Ouvrir le plan d’achats`}
       onPress={() => navigation.open('purchases')}
     />
   );

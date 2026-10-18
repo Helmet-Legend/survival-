@@ -921,6 +921,67 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('chiffre les achats, applique un budget et met à jour sans perdre les coches', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
+    await fireEvent.press(await screen.findByText('Créer le plan'));
+    await screen.findByText(/^Plan créé/);
+    const radioName = 'Radio à piles, Pour suivre les consignes des autorités.';
+    const price = screen.getByLabelText(`Prix : ${radioName}`);
+    await fireEvent.changeText(price, '35');
+    await fireEvent(price, 'blur');
+    expect(await screen.findAllByText(/^35 €/)).not.toHaveLength(0);
+
+    const budget = screen.getByLabelText('Budget par mois (€)');
+    await fireEvent.changeText(budget, '50');
+    await fireEvent(budget, 'blur');
+    expect(await screen.findByText(/^Budget de 50 € par mois/)).toBeTruthy();
+    expect(screen.getAllByText('35 € / 50 €')).not.toHaveLength(0);
+
+    await fireEvent.press(screen.getByRole('checkbox', { name: radioName }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('checkbox', { name: radioName }).props
+          .accessibilityState,
+      ).toEqual({ checked: true }),
+    );
+    await fireEvent.press(screen.getByText('Mettre à jour d’après le stock'));
+    expect(await screen.findByText(/coches gardées\.$/)).toBeTruthy();
+    expect(
+      screen.getByRole('checkbox', { name: radioName }).props
+        .accessibilityState,
+    ).toEqual({ checked: true });
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    expect(
+      await screen.findByLabelText(
+        /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
+      ),
+    ).toBeTruthy();
+  });
+
+  it('ajoute au plan d’achats les manques d’une crise simulée', async () => {
+    await openApp();
+    await fireEvent.press(
+      screen.getByLabelText('Ouvrir le simulateur de crise'),
+    );
+    await fireEvent.press(await screen.findByText('Confinement'));
+    await fireEvent.press(await screen.findByText('21 jours'));
+    await screen.findByText(/manque dès le jour 11/);
+    await fireEvent.press(
+      screen.getByText('Ajouter les manques au plan d’achats'),
+    );
+    expect(
+      await screen.findByText(/^Ajouté au plan d’achats et réparti/),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Ouvrir le plan d’achats'));
+    expect(
+      (await screen.findAllByText(/^Eau potable · confinement de 21 jours/))
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(' · simulation').length).toBeGreaterThan(0);
+  });
+
   it('trace chaque mouvement dans l’historique', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));

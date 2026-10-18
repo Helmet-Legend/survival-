@@ -16,10 +16,16 @@ import {
   type CrisisDay,
   type CrisisId,
   type CrisisLink,
+  type CrisisResult,
   type ResourceDay,
   type ResourceOutcome,
 } from '../../plan/crisis';
+import {
+  addCrisisShortfalls,
+  type CrisisShortfall,
+} from '../../plan/purchasePlan';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
+import { syncReminders } from '../../resilience/reminders';
 import {
   loadConsumableLots,
   loadHousehold,
@@ -45,13 +51,68 @@ const formatKcal = (kcal: number) => `${formatNumber(kcal, 0)} kcal`;
 const formatWh = (wh: number) => `${formatNumber(wh, 0)} Wh`;
 
 export function CrisisScreen() {
-  const { db, repo, bags } = useSession();
+  const { db, repo, bags, documents, reminders } = useSession();
   const navigation = useNavigation();
   const [crisisId, setCrisisId] = useState<CrisisId>('blackout');
   const scenario = crisisById(crisisId);
   const [days, setDays] = useState(scenario.defaultDays);
   const [bagId, setBagId] = useState<string | null>(null);
   const [guideSlug, setGuideSlug] = useState<string | null>(null);
+  const [planned, setPlanned] = useState<{
+    tone: 'ok' | 'error';
+    message: string;
+  } | null>(null);
+
+  const addToPlan = async (result: CrisisResult) => {
+    const crisis = `${scenario.label.toLowerCase()} de ${plural(days, 'jour')}`;
+    const shortfalls: CrisisShortfall[] = [];
+    if (result.water.missing > 0) {
+      shortfalls.push({ kind: 'water', amount: result.water.missing, crisis });
+    }
+    if (result.food.missing > 0) {
+      shortfalls.push({ kind: 'food', amount: result.food.missing, crisis });
+    }
+    if (result.energy && result.energy.missing > 0) {
+      shortfalls.push({
+        kind: 'energy',
+        amount: result.energy.missing,
+        crisis,
+      });
+    }
+    try {
+      const [items, bagList, docs] = await Promise.all([
+        repo.listItems({ bag: 'none' }),
+        bags.list(),
+        documents.list(),
+      ]);
+      const { alreadyPlanned } = await addCrisisShortfalls(
+        db,
+        {
+          items,
+          bags: bagList,
+          documentCount: docs.length,
+          asOf: localToday(),
+        },
+        shortfalls,
+      );
+      await syncReminders(db, reminders);
+      const added = shortfalls.length - alreadyPlanned.length;
+      setPlanned({
+        tone: 'ok',
+        message:
+          added === 0
+            ? 'Ces manques sont déjà couverts par les achats prévus.'
+            : `Ajouté au plan d’achats et réparti sur les mois à venir${
+                alreadyPlanned.length > 0 ? ' (le reste était déjà prévu)' : ''
+              }.`,
+      });
+    } catch (e) {
+      setPlanned({
+        tone: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
 
   const { data: bagList } = useLoader(() => bags.list());
   const chosenBag = scenario.usesBag
@@ -130,6 +191,7 @@ export function CrisisScreen() {
     });
 
   const choose = (id: CrisisId) => {
+    setPlanned(null);
     setCrisisId(id);
     setDays(crisisById(id).defaultDays);
   };
@@ -160,7 +222,10 @@ export function CrisisScreen() {
               key={n}
               label={plural(n, 'jour')}
               selected={n === days}
-              onPress={() => setDays(n)}
+              onPress={() => {
+                setPlanned(null);
+                setDays(n);
+              }}
             />
           ))}
         </View>
@@ -299,14 +364,27 @@ export function CrisisScreen() {
                 .
               </Text>
             ) : null}
-            {[data.result.water, data.result.food, data.result.energy].some(
+            {!scenario.usesBag &&
+            [data.result.water, data.result.food, data.result.energy].some(
               o => o !== null && o.missing > 0,
             ) ? (
               <Button
-                chevron
-                label="Échelonner les achats sur plusieurs mois"
-                onPress={() => navigation.open('purchases')}
+                variant="primary"
+                label="Ajouter les manques au plan d’achats"
+                onPress={() => {
+                  void addToPlan(data.result);
+                }}
               />
+            ) : null}
+            {planned ? (
+              <>
+                <Notice {...planned} />
+                <Button
+                  chevron
+                  label="Ouvrir le plan d’achats"
+                  onPress={() => navigation.open('purchases')}
+                />
+              </>
             ) : null}
           </Panel>
 

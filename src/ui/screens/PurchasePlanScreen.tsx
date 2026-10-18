@@ -1,7 +1,9 @@
 /**
  * Plan d'achats échelonné : ce qui manque à la préparation, réparti mois par
- * mois, l'essentiel d'abord. Chaque achat se coche ; un rappel neutre peut
- * être programmé le 1er de chaque mois.
+ * mois, l'essentiel d'abord. Chaque achat se coche et peut recevoir son prix ;
+ * un budget mensuel reporte ce qui dépasse. La mise à jour d'après le stock
+ * garde les coches. Un rappel neutre peut être programmé le 1er de chaque
+ * mois.
  */
 import { CheckCircle2, Circle, ShoppingCart } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -11,6 +13,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -23,8 +26,12 @@ import {
   monthLabel,
   PLAN_MONTHS,
   PLAN_MONTHS_DEFAULT,
+  monthTotal,
   savePurchasePlan,
+  setPurchaseBudget,
   setPurchaseDone,
+  setPurchasePrice,
+  updatePurchasePlan,
   type PurchaseEntry,
 } from '../../plan/purchasePlan';
 import {
@@ -35,14 +42,25 @@ import {
 import {
   Button,
   Chip,
+  Field,
   Notice,
   Panel,
   ScreenTitle,
 } from '../components/controls';
+import { formatEuros, formatNumber, parseDecimal } from '../format';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+
+/** Montant saisi en euros, null si vide ; NaN si invalide. */
+function parseEuros(input: string): number | null {
+  if (input.trim() === '') {
+    return null;
+  }
+  const value = parseDecimal(input.replace('€', ''));
+  return value >= 0 && value <= 100000 ? value : NaN;
+}
 
 export function PurchasePlanScreen() {
   const { db, repo, bags, documents, reminders } = useSession();
@@ -57,18 +75,90 @@ export function PurchasePlanScreen() {
     remindersOn: await loadRemindersEnabled(db),
   }));
 
+  const [budgetText, setBudgetText] = useState<string | null>(null);
+
+  const stockInput = async () => {
+    const [items, bagList, docs] = await Promise.all([
+      repo.listItems({ bag: 'none' }),
+      bags.list(),
+      documents.list(),
+    ]);
+    return {
+      items,
+      bags: bagList,
+      documentCount: docs.length,
+      asOf: localToday(),
+    };
+  };
+
+  const update = async () => {
+    try {
+      const plan = await updatePurchasePlan(db, await stockInput());
+      await syncReminders(db, reminders);
+      const left = plan.entries.filter(e => !e.done).length;
+      setFeedback({
+        tone: 'ok',
+        message:
+          left === 0
+            ? 'Plan à jour : plus rien à acheter.'
+            : `Plan à jour : ${left} achat${left > 1 ? 's' : ''} restant${
+                left > 1 ? 's' : ''
+              }, coches gardées.`,
+      });
+      await reload();
+    } catch (e) {
+      setFeedback({
+        tone: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  const saveBudget = async (input: string) => {
+    const budget = parseEuros(input);
+    if (Number.isNaN(budget) || budget === 0) {
+      setFeedback({
+        tone: 'error',
+        message: 'Budget : saisissez un montant en euros, par exemple 50.',
+      });
+      return;
+    }
+    await setPurchaseBudget(db, budget, localToday());
+    await syncReminders(db, reminders);
+    setBudgetText(null);
+    setFeedback({
+      tone: 'ok',
+      message:
+        budget === null
+          ? 'Budget retiré.'
+          : `Budget de ${formatEuros(
+              budget,
+            )} par mois : les achats chiffrés sont répartis pour le respecter.`,
+    });
+    await reload();
+  };
+
+  const savePrice = async (entry: PurchaseEntry, input: string) => {
+    const price = parseEuros(input);
+    if (Number.isNaN(price)) {
+      setFeedback({
+        tone: 'error',
+        message: `Prix de « ${entry.label} » : saisissez un montant en euros.`,
+      });
+      return;
+    }
+    if (price === (entry.price ?? null)) {
+      return;
+    }
+    await setPurchasePrice(db, entry.id, price, localToday());
+    await syncReminders(db, reminders);
+    await reload();
+  };
+
   const create = async () => {
     try {
-      const [items, bagList, docs] = await Promise.all([
-        repo.listItems({ bag: 'none' }),
-        bags.list(),
-        documents.list(),
-      ]);
       const plan = await createPurchasePlan(db, {
-        items,
-        bags: bagList,
-        documentCount: docs.length,
-        asOf: localToday(),
+        ...(await stockInput()),
         months,
       });
       await syncReminders(db, reminders);
@@ -211,15 +301,59 @@ export function PurchasePlanScreen() {
         </Text>
       </Panel>
 
-      {byMonth.map((entries, m) =>
-        entries.length === 0 ? null : (
+      <Panel title="Budget">
+        <Field
+          label="Budget par mois (€)"
+          keyboardType="decimal-pad"
+          placeholder="Sans budget"
+          value={
+            budgetText ??
+            (plan.budget === undefined ? '' : formatNumber(plan.budget, 2))
+          }
+          onChangeText={setBudgetText}
+          onBlur={() => {
+            if (budgetText !== null) {
+              void saveBudget(budgetText);
+            }
+          }}
+          onSubmitEditing={() => {
+            if (budgetText !== null) {
+              void saveBudget(budgetText);
+            }
+          }}
+          hint="Saisissez le prix de vos achats ci-dessous : ceux qui dépassent le budget du mois passent au mois suivant, le plan s’allonge si besoin. Les essentiels restent en tête. Aucun prix n’est estimé par Fenrir."
+        />
+      </Panel>
+
+      {byMonth.map((entries, m) => {
+        if (entries.length === 0) {
+          return null;
+        }
+        const total = monthTotal(plan, m);
+        const over = plan.budget !== undefined && total > plan.budget;
+        return (
           <Panel
             key={m}
             title={`${m === current ? 'Ce mois-ci · ' : ''}${monthLabel(
               addMonths(plan.start, m),
             )}`}
             accent={m === current ? colors.primary : undefined}
+            right={
+              total > 0 ? (
+                <Text style={[text.mono, over ? styles.over : null]}>
+                  {formatEuros(total)}
+                  {plan.budget !== undefined
+                    ? ` / ${formatEuros(plan.budget)}`
+                    : ''}
+                </Text>
+              ) : undefined
+            }
           >
+            {over ? (
+              <Text style={[text.subtle, styles.over]}>
+                Les essentiels dépassent le budget de ce mois.
+              </Text>
+            ) : null}
             {entries.map(e => (
               <PurchaseRow
                 key={e.id}
@@ -227,6 +361,9 @@ export function PurchasePlanScreen() {
                 past={m < current}
                 onToggle={() => {
                   void toggle(e);
+                }}
+                onPrice={value => {
+                  void savePrice(e, value);
                 }}
                 onAdd={
                   e.category === null
@@ -240,16 +377,29 @@ export function PurchasePlanScreen() {
               />
             ))}
           </Panel>
-        ),
-      )}
+        );
+      })}
 
-      <Panel title="Recalculer">
+      <Panel title="Mettre à jour">
         <Text style={text.muted}>
-          Après des achats ou un changement du foyer, recalculez le plan à
-          partir du stock actuel. Les coches sont remises à zéro.
+          Après des achats ou un changement du foyer : les manques sont
+          recalculés d’après le stock actuel, les achats cochés, les prix et les
+          ajouts du simulateur sont gardés.
+        </Text>
+        <Button
+          variant="primary"
+          label="Mettre à jour d’après le stock"
+          onPress={update}
+        />
+      </Panel>
+
+      <Panel title="Recommencer">
+        <Text style={text.muted}>
+          Un nouveau plan à partir de ce mois-ci : coches, prix et ajouts du
+          simulateur sont effacés.
         </Text>
         {monthChooser}
-        <Button label="Recalculer le plan" onPress={create} />
+        <Button label="Recommencer le plan" onPress={create} />
         <Button
           variant="danger"
           compact
@@ -269,10 +419,20 @@ function PurchaseRow(props: {
   entry: PurchaseEntry;
   past: boolean;
   onToggle: () => void;
+  onPrice: (value: string) => void;
   onAdd?: () => void;
 }) {
   const e = props.entry;
   const Icon = e.done ? CheckCircle2 : Circle;
+  const [price, setPrice] = useState<string | null>(null);
+  const shown =
+    price ?? (e.price === undefined ? '' : formatNumber(e.price, 2));
+  const commit = () => {
+    if (price !== null) {
+      props.onPrice(price);
+      setPrice(null);
+    }
+  };
   return (
     <View style={styles.row}>
       <Pressable
@@ -291,6 +451,9 @@ function PurchaseRow(props: {
           <Text style={[text.body, e.done && styles.doneText]}>
             {e.label}
             {e.vital ? <Text style={styles.vital}> · essentiel</Text> : null}
+            {e.source === 'crisis' ? (
+              <Text style={styles.crisis}> · simulation</Text>
+            ) : null}
             {props.past && !e.done ? (
               <Text style={styles.late}> · en retard</Text>
             ) : null}
@@ -298,15 +461,34 @@ function PurchaseRow(props: {
           {e.detail ? <Text style={text.subtle}>{e.detail}</Text> : null}
         </View>
       </Pressable>
-      {props.onAdd && !e.done ? (
-        <Button
-          compact
-          variant="ghost"
-          label="Ajouter au stock"
-          accessibilityLabel={`Ajouter au stock : ${e.label}`}
-          onPress={props.onAdd}
-        />
-      ) : null}
+      <View style={styles.actions}>
+        <View style={styles.priceBox}>
+          <TextInput
+            accessibilityLabel={`Prix : ${e.label}${
+              e.detail ? `, ${e.detail}` : ''
+            }`}
+            keyboardType="decimal-pad"
+            placeholder="Prix"
+            placeholderTextColor={colors.textSubtle}
+            selectionColor={colors.primary}
+            value={shown}
+            onChangeText={setPrice}
+            onBlur={commit}
+            onSubmitEditing={commit}
+            style={styles.price}
+          />
+          <Text style={text.muted}>€</Text>
+        </View>
+        {props.onAdd && !e.done ? (
+          <Button
+            compact
+            variant="ghost"
+            label="Ajouter au stock"
+            accessibilityLabel={`Ajouter au stock : ${e.label}`}
+            onPress={props.onAdd}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -337,4 +519,25 @@ const styles = StyleSheet.create({
   doneText: { color: colors.textMuted, textDecorationLine: 'line-through' },
   vital: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   late: { color: colors.warning, fontSize: 13, fontWeight: '700' },
+  crisis: { color: colors.cyan, fontSize: 13, fontWeight: '700' },
+  over: { color: colors.warning },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: space.s,
+    paddingLeft: 22 + space.m,
+  },
+  priceBox: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  price: {
+    width: 96,
+    minHeight: 40,
+    paddingHorizontal: space.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.s,
+    color: colors.text,
+    backgroundColor: colors.bgElevated,
+    textAlign: 'right',
+  },
 });

@@ -111,6 +111,11 @@ export function formatNumber(value: number, decimals = 1): string {
   return `${rounded < 0 ? '−' : ''}${grouped}${decPart ? `,${decPart}` : ''}`;
 }
 
+/** Montant en euros : « 12,5 € ». */
+export function formatEuros(value: number): string {
+  return `${formatNumber(value, 2)} €`;
+}
+
 export function formatRelativeDays(days: number): string {
   if (days < 0) {
     return `périmé depuis ${-days} j`;
