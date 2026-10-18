@@ -32,6 +32,10 @@ import {
   META_PREFIX,
   readMeta,
   type Priority,
+  ficheInfo,
+  HEADER_KEYS,
+  needsReview,
+  REVIEW_AFTER_MONTHS,
 } from '../../content/fiches/fiche';
 import {
   CHECK_PREFIX,
@@ -41,7 +45,7 @@ import {
   setGuideCheck,
 } from '../../content/guideChecks';
 import { searchGuides } from '../../db/guides';
-import { isoToFr } from '../../lib/dates';
+import { isoToFr, localToday } from '../../lib/dates';
 import {
   Button,
   EmptyState,
@@ -58,6 +62,7 @@ interface GuideRow {
   title: string;
   category: string;
   priority: Priority;
+  minutes?: number | null;
   snippet?: string;
 }
 
@@ -114,6 +119,7 @@ export function GuidesScreen() {
           title: String(r.title),
           category: String(r.category),
           priority: readMeta(String(r.body)).priority,
+          minutes: ficheInfo(String(r.body)).minutes,
         }))
         .sort(
           (a, b) =>
@@ -213,6 +219,9 @@ export function GuidesScreen() {
                   {guide.priority === 'vitale' && !searching ? (
                     <Text style={styles.vital}>VITAL</Text>
                   ) : null}
+                  {guide.minutes ? (
+                    <Text style={text.subtle}>{guide.minutes} min</Text>
+                  ) : null}
                 </View>
                 <Text style={styles.title}>{guide.title}</Text>
                 {guide.snippet ? <Snippet text={guide.snippet} /> : null}
@@ -292,6 +301,7 @@ export function GuideReader(props: { slug: string; onBack: () => void }) {
           <Text accessibilityRole="header" style={text.h1}>
             {String(data.title)}
           </Text>
+          <FicheHeader body={String(data.body)} />
           {blocks(String(data.body)).map((block, i) =>
             typeof block === 'string' ? (
               <GuideLine key={i} line={block} />
@@ -389,9 +399,56 @@ function GuideChecklist(props: { slug: string; items: string[] }) {
   );
 }
 
+/** Tête de fiche : priorité, temps de lecture, fiabilité, résumé, révision. */
+function FicheHeader({ body }: { body: string }) {
+  const { priority } = readMeta(body);
+  const info = ficheInfo(body);
+  const stale = needsReview(info.checked, localToday());
+  return (
+    <>
+      <View style={styles.badges}>
+        <Text
+          style={[styles.badge, priority === 'vitale' && styles.badgeVital]}
+        >
+          {PRIORITY_LABELS[priority]}
+        </Text>
+        {info.minutes !== null ? (
+          <Text style={styles.badge}>{info.minutes} min de lecture</Text>
+        ) : null}
+        {info.reliability !== null ? (
+          <Text style={styles.badge}>{info.reliability}</Text>
+        ) : null}
+      </View>
+      {stale ? (
+        <View style={styles.review}>
+          <Text style={styles.reviewText}>
+            Fiche à revoir : sa dernière vérification date de plus de{' '}
+            {REVIEW_AFTER_MONTHS} mois. Recoupez avec les sources officielles à
+            jour.
+          </Text>
+        </View>
+      ) : null}
+      {info.summary ? (
+        <View style={styles.brief}>
+          <Text style={styles.briefLabel}>En bref</Text>
+          <Text style={text.body}>{info.summary}</Text>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+const PRIORITY_LABELS: Record<Priority, string> = {
+  vitale: 'Vitale',
+  importante: 'Importante',
+  utile: 'Utile',
+};
+
 /** Pied de fiche : priorité, références, date et statut de relecture. */
 function MetaFooter({ body }: { body: string }) {
-  const { entries } = readMeta(body);
+  const entries = readMeta(body).entries.filter(
+    ([key]) => !HEADER_KEYS.has(key),
+  );
   if (entries.length === 0) {
     return null;
   }
@@ -595,6 +652,34 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   metaKey: { fontWeight: '700', color: colors.textMuted },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  badge: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: space.s,
+    paddingVertical: 2,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  badgeVital: { color: colors.danger, borderColor: colors.danger },
+  brief: {
+    gap: space.xs,
+    padding: space.m,
+    borderRadius: radius.s,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  briefLabel: { ...text.label, color: colors.primary },
+  review: {
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  reviewText: { color: colors.warning, fontSize: 14, lineHeight: 20 },
   checklist: {
     gap: space.xs,
     padding: space.m,
