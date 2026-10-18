@@ -14,8 +14,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BASE =
-  'https://base-donnees-publique.medicaments.gouv.fr/telechargement.php?fichier=';
+// Adresse actuelle du site, puis l'ancienne au cas où.
+const SOURCES = [
+  'https://base-donnees-publique.medicaments.gouv.fr/download/file/',
+  'https://base-donnees-publique.medicaments.gouv.fr/telechargement.php?fichier=',
+];
 const OUT = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -36,13 +39,21 @@ async function fetchFile(name, localDir) {
   if (localDir) {
     return decode(await readFile(join(localDir, name)));
   }
-  const response = await fetch(BASE + name, {
-    signal: AbortSignal.timeout(60000),
-  });
-  if (!response.ok) {
-    throw new Error(`${name} : HTTP ${response.status}`);
+  const errors = [];
+  for (const base of SOURCES) {
+    try {
+      const response = await fetch(base + name, {
+        signal: AbortSignal.timeout(60000),
+      });
+      if (response.ok) {
+        return decode(new Uint8Array(await response.arrayBuffer()));
+      }
+      errors.push(`HTTP ${response.status}`);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
   }
-  return decode(new Uint8Array(await response.arrayBuffer()));
+  throw new Error(`${name} : ${errors.join(', ')}`);
 }
 
 function clean(value) {
