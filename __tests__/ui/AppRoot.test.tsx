@@ -1422,6 +1422,10 @@ describe('écrans', () => {
       ),
     );
     expect(await screen.findByText('Tableau comparatif')).toBeTruthy();
+    expect(screen.getByText('En bref')).toBeTruthy();
+    expect(screen.getByText(/^\d+ min de lecture$/)).toBeTruthy();
+    expect(screen.getByText('Sources officielles citées')).toBeTruthy();
+    expect(screen.queryByText(/^Fiche à revoir/)).toBeNull();
     expect(screen.getByText('Sources et références')).toBeTruthy();
     expect(screen.getByText('0 sur 9 vérifiés')).toBeTruthy();
     await fireEvent.press(

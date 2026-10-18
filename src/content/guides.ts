@@ -16,9 +16,12 @@ import { PREPARATION, RISQUES } from './fiches/preparation-risques';
 import { SURVIE } from './fiches/survie';
 import { ALIMENTATION, HYGIENE } from './fiches/vie-quotidienne';
 
+import { META_PREFIX } from './fiches/fiche';
+import { RESUMES } from './fiches/resumes';
+
 export { GUIDE_FOLDERS } from './fiches/fiche';
 
-export const BUNDLED_GUIDES: BundledGuide[] = [
+const ALL: BundledGuide[] = [
   ...SURVIE,
   ...MEDICAL,
   ...EAU,
@@ -32,3 +35,17 @@ export const BUNDLED_GUIDES: BundledGuide[] = [
   ...ORGANISATION,
   ...PROTECTION,
 ];
+
+/** Résumé « En bref » rédigé pour chaque fiche, à la place du premier paragraphe. */
+export const BUNDLED_GUIDES: BundledGuide[] = ALL.map(guide => {
+  const summary = RESUMES[guide.slug];
+  return summary === undefined
+    ? guide
+    : {
+        ...guide,
+        body: guide.body.replace(
+          new RegExp(`^${META_PREFIX}En bref : .*$`, 'm'),
+          `${META_PREFIX}En bref : ${summary}`,
+        ),
+      };
+});

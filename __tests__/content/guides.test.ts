@@ -1,3 +1,10 @@
+import { RESUMES } from '../../src/content/fiches/resumes';
+import {
+  ficheInfo,
+  GUIDE_CHECKED,
+  needsReview,
+  RELIABILITY_LABELS,
+} from '../../src/content/fiches/fiche';
 import { prepareDatabase } from '../../src/db/connection';
 import { searchGuides, syncGuides } from '../../src/db/guides';
 import { NodeSqliteDb } from '../db/sqlite';
@@ -85,5 +92,35 @@ describe('fiche protections balistiques', () => {
     expect(guide.body).toMatch(/HG1 et HG2.*RF1, RF2 et RF3/);
     expect(guide.body).toMatch(/n’arrête pas tous les calibres/);
     expect(guide.body).toMatch(/§ Mots-clés : balistique/);
+  });
+});
+
+describe('fiches harmonisées', () => {
+  it('donne à chaque fiche un résumé rédigé, une durée et une fiabilité', () => {
+    const slugs = new Set(BUNDLED_GUIDES.map(g => g.slug));
+    expect(Object.keys(RESUMES).filter(s => !slugs.has(s))).toEqual([]);
+    for (const guide of BUNDLED_GUIDES) {
+      const info = ficheInfo(guide.body);
+      expect([guide.slug, info.summary]).toEqual([
+        guide.slug,
+        RESUMES[guide.slug],
+      ]);
+      expect([guide.slug, info.summary!.length <= 200]).toEqual([
+        guide.slug,
+        true,
+      ]);
+      expect(info.minutes).toBeGreaterThanOrEqual(1);
+      expect(info.reliability).toBeTruthy();
+      expect(info.checked).toBe(GUIDE_CHECKED);
+    }
+    const sante = BUNDLED_GUIDES.find(g => g.slug === 'garrot')!;
+    expect(ficheInfo(sante.body).reliability).toBe(RELIABILITY_LABELS.sante);
+  });
+
+  it('signale une fiche à revoir après douze mois', () => {
+    expect(needsReview('2026-10', '2026-10-18')).toBe(false);
+    expect(needsReview('2026-10', '2027-09-30')).toBe(false);
+    expect(needsReview('2026-10', '2027-10-01')).toBe(true);
+    expect(needsReview(null, '2026-10-18')).toBe(true);
   });
 });
