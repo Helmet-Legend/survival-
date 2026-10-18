@@ -12,7 +12,8 @@ export type Overlay =
   | 'stockForm'
   | 'emergency'
   | 'familyPlan'
-  | 'preparation';
+  | 'preparation'
+  | 'calculators';
 
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {

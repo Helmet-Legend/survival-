@@ -66,6 +66,7 @@ import {
   type StockFormTarget,
   type Tab,
 } from './navigation';
+import { CalculatorsScreen } from './screens/CalculatorsScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
 import { PreparationScreen } from './screens/PreparationScreen';
@@ -309,6 +310,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <FamilyPlanScreen />
               ) : overlay === 'preparation' ? (
                 <PreparationScreen />
+              ) : overlay === 'calculators' ? (
+                <CalculatorsScreen />
               ) : overlay === 'stockForm' && formTarget !== null ? (
                 <StockFormScreen target={formTarget} />
               ) : (

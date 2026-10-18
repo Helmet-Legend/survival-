@@ -624,6 +624,40 @@ describe('écrans', () => {
     expect(screen.getByText('4,5 L / jour')).toBeTruthy();
   });
 
+  it('calcule les besoins en eau par usage et les besoins électriques', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(
+      await screen.findByText('Calculateurs eau et électricité'),
+    );
+    expect(await screen.findByText('Eau du foyer')).toBeTruthy();
+    // 1 personne, 3 L de boisson, objectif de 14 jours : 42 L, 30 L en stock.
+    expect(screen.getByText('42 L')).toBeTruthy();
+    expect(screen.getByText('12 L')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByText('Repères Sphère : 2,5 L · 3 L · 2 L'),
+    );
+    // 2,5 + 3 + 2 = 7,5 L par jour, 105 L pour 14 jours.
+    expect(await screen.findByText('7,5 L')).toBeTruthy();
+    expect(screen.getByText('105 L')).toBeTruthy();
+    expect(screen.getByText('75 L')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Appareil'), 'Lampe LED');
+    await fireEvent.changeText(screen.getByLabelText('Puissance (W)'), '5');
+    await fireEvent.press(screen.getByText('Ajouter l’appareil'));
+    expect(await screen.findByText(/Durée invalide/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Heures par jour'), '4');
+    await fireEvent.press(screen.getByText('Ajouter l’appareil'));
+    expect(await screen.findByText('Lampe LED')).toBeTruthy();
+    expect(screen.getByText('20 Wh')).toBeTruthy();
+    // 20 Wh × 1,2 ÷ 0,8 = 30 Wh.
+    expect(screen.getByText('30 Wh')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retirer Lampe LED'));
+    expect(
+      await screen.findByText('Aucun appareil pour l’instant.'),
+    ).toBeTruthy();
+  });
+
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
     await openApp();
     expect(screen.queryByTestId('red-light')).toBeNull();

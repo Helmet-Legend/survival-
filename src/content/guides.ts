@@ -10,6 +10,7 @@ import { COMMUNICATION } from './fiches/communication';
 import { EAU, ORIENTATION } from './fiches/eau-orientation';
 import { FAMILLES } from './fiches/familles';
 import { MEDICAL } from './fiches/medical';
+import { ORGANISATION } from './fiches/organisation';
 import { PREPARATION, RISQUES } from './fiches/preparation-risques';
 import { SURVIE } from './fiches/survie';
 import { ALIMENTATION, HYGIENE } from './fiches/vie-quotidienne';
@@ -27,4 +28,5 @@ export const BUNDLED_GUIDES: BundledGuide[] = [
   ...PREPARATION,
   ...RISQUES,
   ...FAMILLES,
+  ...ORGANISATION,
 ];
