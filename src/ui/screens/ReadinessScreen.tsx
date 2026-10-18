@@ -148,6 +148,14 @@ export function ReadinessScreen() {
         />
       )}
 
+      {data.next.length > 0 ? (
+        <Button
+          chevron
+          label="Échelonner les achats sur plusieurs mois"
+          onPress={() => navigation.open('purchases')}
+        />
+      ) : null}
+
       <Panel title="Détail des critères">
         {data.criteria.map(c => (
           <CriterionRow key={c.id} criterion={c} />
