@@ -7,6 +7,8 @@ import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
+  Siren,
+  TriangleAlert,
   Users,
 } from 'lucide-react-native';
 import React from 'react';
@@ -80,6 +82,7 @@ export function HomeScreen() {
   const noFood =
     report.limitingFactor === 'food' && report.food.available === 0;
   const members = report.household.members;
+  const expired = alerts.filter(a => a.bucket === 'expired');
   const changeMembers = async (delta: number) => {
     await saveHousehold(db, { ...report.household, members: members + delta });
     await reload();
@@ -87,6 +90,28 @@ export function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      {expired.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${expired.length} lot${
+            expired.length > 1 ? 's' : ''
+          } périmé${expired.length > 1 ? 's' : ''}. Ouvrir le stock`}
+          onPress={() => navigation.goTo('stock')}
+          style={({ pressed }) => [styles.expired, pressed && styles.pressed]}
+        >
+          <TriangleAlert color={colors.danger} size={20} />
+          <View style={styles.grow}>
+            <Text style={styles.expiredTitle}>
+              {expired.length} lot{expired.length > 1 ? 's' : ''} périmé
+              {expired.length > 1 ? 's' : ''}
+            </Text>
+            <Text style={text.subtle} numberOfLines={1}>
+              {[...new Set(expired.map(a => a.itemName))].join(', ')}
+            </Text>
+          </View>
+          <ChevronRight color={colors.text} size={20} />
+        </Pressable>
+      ) : null}
       <View style={styles.hero}>
         <AutonomyGauge
           days={report.days}
@@ -100,6 +125,14 @@ export function HomeScreen() {
           </View>
         </View>
       </View>
+
+      <Button
+        variant="danger"
+        icon={Siren}
+        label="URGENCE · appels, position, SMS"
+        accessibilityLabel="Ouvrir l’écran Urgence"
+        onPress={() => navigation.open('emergency')}
+      />
 
       <View style={styles.household}>
         <Users color={colors.cyan} size={22} strokeWidth={2} />
@@ -271,6 +304,19 @@ const styles = StyleSheet.create({
     paddingVertical: space.l,
     gap: space.m,
   },
+  expired: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: sizes.touch,
+    paddingVertical: space.s,
+    paddingHorizontal: space.l,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: solidTint(colors.danger, 0.16),
+  },
+  expiredTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
   // Pastille sombre : lisible sur la photo du fond.
   target: {
     paddingVertical: space.xs,

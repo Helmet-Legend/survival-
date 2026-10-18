@@ -7,7 +7,7 @@ import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { BUNDLED_GUIDES } from './src/content/guides';
-import { createVaultKeyManager } from './src/crypto';
+import { createVaultKeyManager, nativeBackupCrypto } from './src/crypto';
 import { seedDecoyInventory } from './src/inventory';
 import { AppRoot } from './src/ui/AppRoot';
 import { colors } from './src/ui/theme';
@@ -26,7 +26,12 @@ export default function App() {
   return (
     <SafeAreaProvider style={{ backgroundColor: colors.bg }}>
       <StatusBar barStyle="light-content" />
-      <AppRoot manager={manager} content={content} updater={updater} />
+      <AppRoot
+        manager={manager}
+        content={content}
+        updater={updater}
+        backupCrypto={nativeBackupCrypto}
+      />
     </SafeAreaProvider>
   );
 }

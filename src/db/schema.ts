@@ -515,6 +515,23 @@ const migration9: Migration = {
   ],
 };
 
+/**
+ * Plan familial de mise en sûreté : contacts (dont un hors zone), points de
+ * regroupement, itinéraires, coupures, rôles, dernier exercice. Un seul
+ * document JSON, validé par l'application.
+ */
+const migration10: Migration = {
+  version: 10,
+  name: 'plan familial',
+  statements: [
+    `CREATE TABLE family_plan (
+       id         INTEGER PRIMARY KEY CHECK (id = 1),
+       data       TEXT NOT NULL CHECK (json_valid(data)),
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -525,6 +542,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration7,
   migration8,
   migration9,
+  migration10,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

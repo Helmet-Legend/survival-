@@ -20,6 +20,7 @@ import {
 } from '../../resilience/reminders';
 import {
   Button,
+  Chip,
   Notice,
   Panel,
   ScreenTitle,
@@ -31,6 +32,7 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { BackupPanel } from './BackupPanel';
 
 const MAX_MEMBERS = 12;
 
@@ -87,6 +89,10 @@ export function SettingsScreen(props: { onLock: () => void }) {
     });
     await reload();
   };
+  const changeWater = async (liters: number) => {
+    await saveHousehold(db, { ...household, waterLitersPerPersonDay: liters });
+    await reload();
+  };
   const changeTarget = async (direction: 1 | -1) => {
     await saveTargetDays(db, nextTarget(targetDays, direction));
     await reload();
@@ -128,6 +134,27 @@ export function SettingsScreen(props: { onLock: () => void }) {
             increaseLabel="Augmenter l’objectif"
           />
         </View>
+        <View style={styles.settingRow}>
+          <Text style={[text.body, styles.grow]}>
+            Eau par personne et par jour
+          </Text>
+          <View style={styles.chips}>
+            {[2, 3].map(liters => (
+              <Chip
+                key={liters}
+                label={`${liters} L`}
+                selected={household.waterLitersPerPersonDay === liters}
+                onPress={() => {
+                  void changeWater(liters);
+                }}
+              />
+            ))}
+          </View>
+        </View>
+        <Text style={text.subtle}>
+          2 L : référence du guide officiel français (kit 72 h). 3 L : marge
+          pour la cuisine, l’hygiène et la chaleur.
+        </Text>
         <Text style={text.muted}>
           Besoins par personne :{' '}
           {formatNumber(household.waterLitersPerPersonDay)} L d’eau et{' '}
@@ -179,6 +206,8 @@ export function SettingsScreen(props: { onLock: () => void }) {
         </Panel>
       ) : null}
 
+      <BackupPanel onRestored={reload} />
+
       <Panel
         title="Confidentialité"
         right={<ShieldCheck color={colors.success} size={20} />}
@@ -228,6 +257,7 @@ const styles = StyleSheet.create({
     gap: space.m,
   },
   grow: { flex: 1, minWidth: 0 },
+  chips: { flexDirection: 'row', gap: space.s },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

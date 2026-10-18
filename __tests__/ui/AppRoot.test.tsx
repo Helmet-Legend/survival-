@@ -12,7 +12,12 @@ import {
   within,
 } from '@testing-library/react-native';
 import React from 'react';
-import { AppState, Clipboard, type AppStateStatus } from 'react-native';
+import {
+  AppState,
+  Clipboard,
+  Linking,
+  type AppStateStatus,
+} from 'react-native';
 
 import { BUNDLED_GUIDES, GUIDE_FOLDERS } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
@@ -330,6 +335,157 @@ describe('cycle de vie', () => {
     expect(await screen.findByText(/Captures autorisées/)).toBeTruthy();
   });
 
+  it('ouvre l’écran Urgence : appels, position GPS, SMS et fiches', async () => {
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        location={{
+          available: true,
+          getPosition: async () => ({
+            latitude: 45.83265,
+            longitude: 6.86518,
+            accuracy: 8,
+            stale: false,
+          }),
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+    );
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+
+    await fireEvent.press(
+      screen.getByLabelText('Appeler le 112, Urgences (toute l’Europe)'),
+    );
+    expect(open).toHaveBeenCalledWith('tel:112');
+
+    await fireEvent.press(screen.getByText('Localiser (GPS)'));
+    expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
+    expect(screen.getByText('Précision ± 8 m')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Envoyer ma position par SMS'));
+    const url = String(open.mock.calls[1][0]);
+    expect(url.startsWith('sms:?body=')).toBe(true);
+    expect(decodeURIComponent(url)).toContain(
+      'Ma position : 45.83265, 6.86518 (± 8 m). MGRS 32T LR 34199 77670.',
+    );
+
+    // Plan familial : préparé depuis l'écran Urgence, puis joignable.
+    await fireEvent.press(screen.getByText('Préparer le plan familial'));
+    await fireEvent.press(await screen.findByText('Ajouter un contact'));
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Paul');
+    await fireEvent.changeText(
+      screen.getByLabelText('Téléphone'),
+      '06 12 34 56 78',
+    );
+    await fireEvent(
+      screen.getByLabelText('Contact 1 hors zone'),
+      'valueChange',
+      true,
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Près du domicile'),
+      'Parking de l’école',
+    );
+    await fireEvent.press(screen.getByText('Enregistrer le plan'));
+    expect(await screen.findByText('Plan familial enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retour'));
+    expect(await screen.findByText('Parking de l’école')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Appeler Paul'));
+    expect(open).toHaveBeenLastCalledWith('tel:0612345678');
+
+    await fireEvent.press(screen.getByText('Arrêt cardiaque'));
+    expect(
+      await screen.findByText(/massage cardiaque|compressions/i),
+    ).toBeTruthy();
+    open.mockRestore();
+  });
+
+  it('exporte une sauvegarde chiffrée puis la restaure', async () => {
+    const ctx = await existingVault();
+    const file: { saved: { name: string; text: string } | null } = {
+      saved: null,
+    };
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        files={{
+          available: true,
+          saveText: async (name, _mime, text) => {
+            file.saved = { name, text };
+            return true;
+          },
+          openText: async () => file.saved?.text ?? null,
+        }}
+        backupCrypto={{
+          engine: new JsArgon2(),
+          random: new SeededRandom(7),
+          params: TEST_ARGON2_PARAMS,
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Exporter une sauvegarde'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'court',
+    );
+    await fireEvent.press(screen.getByText('Chiffrer et enregistrer'));
+    expect(await screen.findByText('Au moins 8 caractères')).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'phrase secrète',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Confirmer le mot de passe'),
+      'phrase secrète',
+    );
+    await fireEvent.press(screen.getByText('Chiffrer et enregistrer'));
+    expect(await screen.findByText(/Sauvegarde enregistrée/)).toBeTruthy();
+    expect(file.saved?.name).toMatch(
+      /^fenrir-sauvegarde-\d{4}-\d{2}-\d{2}\.fenrir$/,
+    );
+    expect(file.saved?.text).not.toContain('Riz');
+
+    // Le stock change, puis la sauvegarde est restaurée.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    await fireEvent.press(await screen.findByLabelText('Supprimer « Riz »'));
+    await fireEvent.press(screen.getByLabelText('Oui, supprimer'));
+    expect(await screen.findByText('« Riz » supprimé.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Restaurer une sauvegarde'));
+    expect(await screen.findByText(/remplace tout le contenu/)).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'mauvais mot de passe',
+    );
+    await fireEvent.press(screen.getByText('Restaurer'));
+    expect(await screen.findByText(/Mot de passe incorrect/)).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'phrase secrète',
+    );
+    await fireEvent.press(screen.getByText('Restaurer'));
+    expect(await screen.findByText(/restaurée/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    expect(await screen.findByLabelText('Riz, 10 kg')).toBeTruthy();
+  });
+
   it('active les rappels neutres et les met à jour au verrouillage', async () => {
     const ctx = await existingVault();
     const calls: Array<readonly number[] | 'cancel'> = [];
@@ -410,6 +566,29 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
     return ctx;
   }
+
+  it('retire une unité en un geste et règle l’eau à 2 L', async () => {
+    await openApp();
+    expect(
+      screen.getByLabelText('Eau disponible : 30 L, 10 j d’autonomie'),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText(/périmé. Ouvrir le stock/)).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('2 L'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(
+      await screen.findByLabelText('Eau disponible : 30 L, 15 j d’autonomie'),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
+    expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
+  });
 
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
@@ -659,7 +838,8 @@ describe('écrans', () => {
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
 
-    expect(screen.getByText('Bouteilles')).toBeTruthy();
+    expect(screen.getByLabelText('1 lot périmé. Ouvrir le stock')).toBeTruthy();
+    expect(screen.getAllByText('Bouteilles').length).toBeGreaterThan(0);
     expect(screen.getByText('Compote')).toBeTruthy();
     expect(screen.getByText('Pâtes')).toBeTruthy();
     expect(screen.queryByText('Lait')).toBeNull();

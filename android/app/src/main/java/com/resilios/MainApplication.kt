@@ -6,6 +6,8 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.resilios.files.FilesPackage
+import com.resilios.location.LocationPackage
 import com.resilios.photo.PhotoPackage
 import com.resilios.reminders.ReminderPackage
 import com.resilios.screen.ScreenPackage
@@ -26,6 +28,10 @@ class MainApplication : Application(), ReactApplication {
           add(ScreenPackage())
           // Rappels de péremption (horaires seulement, texte neutre).
           add(ReminderPackage())
+          // Sauvegarde chiffrée et export : fichiers choisis par l'utilisateur.
+          add(FilesPackage())
+          // Position GPS à la demande (écran Urgence).
+          add(LocationPackage())
         },
     )
   }
