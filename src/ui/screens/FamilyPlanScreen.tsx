@@ -4,11 +4,12 @@
  * exercice. Gardé dans le coffre chiffré ; consultable depuis l'écran
  * Urgence.
  */
-import { Plus, Trash2 } from 'lucide-react-native';
+import { FileText, Plus, Share2, Trash2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -20,6 +21,7 @@ import {
   CONTACTS_MAX,
   loadFamilyPlan,
   PlanError,
+  planText,
   saveFamilyPlan,
   type FamilyPlan,
   type PlanContact,
@@ -58,7 +60,7 @@ export function FamilyPlanScreen() {
 }
 
 function PlanForm(props: { initial: FamilyPlan; title: React.ReactNode }) {
-  const { db } = useSession();
+  const { db, files } = useSession();
   const [plan, setPlan] = useState<FamilyPlan>(props.initial);
   const [drill, setDrill] = useState(
     props.initial.lastDrill ? isoToFr(props.initial.lastDrill) : '',
@@ -79,27 +81,65 @@ function PlanForm(props: { initial: FamilyPlan; title: React.ReactNode }) {
       ),
     }));
 
-  const save = async () => {
+  /** Enregistre le plan ; le plan enregistré, ou null en cas d'erreur. */
+  const save = async (): Promise<FamilyPlan | null> => {
     setErrors({});
     setFeedback(null);
     const lastDrill = drill.trim() === '' ? null : frToIso(drill);
     if (drill.trim() !== '' && lastDrill === null) {
       setErrors({ lastDrill: 'Date au format JJ/MM/AAAA' });
-      return;
+      return null;
     }
     try {
       const saved = await saveFamilyPlan(db, { ...plan, lastDrill });
       setPlan(saved);
       setFeedback({ message: 'Plan familial enregistré.', tone: 'ok' });
+      return saved;
     } catch (e) {
       if (e instanceof PlanError) {
         setErrors({ [e.field]: e.message });
       } else {
+        fail(e);
+      }
+      return null;
+    }
+  };
+
+  const fail = (e: unknown) =>
+    setFeedback({
+      message: e instanceof Error ? e.message : String(e),
+      tone: 'error',
+    });
+
+  // Le plan est enregistré d'abord, pour partager ce que montre l'écran.
+  const share = async () => {
+    const saved = await save();
+    if (saved === null) {
+      return;
+    }
+    try {
+      await Share.share({ title: 'Plan familial', message: planText(saved) });
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  const saveFile = async () => {
+    const saved = await save();
+    if (saved === null) {
+      return;
+    }
+    try {
+      if (
+        await files.saveText('plan-familial.txt', 'text/plain', planText(saved))
+      ) {
         setFeedback({
-          message: e instanceof Error ? e.message : String(e),
-          tone: 'error',
+          message: 'Plan enregistré en fichier texte : imprimez-le.',
+          tone: 'ok',
         });
       }
+    } catch (e) {
+      fail(e);
     }
   };
 
@@ -294,6 +334,34 @@ function PlanForm(props: { initial: FamilyPlan; title: React.ReactNode }) {
           void save();
         }}
       />
+
+      <Panel title="Partager avec la famille">
+        <Text style={text.subtle}>
+          Envoyez le plan à chaque membre et gardez-en une copie papier dans
+          chaque sac : le jour J, les téléphones peuvent ne plus fonctionner.
+        </Text>
+        <Text style={styles.warning}>
+          Une fois envoyé, le texte n’est plus chiffré : il est lisible sur le
+          téléphone du destinataire. Le stock, les armes et les documents ne
+          sont jamais inclus.
+        </Text>
+        <Button
+          icon={Share2}
+          label="Partager le plan"
+          onPress={() => {
+            void share();
+          }}
+        />
+        {files.available ? (
+          <Button
+            icon={FileText}
+            label="Enregistrer en texte à imprimer"
+            onPress={() => {
+              void saveFile();
+            }}
+          />
+        ) : null}
+      </Panel>
     </ScrollView>
   );
 }
@@ -312,4 +380,5 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   grow: { flex: 1, minWidth: 0 },
+  warning: { ...text.subtle, color: colors.warning },
 });

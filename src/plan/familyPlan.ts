@@ -166,3 +166,53 @@ export function isPlanEmpty(plan: FamilyPlan): boolean {
     plan.roles === ''
   );
 }
+
+/**
+ * Version texte du plan, à partager ou à imprimer. Seules les rubriques
+ * remplies apparaissent ; rien d'autre du coffre n'y figure.
+ */
+export function planText(plan: FamilyPlan): string {
+  const sections: string[] = ['PLAN FAMILIAL'];
+  const add = (title: string, lines: string[]) => {
+    const filled = lines.filter(line => line !== '');
+    if (filled.length > 0) {
+      sections.push([title, ...filled].join('\n'));
+    }
+  };
+  add(
+    'CONTACTS',
+    plan.contacts.map(c => {
+      const who = [c.name, c.relation ? `(${c.relation})` : '']
+        .filter(Boolean)
+        .join(' ');
+      const parts = [who, c.phone].filter(Boolean).join(' : ');
+      return parts === ''
+        ? ''
+        : `- ${parts}${c.outOfArea ? ' · hors zone' : ''}`;
+    }),
+  );
+  const meeting = (label: string, point: MeetingPoint) =>
+    point.place === ''
+      ? ''
+      : `${label} : ${point.place}${
+          point.position ? ` (${point.position})` : ''
+        }`;
+  add('POINTS DE REGROUPEMENT', [
+    meeting('Près du domicile', plan.meetingNear),
+    meeting('Hors du quartier', plan.meetingFar),
+  ]);
+  add('ITINÉRAIRES', [plan.routes]);
+  add('COUPURES', [
+    plan.shutoffWater ? `Eau : ${plan.shutoffWater}` : '',
+    plan.shutoffGas ? `Gaz : ${plan.shutoffGas}` : '',
+    plan.shutoffPower ? `Électricité : ${plan.shutoffPower}` : '',
+  ]);
+  add('QUI FAIT QUOI', [plan.roles]);
+  add('NOTES', [plan.notes]);
+  if (plan.lastDrill) {
+    const [y, m, d] = plan.lastDrill.split('-');
+    sections.push(`Dernier exercice : ${d}/${m}/${y}`);
+  }
+  sections.push('Urgences : 112 · SAMU 15 · Pompiers 18 · Police 17 · SMS 114');
+  return sections.join('\n\n');
+}
