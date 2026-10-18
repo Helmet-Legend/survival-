@@ -599,6 +599,19 @@ const migration13: Migration = {
   ],
 };
 
+/**
+ * Data Matrix des médicaments : la péremption et le lot lus dans le code
+ * sont gardés avec l'article du panier, pour préremplir le lot ajouté.
+ */
+const migration14: Migration = {
+  version: 14,
+  name: 'péremption et lot scannés',
+  statements: [
+    'ALTER TABLE barcode_basket ADD COLUMN expiration_date TEXT',
+    'ALTER TABLE barcode_basket ADD COLUMN lot TEXT',
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -613,6 +626,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration11,
   migration12,
   migration13,
+  migration14,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

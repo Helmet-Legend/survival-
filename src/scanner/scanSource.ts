@@ -1,5 +1,6 @@
 /**
- * Lecteur de codes-barres (module natif Android `ResiliosScanner`) : la
+ * Lecteur de codes-barres et de Data Matrix (module natif Android
+ * `ResiliosScanner`) : la
  * caméra et le décodage restent dans le téléphone, sans réseau. En série,
  * chaque lecture est renvoyée, y compris les répétitions d'un même code.
  * Absent sur iOS, dans les tests et l'aperçu web : la saisie manuelle reste.
@@ -7,12 +8,12 @@
 import { NativeModules, Platform } from 'react-native';
 
 import { whileAway } from '../photo/photoSource';
-import { normalizeBarcode } from './barcode';
+import { readFromScanner, type ScanRead } from './barcode';
 
 export interface ScanSource {
   available: boolean;
-  /** Codes lus et normalisés, ou null si l'utilisateur a annulé. */
-  scan(series: boolean): Promise<string[] | null>;
+  /** Lectures normalisées, ou null si l'utilisateur a annulé. */
+  scan(series: boolean): Promise<ScanRead[] | null>;
 }
 
 interface NativeScannerModule {
@@ -37,8 +38,8 @@ export function nativeScanSource(): ScanSource {
         return null;
       }
       return reads
-        .map(r => normalizeBarcode(r.code, r.format))
-        .filter((c): c is string => c !== null);
+        .map(r => readFromScanner(r.code, r.format))
+        .filter((r): r is ScanRead => r !== null);
     },
   };
 }

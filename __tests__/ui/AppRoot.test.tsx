@@ -674,7 +674,7 @@ describe('écrans', () => {
     ];
     const scanSource = {
       available: true,
-      scan: jest.fn(async () => reads.shift() ?? null),
+      scan: jest.fn(async () => reads.shift()?.map(code => ({ code })) ?? null),
     };
     const requested: string[] = [];
     const productFetch = jest.fn(async (url: string) => {
@@ -713,7 +713,7 @@ describe('écrans', () => {
     await fireEvent.press(screen.getByText('Autoriser la recherche'));
     expect(await screen.findByText('Lentilles cuisinées')).toBeTruthy();
     expect(
-      screen.getByText('Inconnu d’Open Food Facts : fiche à compléter.'),
+      screen.getByText('Inconnu des bases en ligne : fiche à compléter.'),
     ).toBeTruthy();
     expect(requested.every(u => /product\/\d+\.json/.test(u))).toBe(true);
 
@@ -770,6 +770,30 @@ describe('écrans', () => {
     await fireEvent.changeText(screen.getByLabelText('Code-barres'), UNKNOWN);
     await fireEvent.press(screen.getByText('Retirer : valider le code'));
     expect(await screen.findByText(/^Inconnu de vos stocks/)).toBeTruthy();
+  });
+
+  it('range un code inconnu dans la catégorie choisie', async () => {
+    await openApp({
+      scanSource: { available: false, scan: async () => null },
+      productFetch: async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      }),
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner des codes-barres'),
+    );
+    await fireEvent.changeText(
+      await screen.findByLabelText('Code-barres'),
+      '96385074',
+    );
+    await fireEvent.press(screen.getByText('Ajouter le code'));
+    await fireEvent.press(await screen.findByText('Rester hors ligne'));
+    await fireEvent.press(await screen.findByText('Hygiène'));
+    await fireEvent.press(screen.getByText('Créer une fiche à compléter'));
+    expect(await screen.findByText('Ajouter du médical')).toBeTruthy();
   });
 
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {

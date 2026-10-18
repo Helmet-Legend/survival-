@@ -55,6 +55,8 @@ jobs:
           java-version: 17
           cache: gradle
       - run: npm ci
+      - name: Base des médicaments (noms par code CIP, hors ligne)
+        run: node scripts/build-medicines.mjs
       - name: Compilation (arm64-v8a, la quasi-totalité des téléphones récents)
         working-directory: android
         run: >-

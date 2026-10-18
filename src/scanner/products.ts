@@ -9,6 +9,9 @@
  */
 import type { SqlDatabase } from '../db/types';
 import type { ItemCategory } from '../inventory';
+import { isoToFr } from '../lib/dates';
+import type { ScanRead } from './barcode';
+import { medicineName } from './medicines';
 
 export type ProductStatus = 'pending' | 'found' | 'not_found' | 'local';
 
@@ -22,7 +25,8 @@ export interface ProductData {
   netValue?: number;
   netUnit?: 'g' | 'kg' | 'mL' | 'L';
   kcalPer100g?: number;
-  category?: 'food' | 'water';
+  /** Nourriture, eau, médicament (base des médicaments) ou hygiène (Open Beauty Facts). */
+  category?: 'food' | 'water' | 'medicine' | 'hygiene';
 }
 
 export interface BarcodeProduct {
@@ -36,6 +40,9 @@ export interface BasketEntry {
   code: string;
   count: number;
   product: BarcodeProduct;
+  /** Péremption la plus proche lue dans un Data Matrix, `AAAA-MM-JJ`. */
+  expiry: string | null;
+  lot: string | null;
 }
 
 // --- Base locale --------------------------------------------------------------
@@ -74,22 +81,55 @@ export async function getProduct(
  */
 export async function addScans(
   db: SqlDatabase,
-  codes: readonly string[],
+  reads: ReadonlyArray<string | ScanRead>,
 ): Promise<void> {
-  const counts = new Map<string, number>();
-  for (const code of codes) {
-    counts.set(code, (counts.get(code) ?? 0) + 1);
+  // Par code : nombre de lectures et péremption la plus proche (avec son lot).
+  const grouped = new Map<
+    string,
+    { n: number; expiry?: string; lot?: string }
+  >();
+  for (const read of reads) {
+    const r = typeof read === 'string' ? { code: read } : read;
+    const g = grouped.get(r.code) ?? { n: 0 };
+    g.n++;
+    if (r.expiry && (g.expiry === undefined || r.expiry < g.expiry)) {
+      g.expiry = r.expiry;
+      g.lot = r.lot;
+    }
+    grouped.set(r.code, g);
   }
-  for (const [code, n] of counts) {
+  for (const [code, g] of grouped) {
+    // Médicament connu de la base embarquée : reconnu sans réseau.
+    const medicine = medicineName(code);
+    if (medicine !== null) {
+      const data = JSON.stringify({ name: medicine, category: 'medicine' });
+      await db.execute(
+        `INSERT INTO barcode_products (code, status, data) VALUES (?, 'found', ?)
+         ON CONFLICT (code) DO UPDATE SET status = 'found', data = excluded.data
+           WHERE barcode_products.status = 'pending'`,
+        [code, data],
+      );
+    } else {
+      await db.execute(
+        `INSERT INTO barcode_products (code, status) VALUES (?, 'pending')
+         ON CONFLICT (code) DO NOTHING`,
+        [code],
+      );
+    }
     await db.execute(
-      `INSERT INTO barcode_products (code, status) VALUES (?, 'pending')
-       ON CONFLICT (code) DO NOTHING`,
-      [code],
-    );
-    await db.execute(
-      `INSERT INTO barcode_basket (code, count) VALUES (?, ?)
-       ON CONFLICT (code) DO UPDATE SET count = min(999, count + excluded.count)`,
-      [code, n],
+      `INSERT INTO barcode_basket (code, count, expiration_date, lot)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (code) DO UPDATE SET
+         count = min(999, count + excluded.count),
+         expiration_date = CASE
+           WHEN excluded.expiration_date IS NOT NULL
+            AND (expiration_date IS NULL OR excluded.expiration_date < expiration_date)
+           THEN excluded.expiration_date ELSE expiration_date END,
+         lot = CASE
+           WHEN excluded.expiration_date IS NOT NULL
+            AND (expiration_date IS NULL OR excluded.expiration_date < expiration_date)
+           THEN excluded.lot ELSE lot END`,
+      [code, g.n, g.expiry ?? null, g.lot ?? null],
     );
   }
 }
@@ -118,7 +158,7 @@ export async function removeFromBasket(
 
 export async function listBasket(db: SqlDatabase): Promise<BasketEntry[]> {
   const { rows } = await db.execute(
-    `SELECT b.code, b.count, p.item_id, p.status, p.data
+    `SELECT b.code, b.count, b.expiration_date, b.lot, p.item_id, p.status, p.data
        FROM barcode_basket AS b
        JOIN barcode_products AS p ON p.code = b.code
       ORDER BY b.scanned_at, b.code`,
@@ -127,6 +167,8 @@ export async function listBasket(db: SqlDatabase): Promise<BasketEntry[]> {
     code: String(r.code),
     count: Number(r.count),
     product: toProduct(r),
+    expiry: r.expiration_date === null ? null : String(r.expiration_date),
+    lot: r.lot === null ? null : String(r.lot),
   }));
 }
 
@@ -221,6 +263,11 @@ export function offUrl(code: string): string {
   return `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=${OFF_FIELDS}`;
 }
 
+/** Base sœur pour les cosmétiques et produits d'hygiène. */
+export function obfUrl(code: string): string {
+  return `https://world.openbeautyfacts.org/api/v2/product/${code}.json?fields=${OFF_FIELDS}`;
+}
+
 const WATER_TAGS = ['en:waters', 'en:mineral-waters', 'en:spring-waters'];
 
 function positive(value: unknown): number | undefined {
@@ -290,18 +337,12 @@ export function parseOffProduct(body: unknown): ProductData | null {
 
 export type LookupOutcome = 'found' | 'not_found' | 'offline';
 
-/**
- * Recherche un code sur Open Food Facts et met le résultat en cache. Une
- * erreur réseau laisse le code en attente.
- */
-export async function lookupProduct(
-  db: SqlDatabase,
-  code: string,
-  fetcher: ProductFetch,
-): Promise<LookupOutcome> {
+type Answer = ProductData | 'not_found' | 'offline';
+
+async function ask(url: string, fetcher: ProductFetch): Promise<Answer> {
   let response: Awaited<ReturnType<ProductFetch>>;
   try {
-    response = await fetcher(offUrl(code), {
+    response = await fetcher(url, {
       headers: {
         Accept: 'application/json',
         'User-Agent': 'Fenrir/1.0 (application Android de gestion de stocks)',
@@ -311,20 +352,50 @@ export async function lookupProduct(
     return 'offline';
   }
   if (response.status === 404) {
-    await saveLookup(db, code, null);
     return 'not_found';
   }
   if (!response.ok) {
     return 'offline';
   }
-  let data: ProductData | null;
   try {
-    data = parseOffProduct(await response.json());
+    return parseOffProduct(await response.json()) ?? 'not_found';
   } catch {
     return 'offline';
   }
-  await saveLookup(db, code, data);
-  return data === null ? 'not_found' : 'found';
+}
+
+/**
+ * Recherche un code sur Open Food Facts, puis sur Open Beauty Facts pour
+ * l'hygiène, et met le résultat en cache. Une erreur réseau laisse le code
+ * en attente.
+ */
+export async function lookupProduct(
+  db: SqlDatabase,
+  code: string,
+  fetcher: ProductFetch,
+): Promise<LookupOutcome> {
+  const food = await ask(offUrl(code), fetcher);
+  if (food === 'offline') {
+    return 'offline';
+  }
+  if (food !== 'not_found') {
+    await saveLookup(db, code, food);
+    return 'found';
+  }
+  const beauty = await ask(obfUrl(code), fetcher);
+  if (beauty === 'offline') {
+    return 'offline';
+  }
+  if (beauty === 'not_found') {
+    await saveLookup(db, code, null);
+    return 'not_found';
+  }
+  await saveLookup(db, code, {
+    ...beauty,
+    category: 'hygiene',
+    kcalPer100g: undefined,
+  });
+  return 'found';
 }
 
 /** Recherche les codes en attente ; s'arrête à la première panne réseau. */
@@ -349,23 +420,78 @@ function decimal(value: number): string {
   return String(Math.round(value * 1000) / 1000).replace('.', ',');
 }
 
-/** Catégorie et valeurs de la fiche d'ajout habituelle. */
-export function prefillFor(product: BarcodeProduct): {
+/** Catégories proposées pour un code inconnu, vers les fiches existantes. */
+export const CATEGORY_CHOICES = [
+  { id: 'food', label: 'Nourriture', category: 'food' },
+  { id: 'water', label: 'Eau', category: 'water' },
+  {
+    id: 'medicine',
+    label: 'Médicament',
+    category: 'medical',
+    subtype: 'medicine',
+  },
+  { id: 'hygiene', label: 'Hygiène', category: 'medical', subtype: 'hygiene' },
+  { id: 'power', label: 'Énergie', category: 'power' },
+  { id: 'energy', label: 'Matériel', category: 'energy' },
+  { id: 'tool', label: 'Outil', category: 'tool' },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  category: ItemCategory;
+  subtype?: string;
+}>;
+export type CategoryChoice = (typeof CATEGORY_CHOICES)[number]['id'];
+
+/** Choix proposé par défaut pour un produit, d'après ce que l'on en sait. */
+export function defaultChoice(product: BarcodeProduct): CategoryChoice {
+  const c = product.data.category;
+  if (c === 'water' || c === 'medicine' || c === 'hygiene') {
+    return c;
+  }
+  // Code CIP (3400…) : une boîte de médicament.
+  return product.code.startsWith('340') ? 'medicine' : 'food';
+}
+
+/**
+ * Catégorie et valeurs de la fiche d'ajout habituelle. Le nom, la contenance
+ * et les calories viennent des données trouvées ; la péremption et le lot,
+ * d'un Data Matrix lu au scanner.
+ */
+export function prefillFor(
+  product: BarcodeProduct,
+  options: {
+    choice?: CategoryChoice;
+    expiry?: string | null;
+    lot?: string | null;
+  } = {},
+): {
   category: ItemCategory;
   prefill: Record<string, string>;
 } {
   const d = product.data;
-  const category: ItemCategory = d.category === 'water' ? 'water' : 'food';
+  const choiceId = options.choice ?? defaultChoice(product);
+  const choice =
+    CATEGORY_CHOICES.find(c => c.id === choiceId) ?? CATEGORY_CHOICES[0];
+  const category: ItemCategory = choice.category;
   const prefill: Record<string, string> = {};
+  if ('subtype' in choice) {
+    prefill.subtype = choice.subtype;
+  }
   if (d.name) {
     prefill.name =
       d.brand && !d.name.includes(d.brand) ? `${d.name} (${d.brand})` : d.name;
   }
   const notes = [`Code-barres ${product.code}`];
+  if (options.lot) {
+    notes.push(`Lot ${options.lot}`);
+  }
   if (d.quantityLabel) {
     notes.push(`Contenance : ${d.quantityLabel}`);
   }
   prefill.notes = notes.join(' · ');
+  if (options.expiry) {
+    prefill.expiry = isoToFr(options.expiry);
+  }
   if (category === 'food') {
     if (d.netValue !== undefined && (d.netUnit === 'g' || d.netUnit === 'kg')) {
       prefill.unitWeight = decimal(d.netValue);

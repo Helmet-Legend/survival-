@@ -12,7 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { ItemSummary } from '../../inventory';
-import { frToIso } from '../../lib/dates';
+import { frToIso, isoToFr } from '../../lib/dates';
 import { normalizeBarcode } from '../../scanner/barcode';
 import {
   addScans,
@@ -23,6 +23,9 @@ import {
   lookupPending,
   nameKey,
   prefillFor,
+  CATEGORY_CHOICES,
+  defaultChoice,
+  type CategoryChoice,
   removeFromBasket,
   saveOnlineLookup,
   setBasketCount,
@@ -164,7 +167,7 @@ export function ScanScreen() {
         return { tone: 'error', message: 'Aucun code-barres reconnu.' };
       }
       if (mode === 'remove') {
-        queueWithdrawals(codes);
+        queueWithdrawals(codes.map(r => r.code));
         return {
           tone: 'ok',
           message:
@@ -278,7 +281,9 @@ export function ScanScreen() {
         <Panel title="Reconnaître les produits en ligne ?">
           <Text style={text.body}>
             Fenrir peut chercher le nom, la contenance et les calories sur Open
-            Food Facts, une base libre et collaborative.
+            Food Facts, et les produits d’hygiène sur Open Beauty Facts : deux
+            bases libres et collaboratives. Les médicaments sont reconnus sans
+            réseau.
           </Text>
           <Text style={text.muted}>
             Seul le code-barres est envoyé, jamais votre stock. Sans réseau, les
@@ -535,7 +540,11 @@ function BasketRow(props: {
   const { entry, linked, match, run } = props;
   const { code, count, product } = entry;
   const [amount, setAmount] = useState('');
-  const [expiry, setExpiry] = useState('');
+  // Péremption lue dans un Data Matrix : préremplie, modifiable.
+  const [expiry, setExpiry] = useState(
+    entry.expiry ? isoToFr(entry.expiry) : '',
+  );
+  const [choice, setChoice] = useState<CategoryChoice>(defaultChoice(product));
   const [rowError, setRowError] = useState<string | null>(null);
 
   const counter = (
@@ -670,7 +679,7 @@ function BasketRow(props: {
         ? 'Recherche en ligne désactivée : fiche à compléter.'
         : 'En attente de connexion pour la recherche.'
       : product.status === 'not_found'
-      ? 'Inconnu d’Open Food Facts : fiche à compléter.'
+      ? 'Inconnu des bases en ligne : fiche à compléter.'
       : 'Fiche supprimée : à recréer.';
   const details = [
     d.brand,
@@ -678,12 +687,14 @@ function BasketRow(props: {
     d.kcalPer100g !== undefined ? `${d.kcalPer100g} kcal / 100 g` : undefined,
   ].filter(Boolean);
   const createForm = () => {
-    const { category, prefill } = found
-      ? prefillFor(product)
-      : {
-          category: 'food' as const,
-          prefill: { notes: `Code-barres ${code}` },
-        };
+    const { category, prefill } = prefillFor(
+      found ? product : { ...product, data: {} },
+      {
+        choice,
+        expiry: entry.expiry,
+        lot: entry.lot,
+      },
+    );
     navigation.openStockForm({
       category,
       prefill:
@@ -725,6 +736,28 @@ function BasketRow(props: {
           }
         />
       ) : null}
+      {entry.expiry || entry.lot ? (
+        <Text style={text.subtle}>
+          Lu dans le code :{' '}
+          {[
+            entry.expiry ? `péremption ${isoToFr(entry.expiry)}` : null,
+            entry.lot ? `lot ${entry.lot}` : null,
+          ]
+            .filter(Boolean)
+            .join(', ')}
+        </Text>
+      ) : null}
+      <Text style={text.label}>Ranger dans</Text>
+      <View style={styles.chips}>
+        {CATEGORY_CHOICES.map(c => (
+          <Chip
+            key={c.id}
+            label={c.label}
+            selected={choice === c.id}
+            onPress={() => setChoice(c.id)}
+          />
+        ))}
+      </View>
       <Button
         compact
         variant={match === undefined ? 'primary' : 'secondary'}
