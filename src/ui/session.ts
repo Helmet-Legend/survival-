@@ -7,7 +7,10 @@ import type {
   InventoryRepository,
   PhotoRepository,
 } from '../inventory';
+import type { FileAccess } from '../device/files';
 import type { ScreenCaptureSetting } from '../device/screenCapture';
+import type { Argon2Params } from '../crypto/params';
+import type { Argon2Engine, RandomSource } from '../crypto/types';
 import type { ReminderScheduler } from '../resilience/reminders';
 import type { PhotoSource } from '../photo/photoSource';
 import type { VaultDatabase } from '../vault';
@@ -27,6 +30,16 @@ export interface Session {
   screenCapture: ScreenCaptureSetting;
   /** Rappels de péremption du téléphone (indisponibles hors Android). */
   reminders: ReminderScheduler;
+  /** Fichiers choisis par l'utilisateur (sauvegarde, export). */
+  files: FileAccess;
+  /** Chiffrement des sauvegardes (null : sauvegarde indisponible). */
+  backupCrypto: BackupCrypto | null;
+}
+
+export interface BackupCrypto {
+  engine: Argon2Engine;
+  random: RandomSource;
+  params?: Argon2Params;
 }
 
 export const SessionContext = createContext<Session | null>(null);

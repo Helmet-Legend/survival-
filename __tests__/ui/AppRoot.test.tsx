@@ -330,6 +330,88 @@ describe('cycle de vie', () => {
     expect(await screen.findByText(/Captures autorisées/)).toBeTruthy();
   });
 
+  it('exporte une sauvegarde chiffrée puis la restaure', async () => {
+    const ctx = await existingVault();
+    const file: { saved: { name: string; text: string } | null } = {
+      saved: null,
+    };
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        files={{
+          available: true,
+          saveText: async (name, _mime, text) => {
+            file.saved = { name, text };
+            return true;
+          },
+          openText: async () => file.saved?.text ?? null,
+        }}
+        backupCrypto={{
+          engine: new JsArgon2(),
+          random: new SeededRandom(7),
+          params: TEST_ARGON2_PARAMS,
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Exporter une sauvegarde'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'court',
+    );
+    await fireEvent.press(screen.getByText('Chiffrer et enregistrer'));
+    expect(await screen.findByText('Au moins 8 caractères')).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'phrase secrète',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Confirmer le mot de passe'),
+      'phrase secrète',
+    );
+    await fireEvent.press(screen.getByText('Chiffrer et enregistrer'));
+    expect(await screen.findByText(/Sauvegarde enregistrée/)).toBeTruthy();
+    expect(file.saved?.name).toMatch(
+      /^fenrir-sauvegarde-\d{4}-\d{2}-\d{2}\.fenrir$/,
+    );
+    expect(file.saved?.text).not.toContain('Riz');
+
+    // Le stock change, puis la sauvegarde est restaurée.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    await fireEvent.press(await screen.findByLabelText('Supprimer « Riz »'));
+    await fireEvent.press(screen.getByLabelText('Oui, supprimer'));
+    expect(await screen.findByText('« Riz » supprimé.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Restaurer une sauvegarde'));
+    expect(await screen.findByText(/remplace tout le contenu/)).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'mauvais mot de passe',
+    );
+    await fireEvent.press(screen.getByText('Restaurer'));
+    expect(await screen.findByText(/Mot de passe incorrect/)).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Mot de passe de la sauvegarde'),
+      'phrase secrète',
+    );
+    await fireEvent.press(screen.getByText('Restaurer'));
+    expect(await screen.findByText(/restaurée/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    expect(await screen.findByLabelText('Riz, 10 kg')).toBeTruthy();
+  });
+
   it('active les rappels neutres et les met à jour au verrouillage', async () => {
     const ctx = await existingVault();
     const calls: Array<readonly number[] | 'cancel'> = [];

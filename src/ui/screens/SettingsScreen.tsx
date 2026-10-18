@@ -31,6 +31,7 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { BackupPanel } from './BackupPanel';
 
 const MAX_MEMBERS = 12;
 
@@ -178,6 +179,8 @@ export function SettingsScreen(props: { onLock: () => void }) {
           ) : null}
         </Panel>
       ) : null}
+
+      <BackupPanel onRestored={reload} />
 
       <Panel
         title="Confidentialité"

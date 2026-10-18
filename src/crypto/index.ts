@@ -15,6 +15,12 @@ export type {
 } from './VaultKeyManager';
 export { VaultKeyManager };
 
+/** Chiffrement des sauvegardes : Argon2id natif et aléa du système. */
+export const nativeBackupCrypto = {
+  engine: nativeArgon2,
+  random: systemRandom,
+};
+
 /** Instance de production branchée sur les modules natifs. */
 export function createVaultKeyManager(): VaultKeyManager<DB> {
   return new VaultKeyManager<DB>({

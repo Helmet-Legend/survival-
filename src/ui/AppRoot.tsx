@@ -33,6 +33,7 @@ import {
   InventoryRepository,
   PhotoRepository,
 } from '../inventory';
+import { nativeFiles, type FileAccess } from '../device/files';
 import { nativeReminders } from '../device/reminders';
 import {
   nativeScreenCapture,
@@ -73,7 +74,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { StockScreen } from './screens/StockScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
-import { SessionContext, type Session } from './session';
+import { SessionContext, type BackupCrypto, type Session } from './session';
 import { colors, sizes, space, text } from './theme';
 
 type Phase =
@@ -94,6 +95,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   screenCapture?: ScreenCaptureSetting;
   /** Rappels de péremption ; le module natif Android par défaut. */
   reminders?: ReminderScheduler;
+  /** Fichiers (sauvegarde, export) ; le module natif Android par défaut. */
+  files?: FileAccess;
+  /** Chiffrement des sauvegardes ; sans lui, la sauvegarde est masquée. */
+  backupCrypto?: BackupCrypto;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
@@ -103,6 +108,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     () => props.screenCapture ?? nativeScreenCapture(),
   );
   const [reminders] = useState(() => props.reminders ?? nativeReminders());
+  const [files] = useState(() => props.files ?? nativeFiles());
+  const backupCrypto = props.backupCrypto ?? null;
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('home');
@@ -143,6 +150,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       photoSource,
       screenCapture,
       reminders,
+      files,
+      backupCrypto,
     };
     sessionRef.current = session;
     // Les rappels suivent le coffre ouvert (stock modifié ailleurs, date…).
