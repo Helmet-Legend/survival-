@@ -13,7 +13,8 @@ export type Overlay =
   | 'emergency'
   | 'familyPlan'
   | 'preparation'
-  | 'calculators';
+  | 'calculators'
+  | 'scan';
 
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {
@@ -25,6 +26,8 @@ export interface StockFormTarget {
   prefill?: Record<string, string>;
   /** Nouvel article rangé dans ce sac d'évacuation. */
   bagId?: string;
+  /** Code-barres scanné : associé à la fiche créée, retiré du panier. */
+  barcode?: string;
 }
 
 /** Catégorie et message à afficher en arrivant sur les Stocks. */

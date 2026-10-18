@@ -35,6 +35,7 @@ import {
   saveEnergyNeed,
 } from '../../resilience/energy';
 import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
+import { loadOnlineLookup, saveOnlineLookup } from '../../scanner/products';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -57,6 +58,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
       remindersOn,
       upcoming,
       whPerPerson,
+      barcodeOnline,
     ] = await Promise.all([
       loadHousehold(db),
       loadTargetDays(db),
@@ -64,6 +66,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
       loadRemindersEnabled(db),
       reminderTimes(db),
       loadEnergyNeed(db),
+      loadOnlineLookup(db),
     ]);
     return {
       household,
@@ -72,6 +75,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
       remindersOn,
       upcoming,
       whPerPerson,
+      barcodeOnline,
     };
   });
 
@@ -321,6 +325,25 @@ export function SettingsScreen(props: { onLock: () => void }) {
           Les données sont chiffrées sur ce téléphone et ne quittent jamais
           l’appareil. Le coffre se verrouille dès que l’application passe en
           arrière-plan.
+        </Text>
+        <View style={styles.settingRow}>
+          <Text style={[text.body, styles.grow]}>
+            Reconnaître les codes-barres en ligne
+          </Text>
+          <Switch
+            accessibilityLabel="Reconnaître les codes-barres en ligne"
+            value={data.barcodeOnline === true}
+            onValueChange={value => {
+              void saveOnlineLookup(db, value).then(reload);
+            }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.text}
+          />
+        </View>
+        <Text style={text.subtle}>
+          {data.barcodeOnline === true
+            ? 'Activé : seul le code-barres d’un produit scanné est envoyé à Open Food Facts pour en trouver le nom et les calories.'
+            : 'Désactivé : les codes scannés restent dans le téléphone ; les fiches se complètent à la main.'}
         </Text>
         {screenCapture.available ? (
           <>

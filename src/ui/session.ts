@@ -14,6 +14,8 @@ import type { Argon2Params } from '../crypto/params';
 import type { Argon2Engine, RandomSource } from '../crypto/types';
 import type { ReminderScheduler } from '../resilience/reminders';
 import type { PhotoSource } from '../photo/photoSource';
+import type { ProductFetch } from '../scanner/products';
+import type { ScanSource } from '../scanner/scanSource';
 import type { VaultDatabase } from '../vault';
 
 /** Coffre déverrouillé, accessible aux écrans de l'application. */
@@ -37,6 +39,10 @@ export interface Session {
   files: FileAccess;
   /** Chiffrement des sauvegardes (null : sauvegarde indisponible). */
   backupCrypto: BackupCrypto | null;
+  /** Lecteur de codes-barres (indisponible hors Android). */
+  scanSource: ScanSource;
+  /** Requête vers Open Food Facts, faite seulement avec l'accord donné. */
+  productFetch: ProductFetch;
 }
 
 export interface BackupCrypto {

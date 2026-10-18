@@ -9,9 +9,10 @@ import {
   FolderLock,
   Minus,
   PackageOpen,
-  Plus,
-  SearchX,
   Pencil,
+  Plus,
+  ScanBarcode,
+  SearchX,
   Trash2,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
@@ -403,6 +404,15 @@ export function StockScreen() {
                 }
               }}
             />
+            {inBag ? null : (
+              <Button
+                compact
+                icon={ScanBarcode}
+                label="Scanner"
+                accessibilityLabel="Scanner des codes-barres"
+                onPress={() => navigation.open('scan')}
+              />
+            )}
             <Button
               compact
               variant="danger"

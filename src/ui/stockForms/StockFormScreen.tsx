@@ -33,6 +33,7 @@ import { IconButton, Notice } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
 import { CATEGORY_TITLES } from '../format';
 import { useNavigation, type StockFormTarget } from '../navigation';
+import { linkBarcode, removeFromBasket } from '../../scanner/products';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
@@ -127,7 +128,7 @@ function StockForm(props: {
   item?: InventoryItem;
   weapon?: Weapon;
 }) {
-  const { repo, armory, photos, photoSource } = useSession();
+  const { db, repo, armory, photos, photoSource } = useSession();
   const navigation = useNavigation();
   const { category } = props.target;
   const config = FORMS[category];
@@ -135,10 +136,13 @@ function StockForm(props: {
   // Retour dans le sac d'évacuation d'où vient la fiche, le cas échéant.
   const bagId = props.item?.bagId ?? props.target.bagId;
   const back = (message?: string) =>
-    navigation.goTo(
-      'stock',
-      bagId ? { category: 'bags', bagId, message } : { category, message },
-    );
+    // Fiche ouverte depuis le scanner : y revenir pour la suite du panier.
+    props.target.barcode !== undefined
+      ? navigation.open('scan')
+      : navigation.goTo(
+          'stock',
+          bagId ? { category: 'bags', bagId, message } : { category, message },
+        );
   const [values, setValues] = useState<Values>(() =>
     props.item
       ? valuesFromItem(props.item)
@@ -284,6 +288,12 @@ function StockForm(props: {
           await photos.add('item', item.id, photo);
         }
         name = item.name;
+        const code = props.target.barcode;
+        if (code !== undefined && !isEdit) {
+          // Les prochains scans de ce code retrouveront la fiche.
+          await linkBarcode(db, code, item.id);
+          await removeFromBasket(db, code);
+        }
       }
       back(`« ${name} » ${isEdit ? 'modifié' : 'enregistré'}.`);
     } catch (e) {
