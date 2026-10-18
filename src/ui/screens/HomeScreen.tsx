@@ -7,9 +7,10 @@ import {
   BatteryCharging,
   CalendarClock,
   ChevronRight,
-  Flashlight,
   ClipboardList,
+  Flashlight,
   ListChecks,
+  ShoppingCart,
   Siren,
   TriangleAlert,
   Users,
@@ -47,6 +48,12 @@ import {
 } from '../format';
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation } from '../navigation';
+import {
+  currentMonthIndex,
+  loadPurchasePlan,
+  monthLabel,
+  monthOf,
+} from '../../plan/purchasePlan';
 import { getReadiness } from '../../plan/readiness';
 import { useSession } from '../session';
 import { scoreColor } from './ReadinessScreen';
@@ -334,6 +341,7 @@ export function HomeScreen() {
       </Panel>
 
       <ReadinessCard />
+      <MonthPurchases />
       <Button
         icon={ListChecks}
         chevron
@@ -351,6 +359,34 @@ export function HomeScreen() {
         onPress={() => navigation.open('plan')}
       />
     </ScrollView>
+  );
+}
+
+/** Achats prévus ce mois-ci par le plan d'achats, s'il existe. */
+function MonthPurchases() {
+  const { db } = useSession();
+  const navigation = useNavigation();
+  const { data } = useLoader(() => loadPurchasePlan(db));
+  if (!data) {
+    return null;
+  }
+  const today = localToday();
+  const month = currentMonthIndex(data, today);
+  // Achats du mois, et ceux des mois passés pas encore faits.
+  const pending = data.entries.filter(e => !e.done && e.month <= month);
+  if (pending.length === 0) {
+    return null;
+  }
+  return (
+    <Button
+      icon={ShoppingCart}
+      chevron
+      label={`ACHATS · ${monthLabel(monthOf(today))} · ${
+        pending.length
+      } à faire`}
+      accessibilityLabel={`Achats du mois : ${pending.length} à faire. Ouvrir le plan d’achats`}
+      onPress={() => navigation.open('purchases')}
+    />
   );
 }
 

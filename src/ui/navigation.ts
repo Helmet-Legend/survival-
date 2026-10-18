@@ -16,7 +16,8 @@ export type Overlay =
   | 'calculators'
   | 'scan'
   | 'history'
-  | 'readiness';
+  | 'readiness'
+  | 'purchases';
 
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {

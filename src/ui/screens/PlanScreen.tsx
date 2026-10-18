@@ -161,6 +161,12 @@ export function PlanScreen() {
         label="Calculateurs eau et électricité"
         onPress={() => navigation.open('calculators')}
       />
+      <Button
+        icon={ShoppingCart}
+        chevron
+        label="Plan d’achats échelonné"
+        onPress={() => navigation.open('purchases')}
+      />
 
       {/* Scénarios */}
       <Panel title="Scénarios de consommation">

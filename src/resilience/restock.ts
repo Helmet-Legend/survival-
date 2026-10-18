@@ -123,7 +123,7 @@ export function computeRestockPlan(input: {
 }
 
 /** Articles ayant un stock minimal, avec leur stock utilisable. */
-async function loadMinStockItems(
+export async function loadMinStockItems(
   db: SqlDatabase,
   asOf: string,
 ): Promise<Omit<ItemShortfall, 'missing'>[]> {

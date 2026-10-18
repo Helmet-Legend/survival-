@@ -836,6 +836,35 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
+  it('échelonne les achats et les rappelle sur l’accueil', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByLabelText('Accéder aux plans d’action'));
+    await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
+    await fireEvent.press(await screen.findByText('6 mois'));
+    await fireEvent.press(screen.getByText('Créer le plan'));
+    expect(
+      await screen.findByText(/^Plan créé : \d+ achats? sur 6 mois\.$/),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Ce mois-ci · /)).toBeTruthy();
+    const radio = screen.getByRole('checkbox', {
+      name: 'Radio à piles, Pour suivre les consignes des autorités.',
+    });
+    await fireEvent.press(radio);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('checkbox', {
+          name: 'Radio à piles, Pour suivre les consignes des autorités.',
+        }).props.accessibilityState,
+      ).toEqual({ checked: true }),
+    );
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    expect(
+      await screen.findByLabelText(
+        /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
+      ),
+    ).toBeTruthy();
+  });
+
   it('trace chaque mouvement dans l’historique', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));

@@ -9,10 +9,12 @@
  *
  * Pour chaque lot daté : un rappel quand il entre dans son seuil d'alerte
  * (le seuil de l'article, 30 jours par défaut), puis le jour de sa
- * péremption. Sacs d'évacuation compris.
+ * péremption. Sacs d'évacuation compris. S'y ajoute, si un plan d'achats
+ * existe, le 1er de chaque mois qui a encore des achats prévus.
  */
 import type { SqlDatabase } from '../db/types';
 import { addDays, localToday } from '../lib/dates';
+import { loadPurchasePlan, monthlyReminderDays } from '../plan/purchasePlan';
 
 /** Seuil d'alerte par défaut, comme le premier palier du plan d'action. */
 export const REMINDER_LEAD_DAYS = 30;
@@ -81,6 +83,10 @@ export async function reminderTimes(
         times.add(atReminderHour(day));
       }
     }
+  }
+  const plan = await loadPurchasePlan(db);
+  for (const day of plan === null ? [] : monthlyReminderDays(plan)) {
+    times.add(atReminderHour(day));
   }
   return [...times]
     .filter(t => t > now.getTime())
