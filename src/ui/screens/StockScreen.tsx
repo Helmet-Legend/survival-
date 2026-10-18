@@ -3,6 +3,7 @@
  * consommation, réglages et ajout.
  */
 import {
+  Backpack,
   ChevronDown,
   ChevronRight,
   FolderLock,
@@ -33,6 +34,7 @@ import {
   type InventoryLot,
   type ItemCategory,
   type ItemSummary,
+  type BagSummary,
   type DocumentSummary,
 } from '../../inventory';
 import { daysBetween, frToIso, localToday } from '../../lib/dates';
@@ -83,6 +85,7 @@ import {
 import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
 import { useLoader } from '../useLoader';
 import { ArmorySection } from './ArmorySection';
+import { BAG_COLOR, BagHeader, BagsSection } from './BagsSection';
 import { DocumentsSection, documentStatus } from './DocumentsSection';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
@@ -162,19 +165,32 @@ function renewCount(docs: readonly DocumentSummary[]): number {
   return docs.filter(d => documentStatus(d) !== null).length;
 }
 
+/** Lots périmés ou à moins de 30 jours, tous sacs confondus. */
+function bagAlerts(list: readonly BagSummary[]): number {
+  return list.reduce((sum, b) => sum + b.expiredLots + b.soonLots, 0);
+}
+
 function articles(count: number): string {
   return `${count} article${count > 1 ? 's' : ''}`;
 }
 
 export function StockScreen() {
-  const { repo, armory, documents } = useSession();
+  const { repo, armory, documents, bags } = useSession();
   const navigation = useNavigation();
   const focus = navigation.stockFocus;
-  const [filter, setFilter] = useState<ItemCategory | 'all' | 'documents'>(
-    focus?.category ?? 'all',
-  );
+  const [filter, setFilter] = useState<
+    ItemCategory | 'all' | 'documents' | 'bags'
+  >(focus?.category ?? 'all');
+  // Sac d'évacuation ouvert (dossier « Sacs »), sinon null.
+  const [bagId, setBagId] = useState<string | null>(focus?.bagId ?? null);
   const [choosing, setChoosing] = useState(false);
   const isDocs = filter === 'documents';
+  const isBags = filter === 'bags';
+  const inBag = isBags && bagId !== null;
+  const showFilter = (next: ItemCategory | 'all' | 'documents' | 'bags') => {
+    setFilter(next);
+    setBagId(null);
+  };
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -186,30 +202,42 @@ export function StockScreen() {
     navigation.openStockForm({
       category,
       recordType: category === 'weapon' ? 'ammo' : undefined,
+      bagId: inBag ? bagId : undefined,
     });
   };
 
   const { data, error, reload } = useLoader(async () => {
-    const all = (await repo.listItems()) as ItemSummary[];
+    // Le contenu des sacs d'évacuation reste dans son dossier.
+    const all = (await repo.listItems({ bag: 'none' })) as ItemSummary[];
     const items = isDocs
       ? []
+      : isBags
+      ? bagId === null
+        ? []
+        : ((await repo.listItems({ bag: bagId, query })) as ItemSummary[])
       : ((await repo.listItems({
           category: filter === 'all' ? undefined : filter,
           query,
+          bag: 'none',
         })) as ItemSummary[]);
     const detail =
       expanded === null ? null : await repo.getItem(expanded).catch(() => null);
     const weapons = await armory.listWeapons();
     const docs = await documents.list();
+    const bagList = await bags.list();
     return {
       weapons,
       docs,
+      bags: bagList,
+      bag: bagList.find(b => b.id === bagId) ?? null,
       all,
       items,
       detail,
-      hasExpired: all.some(i => i.totalQuantity > i.usableQuantity),
+      hasExpired: (inBag ? items : all).some(
+        i => i.totalQuantity > i.usableQuantity,
+      ),
     };
-  }, [filter, expanded, query]);
+  }, [filter, bagId, expanded, query]);
 
   const discard = async () => {
     try {
@@ -241,20 +269,25 @@ export function StockScreen() {
         <Chip
           label="Tous"
           selected={filter === 'all'}
-          onPress={() => setFilter('all')}
+          onPress={() => showFilter('all')}
         />
         {STOCK_ORDER.map(c => (
           <Chip
             key={c}
             label={CATEGORY_LABELS[c]}
             selected={filter === c}
-            onPress={() => setFilter(c)}
+            onPress={() => showFilter(c)}
           />
         ))}
         <Chip
+          label="Sacs"
+          selected={isBags}
+          onPress={() => showFilter('bags')}
+        />
+        <Chip
           label="Documents"
           selected={isDocs}
-          onPress={() => setFilter('documents')}
+          onPress={() => showFilter('documents')}
         />
       </ScrollView>
 
@@ -272,7 +305,44 @@ export function StockScreen() {
         </>
       ) : null}
 
-      {isDocs ? null : (
+      {isBags && !inBag && data ? (
+        <>
+          {feedback ? <Notice {...feedback} /> : null}
+          {error ? <Notice tone="error" message={error} /> : null}
+          <BagsSection
+            bags={data.bags}
+            onOpen={id => {
+              setExpanded(null);
+              setBagId(id);
+            }}
+            onChanged={async message => {
+              setFeedback(message);
+              await reload();
+            }}
+          />
+        </>
+      ) : null}
+
+      {inBag && data?.bag ? (
+        <BagHeader
+          bag={data.bag}
+          onBack={() => {
+            setFeedback(null);
+            setBagId(null);
+          }}
+          onChanged={async message => {
+            setFeedback(message);
+            await reload();
+          }}
+          onDeleted={async message => {
+            setFeedback(message);
+            setBagId(null);
+            await reload();
+          }}
+        />
+      ) : null}
+
+      {isDocs || (isBags && !inBag) ? null : (
         <>
           <SearchField
             label="Rechercher un article"
@@ -293,11 +363,13 @@ export function StockScreen() {
               accessibilityLabel={
                 filter === 'all'
                   ? '+ Ajouter un article'
+                  : filter === 'bags'
+                  ? '+ Ajouter dans le sac'
                   : `+ Ajouter : ${CATEGORY_TITLES[filter]}`
               }
               onPress={() => {
                 setFeedback(null);
-                if (filter === 'all') {
+                if (filter === 'all' || filter === 'bags') {
                   setChoosing(true);
                 } else {
                   addInto(filter);
@@ -404,6 +476,39 @@ export function StockScreen() {
           {showCategories && data ? (
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`Sacs d’évacuation : ${data.bags.length} sac${
+                data.bags.length > 1 ? 's' : ''
+              }${
+                bagAlerts(data.bags) > 0
+                  ? `, ${bagAlerts(data.bags)} à vérifier`
+                  : ''
+              }`}
+              onPress={() => showFilter('bags')}
+              style={({ pressed }) => [
+                styles.category,
+                pressed && styles.pressed,
+              ]}
+            >
+              <IconTile icon={Backpack} color={BAG_COLOR} />
+              <View style={styles.grow}>
+                <Text style={text.h3}>Sacs d’évacuation</Text>
+                <Text style={text.muted}>
+                  {data.bags.length} sac{data.bags.length > 1 ? 's' : ''}
+                  {bagAlerts(data.bags) > 0 ? (
+                    <Text style={styles.warn}>
+                      {' '}
+                      · {bagAlerts(data.bags)} à vérifier
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+              <ChevronRight color={colors.text} size={22} />
+            </Pressable>
+          ) : null}
+
+          {showCategories && data ? (
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel={`Documents : ${data.docs.length} document${
                 data.docs.length > 1 ? 's' : ''
               }${
@@ -411,7 +516,7 @@ export function StockScreen() {
                   ? `, ${renewCount(data.docs)} à renouveler`
                   : ''
               }`}
-              onPress={() => setFilter('documents')}
+              onPress={() => showFilter('documents')}
               style={({ pressed }) => [
                 styles.category,
                 pressed && styles.pressed,
@@ -458,6 +563,8 @@ export function StockScreen() {
               title={
                 query
                   ? 'Aucun article ne correspond.'
+                  : inBag
+                  ? 'Ce sac est vide.'
                   : 'Aucun article dans cette catégorie.'
               }
               message={

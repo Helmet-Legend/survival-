@@ -132,6 +132,13 @@ function StockForm(props: {
   const { category } = props.target;
   const config = FORMS[category];
   const isEdit = props.item !== undefined || props.weapon !== undefined;
+  // Retour dans le sac d'évacuation d'où vient la fiche, le cas échéant.
+  const bagId = props.item?.bagId ?? props.target.bagId;
+  const back = (message?: string) =>
+    navigation.goTo(
+      'stock',
+      bagId ? { category: 'bags', bagId, message } : { category, message },
+    );
   const [values, setValues] = useState<Values>(() =>
     props.item
       ? valuesFromItem(props.item)
@@ -240,7 +247,7 @@ function StockForm(props: {
       } else {
         return;
       }
-      navigation.goTo('stock', { category, message: `« ${name} » supprimé.` });
+      back(`« ${name} » supprimé.`);
     } catch (e) {
       setFormError(
         `Suppression impossible : ${
@@ -269,16 +276,16 @@ function StockForm(props: {
         const draft = toItemDraft(category, values, isEdit);
         const item = props.item
           ? await repo.updateItem(props.item.id, draft.input)
-          : await repo.createItem(draft.input, draft.lot ?? undefined);
+          : await repo.createItem(
+              { ...draft.input, bagId: props.target.bagId ?? null },
+              draft.lot ?? undefined,
+            );
         for (const photo of pendingPhotos) {
           await photos.add('item', item.id, photo);
         }
         name = item.name;
       }
-      navigation.goTo('stock', {
-        category,
-        message: `« ${name} » ${isEdit ? 'modifié' : 'enregistré'}.`,
-      });
+      back(`« ${name} » ${isEdit ? 'modifié' : 'enregistré'}.`);
     } catch (e) {
       setSaving(false);
       if (e instanceof FormError) {
@@ -630,11 +637,7 @@ function StockForm(props: {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <IconButton
-            icon={ArrowLeft}
-            label="Retour"
-            onPress={() => navigation.goTo('stock', { category })}
-          />
+          <IconButton icon={ArrowLeft} label="Retour" onPress={() => back()} />
           <View style={styles.headerTitle}>
             <Text style={styles.brand}>{APP_NAME.toUpperCase()}</Text>
             <View

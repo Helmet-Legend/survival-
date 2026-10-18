@@ -76,6 +76,8 @@ export interface ItemInput {
   subtype?: string | null;
   /** Champs propres à la catégorie (potabilité, dosage, état…). */
   attributes?: ItemAttributes | null;
+  /** Sac d'évacuation qui contient l'article, ou null (stock général). */
+  bagId?: string | null;
 }
 
 export interface LotInput {
@@ -101,6 +103,7 @@ export interface InventoryItem {
   packageSize: number | null;
   subtype: string | null;
   attributes: ItemAttributes;
+  bagId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -130,6 +133,11 @@ export interface ItemFilter {
   criticalOnly?: boolean;
   /** Recherche dans le nom, insensible à la casse et aux accents. */
   query?: string;
+  /**
+   * `'none'` : stock général seulement (hors sacs) ; un identifiant : le
+   * contenu de ce sac ; absent : tout.
+   */
+  bag?: string;
 }
 
 export interface ConsumedPortion {
@@ -194,6 +202,7 @@ interface CleanItem {
   packageSize: number | null;
   subtype: string | null;
   attributes: ItemAttributes;
+  bagId: string | null;
 }
 
 const SUBTYPE_RE = /^[a-z_]{1,30}$/;
@@ -240,6 +249,10 @@ function validateItem(input: ItemInput): CleanItem {
     packageSize: validatePackageSize(input.packageSize),
     subtype: validateSubtype(input.subtype),
     attributes: validateItemAttributes(input.attributes),
+    bagId:
+      typeof input.bagId === 'string' && input.bagId !== ''
+        ? input.bagId
+        : null,
   };
 }
 
@@ -367,6 +380,10 @@ function toItem(row: SqlRow): InventoryItem {
         ? null
         : String(row.subtype),
     attributes: parseAttributes<ItemAttributes>(row.attributes),
+    bagId:
+      row.bag_id === null || row.bag_id === undefined
+        ? null
+        : String(row.bag_id),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -374,7 +391,7 @@ function toItem(row: SqlRow): InventoryItem {
 
 const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
   i.location, i.is_critical, i.notes, i.min_stock, i.alert_days, i.caliber, i.package_size, i.subtype, i.attributes,
-  i.created_at, i.updated_at`;
+  i.bag_id, i.created_at, i.updated_at`;
 
 /**
  * Ordre de consommation : péremption la plus proche d'abord, lots non
@@ -412,8 +429,8 @@ export class InventoryRepository {
         `INSERT INTO inventory_items
            (id, name, category, unit, calories_per_unit, location, is_critical,
             notes, min_stock, alert_days, caliber, package_size, subtype,
-            attributes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            attributes, bag_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           item.name,
@@ -429,6 +446,7 @@ export class InventoryRepository {
           item.packageSize,
           item.subtype,
           serializeAttributes(item.attributes),
+          item.bagId,
         ],
       );
       if (lot !== null) {
@@ -464,7 +482,7 @@ export class InventoryRepository {
             SET name = ?, category = ?, unit = ?, calories_per_unit = ?,
                 location = ?, is_critical = ?, notes = ?,
                 min_stock = ?, alert_days = ?, caliber = ?,
-                package_size = ?, subtype = ?, attributes = ?
+                package_size = ?, subtype = ?, attributes = ?, bag_id = ?
           WHERE id = ?`,
         [
           item.name,
@@ -480,6 +498,7 @@ export class InventoryRepository {
           item.packageSize,
           item.subtype,
           serializeAttributes(item.attributes),
+          item.bagId,
           id,
         ],
       );
@@ -517,6 +536,12 @@ export class InventoryRepository {
     }
     if (filter.criticalOnly === true) {
       where.push('i.is_critical = 1');
+    }
+    if (filter.bag === 'none') {
+      where.push('i.bag_id IS NULL');
+    } else if (filter.bag !== undefined) {
+      where.push('i.bag_id = ?');
+      params.push(filter.bag);
     }
     const { rows } = await this.db.execute(
       `SELECT ${ITEM_COLUMNS},

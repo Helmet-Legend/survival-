@@ -236,6 +236,7 @@ export function HomeScreen() {
                 <Text style={text.subtle}>
                   {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
                   {formatRelativeDays(alert.daysLeft)}
+                  {alert.bagName ? ` · ${alert.bagName}` : ''}
                 </Text>
               </View>
               <StatusChip

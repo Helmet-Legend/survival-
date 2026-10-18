@@ -337,6 +337,7 @@ describe('migration 3 (armes et munitions)', () => {
         package_size: null,
         subtype: null,
         attributes: null,
+        bag_id: null,
       },
     ]);
     const lots = await db.execute('SELECT * FROM inventory_lots');

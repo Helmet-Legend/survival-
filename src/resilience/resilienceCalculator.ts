@@ -96,6 +96,8 @@ export interface ExpiryAlert {
   bucket: ExpiryBucket;
   /** Seuil d'alerte propre à l'article, s'il en a un. */
   alertDays: number | null;
+  /** Sac d'évacuation qui contient le lot, sinon null. */
+  bagName: string | null;
 }
 
 export class ResilienceError extends Error {
@@ -378,14 +380,19 @@ export async function saveHousehold(
   );
 }
 
-/** Lots non vides d'eau et de vivres, seuls utiles au calcul d'autonomie. */
+/**
+ * Lots non vides d'eau et de vivres du stock général, seuls utiles au
+ * calcul d'autonomie. Le contenu des sacs d'évacuation est réservé au
+ * départ : il n'entre pas dans l'autonomie du foyer.
+ */
 export async function loadConsumableLots(db: SqlDatabase): Promise<StockLot[]> {
   const { rows } = await db.execute(
     `SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
             l.quantity, i.calories_per_unit, i.attributes, l.expiration_date
        FROM inventory_lots AS l
        JOIN inventory_items AS i ON i.id = l.item_id
-      WHERE l.quantity > 0 AND i.category IN ('water', 'food')`,
+      WHERE l.quantity > 0 AND i.category IN ('water', 'food')
+        AND i.bag_id IS NULL`,
   );
   return rows.map(r => ({
     lotId: String(r.lot_id),
@@ -446,9 +453,11 @@ export async function getResilienceReport(
  */
 export const EXPIRY_ALERTS_SQL = `
   SELECT l.id AS lot_id, i.id AS item_id, i.name, i.category, i.unit,
-         i.is_critical, i.alert_days, l.quantity, l.expiration_date
+         i.is_critical, i.alert_days, l.quantity, l.expiration_date,
+         b.name AS bag_name
     FROM inventory_lots AS l
     JOIN inventory_items AS i ON i.id = l.item_id
+    LEFT JOIN bags AS b ON b.id = i.bag_id
    WHERE l.expiration_date IS NOT NULL AND l.quantity > 0
      AND l.expiration_date <= ?
    ORDER BY l.expiration_date, i.is_critical DESC, i.name`;
@@ -496,6 +505,7 @@ export async function getExpiryAlerts(
       daysLeft,
       bucket,
       alertDays,
+      bagName: r.bag_name === null ? null : String(r.bag_name),
     });
   }
   return alerts;

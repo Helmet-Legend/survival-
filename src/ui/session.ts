@@ -2,11 +2,13 @@ import { createContext, useContext } from 'react';
 
 import type {
   ArmoryRepository,
+  BagRepository,
   DocumentRepository,
   InventoryRepository,
   PhotoRepository,
 } from '../inventory';
 import type { ScreenCaptureSetting } from '../device/screenCapture';
+import type { ReminderScheduler } from '../resilience/reminders';
 import type { PhotoSource } from '../photo/photoSource';
 import type { VaultDatabase } from '../vault';
 
@@ -17,10 +19,14 @@ export interface Session {
   armory: ArmoryRepository;
   documents: DocumentRepository;
   photos: PhotoRepository;
+  /** Sacs d'évacuation. */
+  bags: BagRepository;
   /** Appareil photo et galerie (indisponibles hors Android). */
   photoSource: PhotoSource;
   /** Autorisation des captures d'écran (indisponible hors Android). */
   screenCapture: ScreenCaptureSetting;
+  /** Rappels de péremption du téléphone (indisponibles hors Android). */
+  reminders: ReminderScheduler;
 }
 
 export const SessionContext = createContext<Session | null>(null);

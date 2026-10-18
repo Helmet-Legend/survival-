@@ -28,14 +28,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { VaultKeyManager } from '../crypto/VaultKeyManager';
 import {
   ArmoryRepository,
+  BagRepository,
   DocumentRepository,
   InventoryRepository,
   PhotoRepository,
 } from '../inventory';
+import { nativeReminders } from '../device/reminders';
 import {
   nativeScreenCapture,
   type ScreenCaptureSetting,
 } from '../device/screenCapture';
+import { syncReminders, type ReminderScheduler } from '../resilience/reminders';
 import {
   isAwayForPhoto,
   nativePhotoSource,
@@ -88,6 +91,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   photoSource?: PhotoSource;
   /** Réglage des captures d'écran ; le module natif Android par défaut. */
   screenCapture?: ScreenCaptureSetting;
+  /** Rappels de péremption ; le module natif Android par défaut. */
+  reminders?: ReminderScheduler;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
@@ -96,6 +101,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [screenCapture] = useState(
     () => props.screenCapture ?? nativeScreenCapture(),
   );
+  const [reminders] = useState(() => props.reminders ?? nativeReminders());
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('home');
@@ -132,19 +138,29 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       armory: new ArmoryRepository(db),
       documents: new DocumentRepository(db),
       photos: new PhotoRepository(db),
+      bags: new BagRepository(db),
       photoSource,
       screenCapture,
+      reminders,
     };
     sessionRef.current = session;
+    // Les rappels suivent le coffre ouvert (stock modifié ailleurs, date…).
+    syncReminders(db, reminders).catch(() => undefined);
     setTab('home');
     setOverlay(null);
     setPhase({ kind: 'open', session });
   };
 
   const lock = useCallback((message?: string) => {
-    sessionRef.current?.db.close();
+    const session = sessionRef.current;
     sessionRef.current = null;
     setPhase({ kind: 'locked', message });
+    if (session !== null) {
+      // Dernière mise à jour des rappels avant de refermer la base.
+      syncReminders(session.db, session.reminders)
+        .catch(() => undefined)
+        .finally(() => session.db.close());
+    }
   }, []);
 
   const navigation = useMemo<Navigation>(

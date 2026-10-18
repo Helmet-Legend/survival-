@@ -491,6 +491,30 @@ const migration8: Migration = {
   ],
 };
 
+/**
+ * Sacs d'évacuation : chaque sac a son propre contenu (articles et lots
+ * habituels, avec leurs péremptions). Un article rangé dans un sac a un
+ * `bag_id` ; supprimer le sac remet son contenu dans le stock général.
+ */
+const migration9: Migration = {
+  version: 9,
+  name: 'sacs d’évacuation',
+  statements: [
+    `CREATE TABLE bags (
+       id         TEXT PRIMARY KEY NOT NULL,
+       name       TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 60),
+       owner      TEXT CHECK (owner IS NULL OR length(owner) <= 60),
+       notes      TEXT CHECK (notes IS NULL OR length(notes) <= 500),
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('bags'),
+    `ALTER TABLE inventory_items ADD COLUMN bag_id TEXT
+       REFERENCES bags (id) ON DELETE SET NULL`,
+    'CREATE INDEX idx_inventory_items_bag ON inventory_items (bag_id)',
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -500,6 +524,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration6,
   migration7,
   migration8,
+  migration9,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
