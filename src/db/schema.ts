@@ -575,6 +575,30 @@ const migration12: Migration = {
   ],
 };
 
+/**
+ * Historique des mouvements de stock : entrées, retraits, corrections,
+ * périmés jetés et articles supprimés. Le nom et l'unité sont copiés pour
+ * que l'historique reste lisible après la suppression d'un article.
+ */
+const migration13: Migration = {
+  version: 13,
+  name: 'historique des mouvements',
+  statements: [
+    `CREATE TABLE stock_movements (
+       id         TEXT PRIMARY KEY NOT NULL,
+       item_id    TEXT REFERENCES inventory_items (id) ON DELETE SET NULL,
+       item_name  TEXT NOT NULL,
+       unit       TEXT NOT NULL,
+       kind       TEXT NOT NULL CHECK (kind IN ('in', 'out', 'discard', 'correct', 'deleted')),
+       quantity   REAL NOT NULL CHECK (quantity <> 0),
+       origin     TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'scan', 'form')),
+       created_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    'CREATE INDEX stock_movements_date ON stock_movements (created_at)',
+    'CREATE INDEX stock_movements_item ON stock_movements (item_id, created_at)',
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -588,6 +612,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration10,
   migration11,
   migration12,
+  migration13,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

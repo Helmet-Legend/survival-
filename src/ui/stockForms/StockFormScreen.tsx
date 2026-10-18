@@ -283,6 +283,7 @@ function StockForm(props: {
           : await repo.createItem(
               { ...draft.input, bagId: props.target.bagId ?? null },
               draft.lot ?? undefined,
+              { origin: props.target.barcode !== undefined ? 'scan' : 'form' },
             );
         for (const photo of pendingPhotos) {
           await photos.add('item', item.id, photo);

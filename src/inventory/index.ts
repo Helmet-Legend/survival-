@@ -23,6 +23,10 @@ export {
   type ItemInput,
   type ItemSummary,
   type LotInput,
+  type MovementFilter,
+  type MovementKind,
+  type MovementOrigin,
+  type StockMovement,
 } from './inventoryRepository';
 export {
   ITEM_CATEGORIES,

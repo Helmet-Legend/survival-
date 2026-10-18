@@ -90,6 +90,7 @@ const TABLE_ORDER = [
   'bags',
   'inventory_items',
   'inventory_lots',
+  'stock_movements',
   'weapons',
   'documents',
   'photos',
