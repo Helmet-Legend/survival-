@@ -11,6 +11,7 @@ import { EAU, ORIENTATION } from './fiches/eau-orientation';
 import { FAMILLES } from './fiches/familles';
 import { MEDICAL } from './fiches/medical';
 import { ORGANISATION } from './fiches/organisation';
+import { PROTECTION } from './fiches/protection';
 import { PREPARATION, RISQUES } from './fiches/preparation-risques';
 import { SURVIE } from './fiches/survie';
 import { ALIMENTATION, HYGIENE } from './fiches/vie-quotidienne';
@@ -29,4 +30,5 @@ export const BUNDLED_GUIDES: BundledGuide[] = [
   ...RISQUES,
   ...FAMILLES,
   ...ORGANISATION,
+  ...PROTECTION,
 ];

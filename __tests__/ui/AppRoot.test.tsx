@@ -667,7 +667,11 @@ describe('écrans', () => {
   it('scanne en série, reconnaît en ligne et complète le stock', async () => {
     const LENTILS = '3017620422003';
     const UNKNOWN = '96385074';
-    const reads: string[][] = [[LENTILS, LENTILS, UNKNOWN], [LENTILS]];
+    const reads: string[][] = [
+      [LENTILS, LENTILS, UNKNOWN],
+      [LENTILS],
+      [LENTILS, LENTILS],
+    ];
     const scanSource = {
       available: true,
       scan: jest.fn(async () => reads.shift() ?? null),
@@ -744,6 +748,28 @@ describe('écrans', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Panier · 1')).toBeTruthy();
+
+    // Retrait : 2 fiches créées + 1 ajoutée = 3 en stock, 2 lectures retirées.
+    await fireEvent.press(screen.getByText('Retirer du stock'));
+    await fireEvent.press(screen.getByText('Scanner en série'));
+    expect(await screen.findByText('À retirer · 1')).toBeTruthy();
+    expect(screen.getByText(/^En stock : 3 pièces/)).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Retirer du stock : Lentilles cuisinées (Cassegrain)',
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'Retrait de « Lentilles cuisinées (Cassegrain) » : 2 pièces. Reste 1.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/^À retirer/)).toBeNull();
+
+    // Code jamais associé : rien n'est retiré.
+    await fireEvent.changeText(screen.getByLabelText('Code-barres'), UNKNOWN);
+    await fireEvent.press(screen.getByText('Retirer : valider le code'));
+    expect(await screen.findByText(/^Inconnu de vos stocks/)).toBeTruthy();
   });
 
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
@@ -1308,6 +1334,50 @@ describe('écrans', () => {
     expect(
       screen.getByText(
         'Mettre la victime à l’abri du vent et l’isoler du sol.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('ouvre la fiche balistique et coche sa liste de contrôle', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
+    await fireEvent.press(
+      await screen.findByLabelText(/^Équipement et protection, 1 fiche$/),
+    );
+    await fireEvent.press(
+      await screen.findByText(
+        'Protections balistiques — NIJ IIIA, III, IV et casque FAST',
+      ),
+    );
+    expect(await screen.findByText('Tableau comparatif')).toBeTruthy();
+    expect(screen.getByText('Sources et références')).toBeTruthy();
+    expect(screen.getByText('0 sur 9 vérifiés')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByRole('checkbox', {
+        name: 'Étiquette et traçabilité lisibles',
+      }),
+    );
+    expect(
+      await screen.findByText(
+        /^1 sur 9 vérifiés · dernier contrôle le \d{2}\/\d{2}\/\d{4}$/,
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Nouveau contrôle : tout décocher'),
+    );
+    expect(await screen.findByText('0 sur 9 vérifiés')).toBeTruthy();
+    // Fermeture : retour à la liste du dossier.
+    await fireEvent.press(screen.getByText('Toutes les fiches'));
+    expect(await screen.findByText('Équipement et protection')).toBeTruthy();
+    expect(screen.queryByText('Tableau comparatif')).toBeNull();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Rechercher un guide'),
+      'casque FAST',
+    );
+    expect(
+      await screen.findByText(
+        'Protections balistiques — NIJ IIIA, III, IV et casque FAST',
       ),
     ).toBeTruthy();
   });

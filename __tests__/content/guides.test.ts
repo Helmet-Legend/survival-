@@ -1,3 +1,6 @@
+import { prepareDatabase } from '../../src/db/connection';
+import { searchGuides, syncGuides } from '../../src/db/guides';
+import { NodeSqliteDb } from '../db/sqlite';
 import { BUNDLED_GUIDES } from '../../src/content/guides';
 import {
   F,
@@ -55,5 +58,32 @@ describe('guide embarqué', () => {
     for (const slug of REFLEXES) {
       expect(slugs.has(slug)).toBe(true);
     }
+  });
+});
+
+describe('fiche protections balistiques', () => {
+  it('se trouve par ses mots-clés et rappelle les limites', async () => {
+    const db = new NodeSqliteDb();
+    await prepareDatabase(db);
+    await syncGuides(db, BUNDLED_GUIDES);
+    for (const query of [
+      'casque FAST',
+      'gilet pare-balles',
+      'NIJ',
+      'plaque balistique',
+    ]) {
+      const hits = await searchGuides(db, query);
+      expect([query, hits[0]?.slug]).toEqual([
+        query,
+        'protections-balistiques',
+      ]);
+    }
+    const guide = BUNDLED_GUIDES.find(
+      g => g.slug === 'protections-balistiques',
+    )!;
+    expect(guide.category).toBe('Équipement et protection');
+    expect(guide.body).toMatch(/HG1 et HG2.*RF1, RF2 et RF3/);
+    expect(guide.body).toMatch(/n’arrête pas tous les calibres/);
+    expect(guide.body).toMatch(/§ Mots-clés : balistique/);
   });
 });
