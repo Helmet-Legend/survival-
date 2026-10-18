@@ -4,6 +4,8 @@
  * à une fiche ajoute un lot (quantité et péremption à confirmer) ; un code
  * nouveau ouvre la fiche d'ajout habituelle, préremplie si Open Food Facts le
  * connaît. Le code-barres ne contient ni date ni lot : ils se saisissent ici.
+ * En mode « Retirer », les codes lus retrouvent leur fiche et la quantité
+ * confirmée est prise dans les lots qui périment le plus tôt.
  */
 import { ScanBarcode, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -14,6 +16,7 @@ import { frToIso } from '../../lib/dates';
 import { normalizeBarcode } from '../../scanner/barcode';
 import {
   addScans,
+  getProduct,
   linkBarcode,
   listBasket,
   loadOnlineLookup,
@@ -27,6 +30,7 @@ import {
 } from '../../scanner/products';
 import {
   Button,
+  Chip,
   Field,
   IconButton,
   Notice,
@@ -54,15 +58,24 @@ export function ScanScreen() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [offline, setOffline] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'add' | 'remove'>('add');
+  // Retraits scannés, à confirmer : code et nombre de lectures.
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
 
   const { data, error, reload } = useLoader(async () => {
-    const [online, basket, items] = await Promise.all([
+    const [online, basket, items, links] = await Promise.all([
       loadOnlineLookup(db),
       listBasket(db),
       repo.listItems(),
+      Promise.all(
+        withdrawals.map(
+          async w =>
+            [w.code, (await getProduct(db, w.code))?.itemId ?? null] as const,
+        ),
+      ),
     ]);
-    return { online, basket, items };
-  });
+    return { online, basket, items, links: new Map(links) };
+  }, [withdrawals]);
 
   // Recherche en ligne des codes en attente, si elle est autorisée : à
   // l'ouverture, après un scan et sur demande (pas à chaque modification).
@@ -125,6 +138,22 @@ export function ScanScreen() {
     }
   };
 
+  const queueWithdrawals = (codes: readonly string[]) =>
+    setWithdrawals(current => {
+      const next = current.map(w => ({ ...w }));
+      for (const code of codes) {
+        const found = next.find(w => w.code === code);
+        if (found) {
+          found.count = Math.min(999, found.count + 1);
+        } else {
+          next.push({ code, count: 1 });
+        }
+      }
+      return next;
+    });
+  const dropWithdrawal = (code: string) =>
+    setWithdrawals(current => current.filter(w => w.code !== code));
+
   const scan = (series: boolean) =>
     run(async () => {
       const codes = await scanSource.scan(series);
@@ -133,6 +162,16 @@ export function ScanScreen() {
       }
       if (codes.length === 0) {
         return { tone: 'error', message: 'Aucun code-barres reconnu.' };
+      }
+      if (mode === 'remove') {
+        queueWithdrawals(codes);
+        return {
+          tone: 'ok',
+          message:
+            codes.length === 1
+              ? 'Code lu : confirmez le retrait ci-dessous.'
+              : `${codes.length} lectures : confirmez les retraits ci-dessous.`,
+        };
       }
       await addScans(db, codes);
       await lookup();
@@ -153,6 +192,10 @@ export function ScanScreen() {
     }
     setManualError(null);
     setManual('');
+    if (mode === 'remove') {
+      queueWithdrawals([code]);
+      return;
+    }
     return run(async () => {
       await addScans(db, [code]);
       await lookup();
@@ -170,6 +213,18 @@ export function ScanScreen() {
         title="Lire un code-barres"
         right={<ScanBarcode color={colors.primary} size={20} />}
       >
+        <View style={styles.chips}>
+          <Chip
+            label="Ajouter au stock"
+            selected={mode === 'add'}
+            onPress={() => setMode('add')}
+          />
+          <Chip
+            label="Retirer du stock"
+            selected={mode === 'remove'}
+            onPress={() => setMode('remove')}
+          />
+        </View>
         {scanSource.available ? (
           <View style={styles.actions}>
             <Button
@@ -202,13 +257,16 @@ export function ScanScreen() {
         />
         <Button
           compact
-          label="Ajouter le code"
+          label={
+            mode === 'add' ? 'Ajouter le code' : 'Retirer : valider le code'
+          }
           disabled={busy || manual.trim() === ''}
           onPress={addManual}
         />
         <Text style={text.subtle}>
-          La lecture se fait dans le téléphone, sans réseau. Scanner deux fois
-          le même produit augmente sa quantité.
+          {mode === 'add'
+            ? 'La lecture se fait dans le téléphone, sans réseau. Scanner deux fois le même produit augmente sa quantité.'
+            : 'Chaque lecture retire un article, pris dans le lot qui périme le plus tôt. Le retrait est confirmé avant d’être appliqué.'}
         </Text>
       </Panel>
 
@@ -272,6 +330,34 @@ export function ScanScreen() {
         </View>
       ) : null}
 
+      {withdrawals.length > 0 ? (
+        <>
+          <Text style={text.label}>À retirer · {withdrawals.length}</Text>
+          {withdrawals.map(w => {
+            const itemId = data.links.get(w.code) ?? null;
+            return (
+              <WithdrawRow
+                key={w.code}
+                withdrawal={w}
+                item={itemId === null ? undefined : byId.get(itemId)}
+                busy={busy}
+                run={run}
+                onCount={count =>
+                  count < 1
+                    ? dropWithdrawal(w.code)
+                    : setWithdrawals(current =>
+                        current.map(x =>
+                          x.code === w.code ? { ...x, count } : x,
+                        ),
+                      )
+                }
+                onDone={() => dropWithdrawal(w.code)}
+              />
+            );
+          })}
+        </>
+      ) : null}
+
       <Text style={text.label}>
         Panier{basket.length > 0 ? ` · ${basket.length}` : ''}
       </Text>
@@ -304,6 +390,133 @@ export function ScanScreen() {
         })
       )}
     </ScrollView>
+  );
+}
+
+interface Withdrawal {
+  code: string;
+  count: number;
+}
+
+function WithdrawRow(props: {
+  withdrawal: Withdrawal;
+  item: ItemSummary | undefined;
+  busy: boolean;
+  run: (task: () => Promise<Feedback | null>) => Promise<void>;
+  onCount: (count: number) => void;
+  onDone: () => void;
+}) {
+  const { repo } = useSession();
+  const { withdrawal, item, run } = props;
+  const { code, count } = withdrawal;
+  const [amount, setAmount] = useState('');
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  if (item === undefined) {
+    return (
+      <View style={styles.row}>
+        <View style={styles.rowHead}>
+          <View style={styles.grow}>
+            <Text style={text.body}>Code {code}</Text>
+            <Text style={text.subtle}>
+              Inconnu de vos stocks : scannez-le d’abord en mode « Ajouter au
+              stock » pour l’associer à une fiche.
+            </Text>
+          </View>
+          <IconButton
+            icon={Trash2}
+            label={`Ne pas retirer ${code}`}
+            color={colors.textMuted}
+            onPress={props.onDone}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // Par lecture : une pièce, ou la contenance connue d'un contenant.
+  const perRead =
+    item.unit === 'unit'
+      ? 1
+      : item.packageSize !== null && item.packageSize > 0
+      ? item.packageSize
+      : null;
+  const defaultAmount = perRead === null ? null : count * perRead;
+  const unit = itemUnitLabel(item);
+  const withdraw = () => {
+    const typed = amount.trim().replace(',', '.');
+    const quantity = typed === '' ? defaultAmount : Number(typed);
+    if (quantity === null || !(quantity > 0)) {
+      setRowError(`Indiquez la quantité retirée (${unit}).`);
+      return;
+    }
+    setRowError(null);
+    return run(async () => {
+      try {
+        const result = await repo.consume(item.id, quantity);
+        props.onDone();
+        return {
+          tone: 'ok',
+          message: `Retrait de « ${item.name} » : ${formatNumber(
+            quantity,
+          )} ${itemUnitLabel(item, quantity)}. Reste ${formatNumber(
+            result.remaining,
+          )}.`,
+        };
+      } catch (e) {
+        setRowError(e instanceof Error ? e.message : String(e));
+        return null;
+      }
+    });
+  };
+
+  return (
+    <View style={[styles.row, styles.withdrawRow]}>
+      <View style={styles.rowHead}>
+        <View style={styles.grow}>
+          <Text style={text.body}>{item.name}</Text>
+          <Text style={text.subtle}>
+            En stock : {formatNumber(item.usableQuantity)} {unit} · {code}
+          </Text>
+        </View>
+        <IconButton
+          icon={Trash2}
+          label={`Ne pas retirer ${item.name}`}
+          color={colors.textMuted}
+          onPress={props.onDone}
+        />
+      </View>
+      <View style={styles.rowHead}>
+        <Text style={[text.muted, styles.grow]}>Articles scannés</Text>
+        <Stepper
+          value={`× ${count}`}
+          onDecrease={() => props.onCount(count - 1)}
+          onIncrease={() => props.onCount(count + 1)}
+          canDecrease={!props.busy}
+          canIncrease={!props.busy && count < 999}
+          decreaseLabel={`Un de moins à retirer (${code})`}
+          increaseLabel={`Un de plus à retirer (${code})`}
+        />
+      </View>
+      <Field
+        label={`Quantité retirée (${unit})`}
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="decimal-pad"
+        placeholder={
+          defaultAmount === null ? 'À saisir' : formatNumber(defaultAmount)
+        }
+      />
+      {rowError ? <Notice tone="error" message={rowError} /> : null}
+      <Button
+        variant="danger"
+        compact
+        label="Retirer du stock"
+        accessibilityLabel={`Retirer du stock : ${item.name}`}
+        disabled={props.busy}
+        onPress={withdraw}
+      />
+    </View>
   );
 }
 
@@ -526,6 +739,8 @@ const styles = StyleSheet.create({
     gap: space.m,
   },
   actions: { gap: space.s },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  withdrawRow: { borderColor: colors.danger },
   row: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

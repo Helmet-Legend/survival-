@@ -667,7 +667,11 @@ describe('écrans', () => {
   it('scanne en série, reconnaît en ligne et complète le stock', async () => {
     const LENTILS = '3017620422003';
     const UNKNOWN = '96385074';
-    const reads: string[][] = [[LENTILS, LENTILS, UNKNOWN], [LENTILS]];
+    const reads: string[][] = [
+      [LENTILS, LENTILS, UNKNOWN],
+      [LENTILS],
+      [LENTILS, LENTILS],
+    ];
     const scanSource = {
       available: true,
       scan: jest.fn(async () => reads.shift() ?? null),
@@ -744,6 +748,28 @@ describe('écrans', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Panier · 1')).toBeTruthy();
+
+    // Retrait : 2 fiches créées + 1 ajoutée = 3 en stock, 2 lectures retirées.
+    await fireEvent.press(screen.getByText('Retirer du stock'));
+    await fireEvent.press(screen.getByText('Scanner en série'));
+    expect(await screen.findByText('À retirer · 1')).toBeTruthy();
+    expect(screen.getByText(/^En stock : 3 pièces/)).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Retirer du stock : Lentilles cuisinées (Cassegrain)',
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'Retrait de « Lentilles cuisinées (Cassegrain) » : 2 pièces. Reste 1.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/^À retirer/)).toBeNull();
+
+    // Code jamais associé : rien n'est retiré.
+    await fireEvent.changeText(screen.getByLabelText('Code-barres'), UNKNOWN);
+    await fireEvent.press(screen.getByText('Retirer : valider le code'));
+    expect(await screen.findByText(/^Inconnu de vos stocks/)).toBeTruthy();
   });
 
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
