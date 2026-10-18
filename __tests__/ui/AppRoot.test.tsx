@@ -16,6 +16,7 @@ import {
   AppState,
   Clipboard,
   Linking,
+  Share,
   type AppStateStatus,
 } from 'react-native';
 
@@ -392,6 +393,18 @@ describe('cycle de vie', () => {
     );
     await fireEvent.press(screen.getByText('Enregistrer le plan'));
     expect(await screen.findByText('Plan familial enregistré.')).toBeTruthy();
+    const share = jest
+      .spyOn(Share, 'share')
+      .mockResolvedValue({
+        action: Share.sharedAction,
+        activityType: undefined,
+      });
+    await fireEvent.press(screen.getByText('Partager le plan'));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    const shared = share.mock.calls[0][0] as { message: string };
+    expect(shared.message).toContain('- Paul : 06 12 34 56 78 · hors zone');
+    expect(shared.message).toContain('Près du domicile : Parking de l’école');
+    share.mockRestore();
     await fireEvent.press(screen.getByLabelText('Retour'));
     expect(await screen.findByText('Parking de l’école')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Appeler Paul'));
