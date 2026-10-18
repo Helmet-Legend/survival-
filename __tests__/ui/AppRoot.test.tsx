@@ -8,6 +8,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react-native';
 import React from 'react';
@@ -329,6 +330,53 @@ describe('cycle de vie', () => {
     expect(await screen.findByText(/Captures autorisées/)).toBeTruthy();
   });
 
+  it('active les rappels neutres et les met à jour au verrouillage', async () => {
+    const ctx = await existingVault();
+    const calls: Array<readonly number[] | 'cancel'> = [];
+    let granted = false;
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        reminders={{
+          available: true,
+          requestPermission: async () => granted,
+          schedule: async times => {
+            calls.push(times);
+          },
+          cancelAll: async () => {
+            calls.push('cancel');
+          },
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    // Désactivés par défaut : l'ouverture du coffre n'en programme aucun.
+    await waitFor(() => expect(calls).toEqual(['cancel']));
+    await fireEvent.press(await screen.findByLabelText('Réglages'));
+    const toggle = await screen.findByLabelText('Rappels de péremption');
+    expect(toggle.props.value).toBe(false);
+    expect(screen.getByText(/sans nom\s+d’article/)).toBeTruthy();
+
+    // Autorisation refusée : rien n'est activé.
+    await fireEvent(toggle, 'valueChange', true);
+    expect(await screen.findByText(/Notifications refusées/)).toBeTruthy();
+    expect(calls).toEqual(['cancel']);
+
+    granted = true;
+    await fireEvent(
+      screen.getByLabelText('Rappels de péremption'),
+      'valueChange',
+      true,
+    );
+    expect(await screen.findByText('Aucun rappel à venir.')).toBeTruthy();
+    expect(calls).toEqual(['cancel', []]);
+
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+    await waitFor(() => expect(calls).toEqual(['cancel', [], []]));
+  });
+
   it('masque le réglage des captures hors Android', async () => {
     const { manager } = await existingVault();
     await render(<AppRoot manager={manager} content={content} />);
@@ -461,7 +509,7 @@ describe('écrans', () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
     await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
-    // Six fiches, une par catégorie.
+    // Sept fiches, une par catégorie.
     for (const title of [
       'Eau',
       'Nourriture',
@@ -469,6 +517,7 @@ describe('écrans', () => {
       'Médical',
       'Outils',
       'Matériel & équipements',
+      'Énergie',
     ]) {
       expect(screen.getByLabelText(`Ajouter : ${title}`)).toBeTruthy();
     }
@@ -1079,6 +1128,94 @@ describe('fiches par type de produit', () => {
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(await screen.findByText('« Lentilles » enregistré.')).toBeTruthy();
     expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
+  });
+
+  it('remplit un sac d’évacuation sans toucher au stock du foyer', async () => {
+    const ctx = await existingVault();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Sacs d’évacuation : 0 sac'),
+    );
+    expect(screen.getByText('Aucun sac d’évacuation.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Nouveau sac'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom du sac'),
+      'Sac de Léa',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Pour qui (facultatif)'),
+      'Léa',
+    );
+    await fireEvent.press(screen.getByText('Créer le sac'));
+    expect(await screen.findByText('Ce sac est vide.')).toBeTruthy();
+    expect(screen.getByText('Sac de Léa')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('+ Ajouter dans le sac'));
+    await fireEvent.press(screen.getByLabelText('Ajouter : Nourriture'));
+    await fireEvent.press(
+      within(await screen.findByLabelText('Saisie rapide')).getByRole(
+        'button',
+        { name: 'Lentilles' },
+      ),
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '2',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    // Retour dans le sac, pas dans la catégorie Eau.
+    expect(await screen.findByText('« Lentilles » enregistré.')).toBeTruthy();
+    expect(screen.getByText('Sac de Léa')).toBeTruthy();
+    expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Tous les sacs'));
+    expect(
+      await screen.findByLabelText('Sac Sac de Léa : 1 article'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    // Le stock du foyer est inchangé.
+    expect(
+      await screen.findByLabelText('Nourriture : 36 000 kcal, 1 article'),
+    ).toBeTruthy();
+  });
+
+  it('range piles et batteries dans la catégorie Énergie', async () => {
+    await openForm('Énergie');
+    expect(await screen.findByText('Ajouter de l’énergie')).toBeTruthy();
+    await fireEvent.press(
+      within(screen.getByLabelText('Saisie rapide')).getByRole('button', {
+        name: 'Piles AA',
+      }),
+    );
+    expect(
+      within(screen.getByLabelText('Type d’énergie')).getByRole('radio', {
+        name: 'Piles / accus',
+        selected: true,
+      }),
+    ).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '3',
+    );
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Piles AA » enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(await screen.findByLabelText('Énergie : 1 article')).toBeTruthy();
+    // Le matériel ne propose plus de type « Énergie ».
+    await fireEvent.press(screen.getByLabelText('+ Ajouter un article'));
+    await fireEvent.press(
+      screen.getByLabelText('Ajouter : Matériel & équipements'),
+    );
+    await openDetails();
+    expect(
+      within(await screen.findByLabelText('Type de matériel')).queryByRole(
+        'radio',
+        { name: 'Énergie' },
+      ),
+    ).toBeNull();
   });
 
   it('propose une valeur énergétique habituelle, comptée après confirmation', async () => {

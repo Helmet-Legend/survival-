@@ -23,6 +23,7 @@ import {
   BoxIcon,
   CaloriesIcon,
   DateIcon,
+  EnergyIcon,
   ExpiryIcon,
   LocationIcon,
   ModelIcon,
@@ -628,7 +629,6 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
           o('sleeping', 'Couchage'),
           o('cooking', 'Cuisson'),
           o('lighting', 'Éclairage'),
-          o('energy', 'Énergie'),
           o('communication', 'Communication'),
           o('navigation', 'Navigation'),
           o('transport', 'Transport'),
@@ -680,6 +680,76 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
       notes('Ex : Accessoires, remarques…'),
     ],
   },
+
+  power: {
+    title: 'Ajouter de l’énergie',
+    editTitle: 'Modifier l’énergie',
+    subtitle: 'Piles, batteries, carburant, gaz, bougies…',
+    icon: CATEGORY_ICONS.power,
+    color: CATEGORY_COLORS.power,
+    units: [
+      UNIT_OPTIONS.piece,
+      UNIT_OPTIONS.lot,
+      UNIT_OPTIONS.package,
+      UNIT_OPTIONS.L,
+      UNIT_OPTIONS.kg,
+    ],
+    fields: [
+      name('Ex : Piles AA, bouteille de gaz…'),
+      {
+        type: 'select',
+        key: 'subtype',
+        label: 'Type d’énergie',
+        icon: EnergyIcon,
+        options: options('power.subtype', [
+          o('battery', 'Piles / accus'),
+          o('powerbank', 'Batterie externe'),
+          o('fuel', 'Carburant'),
+          o('gas', 'Gaz'),
+          o('wood', 'Bois / charbon'),
+          o('candle', 'Bougies'),
+          o('solar', 'Solaire'),
+          o('generator', 'Groupe électrogène'),
+          o('other', 'Autre'),
+        ]),
+      },
+      quantity,
+      {
+        type: 'date',
+        key: 'expiry',
+        label: 'Date de péremption',
+        icon: ExpiryIcon,
+        placeholder: 'Facultative — choisir une date',
+      },
+      {
+        type: 'measure',
+        key: 'capacityValue',
+        unitKey: 'capacityUnit',
+        label: 'Capacité',
+        icon: BatteryIcon,
+        units: options('power.capacityUnit', [
+          o('mAh', 'mAh'),
+          o('Wh', 'Wh'),
+          o('L', 'litres'),
+          o('kg', 'kg'),
+          o('h', 'heures'),
+          o('other', 'autre'),
+        ]),
+        placeholder: 'Ex : 20 000',
+      },
+      brandModel('Ex : Varta, Campingaz…'),
+      {
+        type: 'select',
+        key: 'condition',
+        label: 'État',
+        icon: StateIcon,
+        options: options('power.condition', CONDITION_GEAR),
+      },
+      location('Ex : Garage, abri de jardin'),
+      threshold,
+      notes('Ex : Format, appareil concerné…'),
+    ],
+  },
 };
 
 /** Libellés des anciens types (avant le pack), toujours lisibles. */
@@ -690,6 +760,7 @@ const LEGACY_SUBTYPES: Record<string, string> = {
   fresh: 'Frais',
   first_aid: 'Pansement / soin',
   equipment: 'Matériel',
+  energy: 'Énergie',
   battery: 'Piles / batteries',
   fuel: 'Carburant',
   gas: 'Gaz',
@@ -753,6 +824,7 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
   medical: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
   tool: ['name', 'quantity', 'condition'],
   energy: ['name', 'quantity', 'condition'],
+  power: ['name', 'subtype', 'quantity', 'expiry'],
 };
 
 /** Saisie rapide : un appui remplit le nom, le type et l'unité usuels. */
@@ -793,12 +865,17 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
   ],
   energy: [
     pick('Lampe frontale', { subtype: 'lighting', unit: 'piece' }),
-    pick('Piles', { subtype: 'energy', unit: 'lot' }),
-    pick('Batterie externe', { subtype: 'energy', unit: 'piece' }),
     pick('Réchaud', { subtype: 'cooking', unit: 'piece' }),
     pick('Tente', { subtype: 'shelter', unit: 'piece' }),
     pick('Sac de couchage', { subtype: 'sleeping', unit: 'piece' }),
     pick('Radio', { subtype: 'communication', unit: 'piece' }),
+  ],
+  power: [
+    pick('Piles AA', { subtype: 'battery', unit: 'lot' }),
+    pick('Batterie externe', { subtype: 'powerbank', unit: 'piece' }),
+    pick('Bouteille de gaz', { subtype: 'gas', unit: 'piece' }),
+    pick('Jerrican d’essence', { subtype: 'fuel', unit: 'L' }),
+    pick('Bougies', { subtype: 'candle', unit: 'package' }),
   ],
 };
 

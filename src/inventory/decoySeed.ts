@@ -98,7 +98,7 @@ const TEMPLATES: readonly DecoyTemplate[] = [
   {
     item: {
       name: 'Piles AA',
-      category: 'energy',
+      category: 'power',
       unit: 'unit',
       location: 'Tiroir entrée',
     },

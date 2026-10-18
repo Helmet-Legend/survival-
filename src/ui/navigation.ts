@@ -16,12 +16,16 @@ export interface StockFormTarget {
   weaponId?: string;
   /** Valeurs préremplies d'une nouvelle fiche (ex. calibre d'une arme). */
   prefill?: Record<string, string>;
+  /** Nouvel article rangé dans ce sac d'évacuation. */
+  bagId?: string;
 }
 
 /** Catégorie et message à afficher en arrivant sur les Stocks. */
 export interface StockFocus {
-  category?: ItemCategory | 'documents';
+  category?: ItemCategory | 'documents' | 'bags';
   message?: string;
+  /** Sac d'évacuation à rouvrir (retour de fiche). */
+  bagId?: string;
 }
 
 export interface Navigation {

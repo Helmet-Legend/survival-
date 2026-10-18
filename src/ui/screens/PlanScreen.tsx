@@ -196,6 +196,7 @@ export function PlanScreen() {
                 <Text style={text.muted}>
                   {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
                   {formatRelativeDays(alert.daysLeft)}
+                  {alert.bagName ? ` · ${alert.bagName}` : ''}
                 </Text>
               </View>
             </View>

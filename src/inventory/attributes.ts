@@ -61,6 +61,7 @@ export const CAPACITY_UNITS = [
   'h',
   'persons',
   'L',
+  'kg',
   'other',
 ] as const;
 export const RECORD_TYPES = ['ammo', 'accessory'] as const;

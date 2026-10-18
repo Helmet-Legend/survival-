@@ -49,3 +49,10 @@ export {
 } from './photoRepository';
 export * from './attributes';
 export { caloriesPerUnit } from './nutrition';
+export {
+  BAG_SOON_DAYS,
+  BagRepository,
+  type Bag,
+  type BagInput,
+  type BagSummary,
+} from './bagRepository';

@@ -15,6 +15,8 @@ export const CATEGORY_ILLUSTRATIONS: Record<ItemCategory, ImageSourcePropType> =
     medical: require('../assets/illustrations/medical.jpg'),
     tool: require('../assets/illustrations/tool.jpg'),
     energy: require('../assets/illustrations/energy.jpg'),
+    // Lanterne et bidons : vaut aussi pour l'énergie.
+    power: require('../assets/illustrations/energy.jpg'),
   };
 
 /** Fondu vers la surface de la carte, sous l'illustration (lisibilité). */

@@ -7,6 +7,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.resilios.photo.PhotoPackage
+import com.resilios.reminders.ReminderPackage
 import com.resilios.screen.ScreenPackage
 import com.resilios.update.UpdatePackage
 
@@ -23,6 +24,8 @@ class MainApplication : Application(), ReactApplication {
           add(PhotoPackage())
           // Réglage des captures d'écran.
           add(ScreenPackage())
+          // Rappels de péremption (horaires seulement, texte neutre).
+          add(ReminderPackage())
         },
     )
   }
