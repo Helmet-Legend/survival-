@@ -70,6 +70,7 @@ import {
   type Tab,
 } from './navigation';
 import { CalculatorsScreen } from './screens/CalculatorsScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
@@ -328,6 +329,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <CalculatorsScreen />
               ) : overlay === 'scan' ? (
                 <ScanScreen />
+              ) : overlay === 'history' ? (
+                <HistoryScreen />
               ) : overlay === 'stockForm' && formTarget !== null ? (
                 <StockFormScreen target={formTarget} />
               ) : (

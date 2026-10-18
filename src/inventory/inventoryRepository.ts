@@ -146,6 +146,31 @@ export interface ConsumedPortion {
   expirationDate: string | null;
 }
 
+/** Nature d'un mouvement de stock. */
+export type MovementKind = 'in' | 'out' | 'discard' | 'correct' | 'deleted';
+/** D'où vient le mouvement : saisie dans les stocks, scanner, fiche d'ajout. */
+export type MovementOrigin = 'manual' | 'scan' | 'form';
+
+export interface StockMovement {
+  id: string;
+  itemId: string | null;
+  itemName: string;
+  unit: ItemUnit;
+  kind: MovementKind;
+  /** Positif pour une entrée, négatif pour une sortie. */
+  quantity: number;
+  origin: MovementOrigin;
+  /** Horodatage ISO (UTC). */
+  createdAt: string;
+}
+
+export interface MovementFilter {
+  itemId?: string;
+  /** Entrées (`in`) ou sorties (retraits, périmés, corrections négatives). */
+  direction?: 'in' | 'out';
+  limit?: number;
+}
+
 export interface ConsumptionResult {
   taken: ConsumedPortion[];
   /** Quantité utilisable restante pour cet article. */
@@ -420,6 +445,7 @@ export class InventoryRepository {
   async createItem(
     input: ItemInput,
     firstLot?: LotInput,
+    options: { origin?: MovementOrigin } = {},
   ): Promise<InventoryItem> {
     const item = validateItem(input);
     const lot = firstLot === undefined ? null : this.validateLot(firstLot);
@@ -451,6 +477,7 @@ export class InventoryRepository {
       );
       if (lot !== null) {
         await this.insertLot(id, lot);
+        await this.record(id, 'in', lot.quantity, options.origin ?? 'form');
       }
       return this.requireItem(id);
     });
@@ -509,7 +536,17 @@ export class InventoryRepository {
   /** Supprime un article et tous ses lots. */
   async deleteItem(id: string): Promise<void> {
     await this.requireItem(id);
-    await this.db.execute('DELETE FROM inventory_items WHERE id = ?', [id]);
+    await withTransaction(this.db, async () => {
+      const { rows } = await this.db.execute(
+        'SELECT COALESCE(SUM(quantity), 0) AS q FROM inventory_lots WHERE item_id = ?',
+        [id],
+      );
+      const total = roundQuantity(Number(rows[0].q));
+      if (total > 0) {
+        await this.record(id, 'deleted', -total, 'manual');
+      }
+      await this.db.execute('DELETE FROM inventory_items WHERE id = ?', [id]);
+    });
   }
 
   async getItem(
@@ -574,11 +611,16 @@ export class InventoryRepository {
 
   // --- Lots -----------------------------------------------------------------
 
-  async addLot(itemId: string, input: LotInput): Promise<InventoryLot> {
+  async addLot(
+    itemId: string,
+    input: LotInput,
+    options: { origin?: MovementOrigin } = {},
+  ): Promise<InventoryLot> {
     const lot = this.validateLot(input);
     return withTransaction(this.db, async () => {
       await this.requireItem(itemId);
       const id = await this.insertLot(itemId, lot);
+      await this.record(itemId, 'in', lot.quantity, options.origin ?? 'manual');
       return this.requireLot(id);
     });
   }
@@ -594,6 +636,12 @@ export class InventoryRepository {
         await this.db.execute('DELETE FROM inventory_lots WHERE id = ?', [
           lotId,
         ]);
+        await this.record(
+          current.itemId,
+          'correct',
+          -current.quantity,
+          'manual',
+        );
         return null;
       }
       const lot = this.validateLot({
@@ -610,13 +658,22 @@ export class InventoryRepository {
           WHERE id = ?`,
         [lot.quantity, lot.acquiredAt, lot.expirationDate, lotId],
       );
+      const delta = roundQuantity(lot.quantity - current.quantity);
+      if (delta !== 0) {
+        await this.record(current.itemId, 'correct', delta, 'manual');
+      }
       return this.requireLot(lotId);
     });
   }
 
   async deleteLot(lotId: string): Promise<void> {
-    await this.requireLot(lotId);
-    await this.db.execute('DELETE FROM inventory_lots WHERE id = ?', [lotId]);
+    const lot = await this.requireLot(lotId);
+    await withTransaction(this.db, async () => {
+      await this.db.execute('DELETE FROM inventory_lots WHERE id = ?', [lotId]);
+      if (lot.quantity > 0) {
+        await this.record(lot.itemId, 'correct', -lot.quantity, 'manual');
+      }
+    });
   }
 
   // --- Consommation ---------------------------------------------------------
@@ -632,7 +689,7 @@ export class InventoryRepository {
   async consume(
     itemId: string,
     quantity: number,
-    options: { allowExpired?: boolean } = {},
+    options: { allowExpired?: boolean; origin?: MovementOrigin } = {},
   ): Promise<ConsumptionResult> {
     const wanted = validateQuantity(quantity);
     const today = this.today();
@@ -686,6 +743,7 @@ export class InventoryRepository {
         left = roundQuantity(left - take);
       }
 
+      await this.record(itemId, 'out', -wanted, options.origin ?? 'manual');
       return { taken, remaining: await this.usableQuantity(itemId, today) };
     });
   }
@@ -707,8 +765,65 @@ export class InventoryRepository {
           WHERE expiration_date IS NOT NULL AND expiration_date < ?`,
         [today],
       );
-      return rows.map(row => this.toLot(row));
+      const lots = rows.map(row => this.toLot(row));
+      for (const lot of lots) {
+        await this.record(lot.itemId, 'discard', -lot.quantity, 'manual');
+      }
+      return lots;
     });
+  }
+
+  // --- Historique -----------------------------------------------------------
+
+  /** Mouvements les plus récents d'abord (200 par défaut). */
+  async listMovements(filter: MovementFilter = {}): Promise<StockMovement[]> {
+    const where: string[] = [];
+    const params: SqlValue[] = [];
+    if (filter.itemId !== undefined) {
+      where.push('item_id = ?');
+      params.push(filter.itemId);
+    }
+    if (filter.direction === 'in') {
+      where.push('quantity > 0');
+    } else if (filter.direction === 'out') {
+      where.push('quantity < 0');
+    }
+    params.push(Math.max(1, Math.min(1000, filter.limit ?? 200)));
+    const { rows } = await this.db.execute(
+      `SELECT id, item_id, item_name, unit, kind, quantity, origin, created_at
+         FROM stock_movements
+        ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+        ORDER BY created_at DESC, rowid DESC
+        LIMIT ?`,
+      params,
+    );
+    return rows.map(r => ({
+      id: String(r.id),
+      itemId: r.item_id === null ? null : String(r.item_id),
+      itemName: String(r.item_name),
+      unit: r.unit as ItemUnit,
+      kind: r.kind as MovementKind,
+      quantity: Number(r.quantity),
+      origin: r.origin as MovementOrigin,
+      createdAt: String(r.created_at),
+    }));
+  }
+
+  private async record(
+    itemId: string,
+    kind: MovementKind,
+    quantity: number,
+    origin: MovementOrigin,
+  ): Promise<void> {
+    const amount = roundQuantity(quantity);
+    if (amount === 0) {
+      return;
+    }
+    await this.db.execute(
+      `INSERT INTO stock_movements (id, item_id, item_name, unit, kind, quantity, origin)
+       SELECT ?, id, name, unit, ?, ?, ? FROM inventory_items WHERE id = ?`,
+      [this.newId(), kind, amount, origin, itemId],
+    );
   }
 
   // --- Interne --------------------------------------------------------------

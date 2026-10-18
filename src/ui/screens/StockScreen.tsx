@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderLock,
+  History,
   Minus,
   PackageOpen,
   Pencil,
@@ -44,6 +45,7 @@ import {
   Chip,
   EmptyState,
   Field,
+  IconButton,
   IconTile,
   Notice,
   Panel,
@@ -51,6 +53,7 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/controls';
+import { MovementRow } from '../components/Movements';
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
@@ -411,6 +414,13 @@ export function StockScreen() {
                 label="Scanner"
                 accessibilityLabel="Scanner des codes-barres"
                 onPress={() => navigation.open('scan')}
+              />
+            )}
+            {inBag ? null : (
+              <IconButton
+                icon={History}
+                label="Historique des mouvements"
+                onPress={() => navigation.open('history')}
               />
             )}
             <Button
@@ -802,6 +812,33 @@ function totalQuantity(
   return hasContainer && size !== null ? n * size : n;
 }
 
+/** Derniers mouvements d'un article, rafraîchis à chaque changement de lots. */
+function ItemMovements(props: { itemId: string; lots: InventoryLot[] }) {
+  const { repo } = useSession();
+  const navigation = useNavigation();
+  const { data } = useLoader(
+    () => repo.listMovements({ itemId: props.itemId, limit: 5 }),
+    [props.itemId, props.lots],
+  );
+  if (data === null || data.length === 0) {
+    return null;
+  }
+  return (
+    <View style={styles.movements}>
+      <Text style={text.label}>Derniers mouvements</Text>
+      {data.map(m => (
+        <MovementRow key={m.id} movement={m} showDate />
+      ))}
+      <Button
+        compact
+        variant="ghost"
+        label="Tout l’historique"
+        onPress={() => navigation.open('history')}
+      />
+    </View>
+  );
+}
+
 function ItemDetail(props: {
   item: InventoryItem;
   lots: InventoryLot[];
@@ -962,6 +999,7 @@ function ItemDetail(props: {
           </Text>
         </View>
       ))}
+      <ItemMovements itemId={item.id} lots={props.lots} />
       <Button
         compact
         icon={Pencil}
@@ -1217,6 +1255,7 @@ function ItemDetail(props: {
 }
 
 const styles = StyleSheet.create({
+  movements: { gap: space.xs },
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,

@@ -814,6 +814,27 @@ describe('écrans', () => {
     expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
   });
 
+  it('trace chaque mouvement dans l’historique', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
+    expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Historique des mouvements'));
+    expect(await screen.findByText('Aujourd’hui')).toBeTruthy();
+    expect(
+      screen.getByLabelText(/^Retrait, −1 kg, Riz, \d{2}:\d{2}$/),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Entrées'));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/^Retrait, −1 kg, Riz/)).toBeNull(),
+    );
+    await fireEvent.press(screen.getByText('Sorties'));
+    expect(await screen.findByLabelText(/^Retrait, −1 kg, Riz/)).toBeTruthy();
+  });
+
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
     // Directement depuis l'accueil.

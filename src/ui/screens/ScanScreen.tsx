@@ -453,7 +453,9 @@ function WithdrawRow(props: {
     setRowError(null);
     return run(async () => {
       try {
-        const result = await repo.consume(item.id, quantity);
+        const result = await repo.consume(item.id, quantity, {
+          origin: 'scan',
+        });
         props.onDone();
         return {
           tone: 'ok',
@@ -594,7 +596,11 @@ function BasketRow(props: {
       }
       setRowError(null);
       return run(async () => {
-        await repo.addLot(linked.id, { quantity, expirationDate });
+        await repo.addLot(
+          linked.id,
+          { quantity, expirationDate },
+          { origin: 'scan' },
+        );
         await removeFromBasket(db, code);
         return {
           tone: 'ok',
