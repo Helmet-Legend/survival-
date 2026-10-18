@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardList,
   Flashlight,
+  Hourglass,
   ListChecks,
   ShoppingCart,
   Siren,
@@ -348,6 +349,13 @@ export function HomeScreen() {
         label="PRÉPARATION · kit 72 h, maison et sacs"
         accessibilityLabel="Ouvrir la préparation par paliers"
         onPress={() => navigation.open('preparation')}
+      />
+      <Button
+        icon={Hourglass}
+        chevron
+        label="SIMULATION · tester une crise sur votre stock"
+        accessibilityLabel="Ouvrir le simulateur de crise"
+        onPress={() => navigation.open('crisis')}
       />
 
       <Button

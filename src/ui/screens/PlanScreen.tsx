@@ -2,7 +2,12 @@
  * Plan d'action : objectif d'autonomie, liste de réapprovisionnement,
  * péremptions et détail du calcul pour l'eau et les vivres.
  */
-import { Calculator, CalendarClock, ShoppingCart } from 'lucide-react-native';
+import {
+  Calculator,
+  CalendarClock,
+  Hourglass,
+  ShoppingCart,
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -166,6 +171,12 @@ export function PlanScreen() {
         chevron
         label="Plan d’achats échelonné"
         onPress={() => navigation.open('purchases')}
+      />
+      <Button
+        icon={Hourglass}
+        chevron
+        label="Simuler une crise jour par jour"
+        onPress={() => navigation.open('crisis')}
       />
 
       {/* Scénarios */}
