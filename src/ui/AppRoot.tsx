@@ -330,7 +330,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="SOS : ouvrir l’écran Urgence"
+                  accessibilityLabel="Ouvrir l’écran Urgence"
                   onPress={() => navigation.open('emergency')}
                   hitSlop={4}
                   style={({ pressed }) => [
