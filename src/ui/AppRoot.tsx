@@ -34,6 +34,7 @@ import {
   PhotoRepository,
 } from '../inventory';
 import { nativeFiles, type FileAccess } from '../device/files';
+import { nativeLocation, type LocationSource } from '../device/location';
 import { nativeReminders } from '../device/reminders';
 import {
   nativeScreenCapture,
@@ -65,6 +66,7 @@ import {
   type StockFormTarget,
   type Tab,
 } from './navigation';
+import { EmergencyScreen } from './screens/EmergencyScreen';
 import { GuidesScreen } from './screens/GuidesScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LockScreen } from './screens/LockScreen';
@@ -95,6 +97,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   screenCapture?: ScreenCaptureSetting;
   /** Rappels de péremption ; le module natif Android par défaut. */
   reminders?: ReminderScheduler;
+  /** Position GPS ; le module natif Android par défaut. */
+  location?: LocationSource;
   /** Fichiers (sauvegarde, export) ; le module natif Android par défaut. */
   files?: FileAccess;
   /** Chiffrement des sauvegardes ; sans lui, la sauvegarde est masquée. */
@@ -109,6 +113,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   );
   const [reminders] = useState(() => props.reminders ?? nativeReminders());
   const [files] = useState(() => props.files ?? nativeFiles());
+  const [location] = useState(() => props.location ?? nativeLocation());
   const backupCrypto = props.backupCrypto ?? null;
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -151,6 +156,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       screenCapture,
       reminders,
       files,
+      location,
       backupCrypto,
     };
     sessionRef.current = session;
@@ -269,6 +275,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               <SettingsScreen onLock={() => lock()} />
             ) : overlay === 'plan' ? (
               <PlanScreen />
+            ) : overlay === 'emergency' ? (
+              <EmergencyScreen />
             ) : overlay === 'stockForm' && formTarget !== null ? (
               <StockFormScreen target={formTarget} />
             ) : (

@@ -12,7 +12,12 @@ import {
   within,
 } from '@testing-library/react-native';
 import React from 'react';
-import { AppState, Clipboard, type AppStateStatus } from 'react-native';
+import {
+  AppState,
+  Clipboard,
+  Linking,
+  type AppStateStatus,
+} from 'react-native';
 
 import { BUNDLED_GUIDES, GUIDE_FOLDERS } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
@@ -328,6 +333,51 @@ describe('cycle de vie', () => {
     await fireEvent(toggle, 'valueChange', true);
     expect(allowed).toBe(true);
     expect(await screen.findByText(/Captures autorisées/)).toBeTruthy();
+  });
+
+  it('ouvre l’écran Urgence : appels, position GPS, SMS et fiches', async () => {
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        location={{
+          available: true,
+          getPosition: async () => ({
+            latitude: 45.83265,
+            longitude: 6.86518,
+            accuracy: 8,
+            stale: false,
+          }),
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+    );
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+
+    await fireEvent.press(
+      screen.getByLabelText('Appeler le 112, Urgences (toute l’Europe)'),
+    );
+    expect(open).toHaveBeenCalledWith('tel:112');
+
+    await fireEvent.press(screen.getByText('Localiser (GPS)'));
+    expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
+    expect(screen.getByText('Précision ± 8 m')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Envoyer ma position par SMS'));
+    const url = String(open.mock.calls[1][0]);
+    expect(url.startsWith('sms:?body=')).toBe(true);
+    expect(decodeURIComponent(url)).toContain(
+      'Ma position : 45.83265, 6.86518 (± 8 m). MGRS 32T LR 34199 77670.',
+    );
+
+    await fireEvent.press(screen.getByText('Arrêt cardiaque'));
+    expect(
+      await screen.findByText(/massage cardiaque|compressions/i),
+    ).toBeTruthy();
+    open.mockRestore();
   });
 
   it('exporte une sauvegarde chiffrée puis la restaure', async () => {

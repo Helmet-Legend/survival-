@@ -6,7 +6,7 @@ import type { ItemCategory } from '../inventory';
 export type Tab = 'home' | 'stock' | 'map' | 'guides';
 
 /** Écrans secondaires ouverts par-dessus une section. */
-export type Overlay = 'plan' | 'settings' | 'stockForm';
+export type Overlay = 'plan' | 'settings' | 'stockForm' | 'emergency';
 
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {

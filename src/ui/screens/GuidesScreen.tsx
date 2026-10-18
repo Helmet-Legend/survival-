@@ -211,7 +211,7 @@ function Snippet({ text: snippet }: { text: string }) {
   );
 }
 
-function GuideReader(props: { slug: string; onBack: () => void }) {
+export function GuideReader(props: { slug: string; onBack: () => void }) {
   const { db } = useSession();
   const { data, error } = useLoader(async () => {
     const { rows } = await db.execute(

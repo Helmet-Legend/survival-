@@ -8,6 +8,7 @@ import type {
   PhotoRepository,
 } from '../inventory';
 import type { FileAccess } from '../device/files';
+import type { LocationSource } from '../device/location';
 import type { ScreenCaptureSetting } from '../device/screenCapture';
 import type { Argon2Params } from '../crypto/params';
 import type { Argon2Engine, RandomSource } from '../crypto/types';
@@ -30,6 +31,8 @@ export interface Session {
   screenCapture: ScreenCaptureSetting;
   /** Rappels de péremption du téléphone (indisponibles hors Android). */
   reminders: ReminderScheduler;
+  /** Position GPS à la demande (écran Urgence). */
+  location: LocationSource;
   /** Fichiers choisis par l'utilisateur (sauvegarde, export). */
   files: FileAccess;
   /** Chiffrement des sauvegardes (null : sauvegarde indisponible). */

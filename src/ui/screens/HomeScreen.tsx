@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChevronRight,
   ClipboardList,
+  Siren,
   TriangleAlert,
   Users,
 } from 'lucide-react-native';
@@ -124,6 +125,14 @@ export function HomeScreen() {
           </View>
         </View>
       </View>
+
+      <Button
+        variant="danger"
+        icon={Siren}
+        label="URGENCE · appels, position, SMS"
+        accessibilityLabel="Ouvrir l’écran Urgence"
+        onPress={() => navigation.open('emergency')}
+      />
 
       <View style={styles.household}>
         <Users color={colors.cyan} size={22} strokeWidth={2} />
