@@ -8,20 +8,28 @@ import {
   ChevronRight,
   ClipboardList,
   Compass,
+  DoorOpen,
   Droplet,
-  Flame,
   HeartPulse,
+  House,
   Radio,
   SearchX,
-  ShowerHead,
   Siren,
+  Trees,
   Utensils,
+  Zap,
   type LucideIcon,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { GUIDE_FOLDERS } from '../../content/fiches/fiche';
+import {
+  F,
+  GUIDE_FOLDERS,
+  META_PREFIX,
+  readMeta,
+  type Priority,
+} from '../../content/fiches/fiche';
 import { searchGuides } from '../../db/guides';
 import {
   Button,
@@ -38,20 +46,29 @@ interface GuideRow {
   slug: string;
   title: string;
   category: string;
+  priority: Priority;
   snippet?: string;
 }
 
+const PRIORITY_RANK: Record<Priority, number> = {
+  vitale: 0,
+  importante: 1,
+  utile: 2,
+};
+
 /** Pictogramme et couleur par dossier connu ; livre ouvert sinon. */
 const CATEGORY_STYLE: Record<string, [LucideIcon, string]> = {
-  Survie: [Flame, colors.energy],
-  Médical: [HeartPulse, colors.health],
-  Eau: [Droplet, colors.water],
-  Communication: [Radio, colors.cyan],
-  Orientation: [Compass, colors.equipment],
-  Alimentation: [Utensils, colors.food],
-  Hygiène: [ShowerHead, colors.cyanSoft],
-  Préparation: [ClipboardList, colors.primary],
-  'Risques & alertes': [Siren, colors.danger],
+  [F.crise]: [ClipboardList, colors.primary],
+  [F.risques]: [Siren, colors.danger],
+  [F.sante]: [HeartPulse, colors.health],
+  [F.eau]: [Droplet, colors.water],
+  [F.alimentation]: [Utensils, colors.food],
+  [F.energie]: [Zap, colors.energy],
+  [F.habitat]: [House, colors.tools],
+  [F.evacuation]: [DoorOpen, colors.warning],
+  [F.communication]: [Radio, colors.cyan],
+  [F.orientation]: [Compass, colors.equipment],
+  [F.nature]: [Trees, colors.success],
 };
 
 /** Ordre des dossiers : celui de GUIDE_FOLDERS, les inconnus à la fin. */
@@ -77,15 +94,25 @@ export function GuidesScreen() {
   const { data, error } = useLoader(async (): Promise<GuideRow[]> => {
     if (query.trim() === '') {
       const { rows } = await db.execute(
-        'SELECT slug, title, category FROM survival_guides ORDER BY title',
+        'SELECT slug, title, category, body FROM survival_guides ORDER BY title',
       );
-      return rows.map(r => ({
-        slug: String(r.slug),
-        title: String(r.title),
-        category: String(r.category),
-      }));
+      return rows
+        .map(r => ({
+          slug: String(r.slug),
+          title: String(r.title),
+          category: String(r.category),
+          priority: readMeta(String(r.body)).priority,
+        }))
+        .sort(
+          (a, b) =>
+            PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+            a.title.localeCompare(b.title, 'fr'),
+        );
     }
-    return searchGuides(db, query);
+    return (await searchGuides(db, query)).map(hit => ({
+      ...hit,
+      priority: 'importante' as const,
+    }));
   }, [query]);
 
   if (slug !== null) {
@@ -169,7 +196,12 @@ export function GuidesScreen() {
             >
               <Icon color={color} size={22} />
               <View style={styles.grow}>
-                <Text style={[text.label, { color }]}>{guide.category}</Text>
+                <View style={styles.cardHead}>
+                  <Text style={[text.label, { color }]}>{guide.category}</Text>
+                  {guide.priority === 'vitale' && !searching ? (
+                    <Text style={styles.vital}>VITAL</Text>
+                  ) : null}
+                </View>
                 <Text style={styles.title}>{guide.title}</Text>
                 {guide.snippet ? <Snippet text={guide.snippet} /> : null}
               </View>
@@ -187,7 +219,9 @@ export function GuidesScreen() {
         />
       ) : null}
       <Text style={text.subtle}>
-        Fiches d’exemple, à faire valider par un professionnel de santé.
+        Fiches rédigées pour Fenrir et mises à jour en octobre 2026, avec les
+        références à consulter. Les fiches de santé n’ont pas été relues par un
+        professionnel et ne remplacent pas une formation aux premiers secours.
       </Text>
     </ScrollView>
   );
@@ -248,12 +282,32 @@ export function GuideReader(props: { slug: string; onBack: () => void }) {
           </Text>
           {String(data.body)
             .split('\n')
+            .filter(line => !line.startsWith(META_PREFIX))
             .map((line, i) => (
               <GuideLine key={i} line={line} />
             ))}
+          <MetaFooter body={String(data.body)} />
         </View>
       ) : null}
     </ScrollView>
+  );
+}
+
+/** Pied de fiche : priorité, références, date et statut de relecture. */
+function MetaFooter({ body }: { body: string }) {
+  const { entries } = readMeta(body);
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <View style={styles.meta}>
+      {entries.map(([key, value]) => (
+        <Text key={key} style={text.subtle}>
+          <Text style={styles.metaKey}>{key} : </Text>
+          {value}
+        </Text>
+      ))}
+    </View>
   );
 }
 
@@ -430,6 +484,21 @@ const styles = StyleSheet.create({
   },
   diagramConnector: { alignItems: 'center', marginVertical: -space.s },
   diagramArrow: { color: colors.primary, fontSize: 22, fontWeight: '800' },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  vital: {
+    color: colors.danger,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  meta: {
+    gap: 4,
+    marginTop: space.m,
+    paddingTop: space.m,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  metaKey: { fontWeight: '700', color: colors.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridCell: { width: '50%' },
   tableRow: {
