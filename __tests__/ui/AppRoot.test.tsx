@@ -373,6 +373,30 @@ describe('cycle de vie', () => {
       'Ma position : 45.83265, 6.86518 (± 8 m). MGRS 32T LR 34199 77670.',
     );
 
+    // Plan familial : préparé depuis l'écran Urgence, puis joignable.
+    await fireEvent.press(screen.getByText('Préparer le plan familial'));
+    await fireEvent.press(await screen.findByText('Ajouter un contact'));
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Paul');
+    await fireEvent.changeText(
+      screen.getByLabelText('Téléphone'),
+      '06 12 34 56 78',
+    );
+    await fireEvent(
+      screen.getByLabelText('Contact 1 hors zone'),
+      'valueChange',
+      true,
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Près du domicile'),
+      'Parking de l’école',
+    );
+    await fireEvent.press(screen.getByText('Enregistrer le plan'));
+    expect(await screen.findByText('Plan familial enregistré.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retour'));
+    expect(await screen.findByText('Parking de l’école')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Appeler Paul'));
+    expect(open).toHaveBeenLastCalledWith('tel:0612345678');
+
     await fireEvent.press(screen.getByText('Arrêt cardiaque'));
     expect(
       await screen.findByText(/massage cardiaque|compressions/i),

@@ -9,6 +9,7 @@ import {
   HeartPulse,
   MessageSquareText,
   Phone,
+  Users,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -21,12 +22,18 @@ import {
 } from 'react-native';
 
 import type { Position } from '../../device/location';
+import {
+  isPlanEmpty,
+  loadFamilyPlan,
+  type FamilyPlan,
+} from '../../plan/familyPlan';
 import { formatLatLon, formatMgrs, latLonToMgrs } from '../../geo/geoConverter';
 import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
 import { formatNumber } from '../format';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
+import { useLoader } from '../useLoader';
 import { GuideReader } from './GuidesScreen';
 
 const NUMBERS: Array<[string, string]> = [
@@ -59,7 +66,8 @@ export function positionMessage(position: Position): string {
 }
 
 export function EmergencyScreen() {
-  const { location } = useSession();
+  const { db, location } = useSession();
+  const { data: plan } = useLoader(() => loadFamilyPlan(db));
   const navigation = useNavigation();
   const [position, setPosition] = useState<Position | null>(null);
   const [locating, setLocating] = useState(false);
@@ -166,6 +174,20 @@ export function EmergencyScreen() {
         {error ? <Notice tone="error" message={error} /> : null}
       </Panel>
 
+      <FamilyPlanPanel
+        plan={plan}
+        position={position}
+        onCall={phone => open(`tel:${phone.replace(/[^+0-9]/g, '')}`)}
+        onSms={(phone, body) =>
+          open(
+            `sms:${phone.replace(/[^+0-9]/g, '')}?body=${encodeURIComponent(
+              body,
+            )}`,
+          )
+        }
+        onEdit={() => navigation.open('familyPlan')}
+      />
+
       <Panel
         title="Fiches réflexes"
         right={<HeartPulse color={colors.health} size={20} />}
@@ -184,7 +206,111 @@ export function EmergencyScreen() {
   );
 }
 
+/** Résumé du plan familial : points de regroupement et contacts à joindre. */
+function FamilyPlanPanel(props: {
+  plan: FamilyPlan | null;
+  position: Position | null;
+  onCall: (phone: string) => void;
+  onSms: (phone: string, body: string) => void;
+  onEdit: () => void;
+}) {
+  const { plan, position } = props;
+  const empty = plan === null || isPlanEmpty(plan);
+  return (
+    <Panel
+      title="Plan familial"
+      right={<Users color={colors.cyan} size={20} />}
+    >
+      {empty ? (
+        <Text style={text.muted}>
+          Préparez à l’avance où vous retrouver et qui appeler : le jour J, le
+          réseau peut tomber.
+        </Text>
+      ) : null}
+      {plan && plan.meetingNear.place !== '' ? (
+        <View>
+          <Text style={text.label}>Regroupement près du domicile</Text>
+          <Text style={text.body}>{plan.meetingNear.place}</Text>
+          {plan.meetingNear.position ? (
+            <Text selectable style={text.mono}>
+              {plan.meetingNear.position}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      {plan && plan.meetingFar.place !== '' ? (
+        <View>
+          <Text style={text.label}>Regroupement hors du quartier</Text>
+          <Text style={text.body}>{plan.meetingFar.place}</Text>
+          {plan.meetingFar.position ? (
+            <Text selectable style={text.mono}>
+              {plan.meetingFar.position}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      {plan?.contacts
+        .filter(c => c.phone !== '')
+        .map((c, i) => (
+          <View key={i} style={styles.contact}>
+            <View style={styles.grow}>
+              <Text style={text.body}>
+                {c.name || c.phone}
+                {c.outOfArea ? (
+                  <Text style={styles.outOfArea}> · hors zone</Text>
+                ) : null}
+              </Text>
+              {c.relation ? (
+                <Text style={text.subtle}>{c.relation}</Text>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Appeler ${c.name || c.phone}`}
+              onPress={() => props.onCall(c.phone)}
+              style={styles.round}
+            >
+              <Phone color={colors.text} size={18} />
+            </Pressable>
+            {position ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Envoyer ma position à ${
+                  c.name || c.phone
+                }`}
+                onPress={() => props.onSms(c.phone, positionMessage(position))}
+                style={styles.round}
+              >
+                <MessageSquareText color={colors.text} size={18} />
+              </Pressable>
+            ) : null}
+          </View>
+        ))}
+      <Button
+        variant="ghost"
+        label={
+          empty ? 'Préparer le plan familial' : 'Modifier le plan familial'
+        }
+        chevron
+        onPress={props.onEdit}
+      />
+    </Panel>
+  );
+}
+
 const styles = StyleSheet.create({
+  contact: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  grow: { flex: 1, minWidth: 0 },
+  outOfArea: { color: colors.primary, fontSize: 13 },
+  round: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: colors.borderActive,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,

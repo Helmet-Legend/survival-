@@ -96,6 +96,7 @@ const TABLE_ORDER = [
   'poi_locations',
   'crisis_checklists',
   'crisis_checklist_items',
+  'family_plan',
 ];
 
 /** Tables sauvegardées : tout sauf les guides (réinstallés) et l'index FTS. */
