@@ -838,6 +838,38 @@ describe('écrans', () => {
     expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
   });
 
+  it('simule une crise jour par jour sur le stock réel', async () => {
+    await openApp();
+    await fireEvent.press(
+      screen.getByLabelText('Ouvrir le simulateur de crise'),
+    );
+    // Coupure de courant de 5 jours : 30 L à 3 L par jour suffisent.
+    expect(await screen.findAllByText(/tient les 5 jours/)).toHaveLength(2);
+    expect(
+      screen.getByText(/Énergie : aucune batterie de capacité connue/),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Jour 5 · /)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Confinement'));
+    await fireEvent.press(await screen.findByText('21 jours'));
+    // Eau : 10 jours couverts, 11 jours × 3 L manquent.
+    expect(
+      await screen.findByText(/manque dès le jour 11 · 33 L à prévoir/),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Jour 21 · /)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Se mettre à l’abri'));
+    expect(
+      await screen.findByText('Se mettre à l’abri (confinement)'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Retour à la simulation'));
+    // Le scénario choisi est conservé au retour.
+    await fireEvent.press(await screen.findByText('Ajouter de l’eau'));
+    expect(
+      await screen.findByText(/Ajouter de l’eau|Nouvelle fiche/),
+    ).toBeTruthy();
+  });
+
   it('affiche l’indice de préparation et ses actions', async () => {
     await openApp();
     const card = await screen.findByLabelText(

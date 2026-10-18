@@ -43,6 +43,8 @@ export interface StockLot {
   caloriesPerUnit: number | null;
   /** `AAAA-MM-JJ` ou null si non périssable. */
   expirationDate: string | null;
+  /** Conservation saisie sur la fiche (réfrigéré, congelé…), si connue. */
+  storage?: ItemAttributes['storage'];
 }
 
 export interface ResourceAutonomy {
@@ -434,6 +436,7 @@ export async function loadConsumableLots(
       ),
       expirationDate:
         r.expiration_date === null ? null : String(r.expiration_date),
+      ...(attributes.storage ? { storage: attributes.storage } : {}),
     }));
 }
 

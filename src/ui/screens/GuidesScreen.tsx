@@ -266,7 +266,12 @@ function Snippet({ text: snippet }: { text: string }) {
   );
 }
 
-export function GuideReader(props: { slug: string; onBack: () => void }) {
+export function GuideReader(props: {
+  slug: string;
+  onBack: () => void;
+  /** Libellé du retour, si l'on ne revient pas à la liste des fiches. */
+  backLabel?: string;
+}) {
   const { db } = useSession();
   const { data, error } = useLoader(async () => {
     const { rows } = await db.execute(
@@ -283,7 +288,7 @@ export function GuideReader(props: { slug: string; onBack: () => void }) {
           variant="ghost"
           compact
           icon={ArrowLeft}
-          label="Toutes les fiches"
+          label={props.backLabel ?? 'Toutes les fiches'}
           onPress={props.onBack}
         />
       </View>
