@@ -177,8 +177,32 @@ export const RESUMES: Record<string, string> = {
     'Ce qu’il faut garder dans la voiture pour plusieurs heures bloquées, et les précautions si l’on reste à l’intérieur.',
 
   // Équipement et protection
+  'armes-securite-reglementation':
+    'Les quatre règles de sécurité, les catégories A à D, le stockage et les limites de la légitime défense : vérifier toujours le texte officiel en vigueur.',
+  'protection-respiratoire':
+    'Un filtre à particules n’arrête pas les gaz, aucun masque ne fournit d’oxygène : s’éloigner ou se mettre à l’abri reste la première protection.',
   'protections-balistiques':
     'Ce que protègent réellement gilets NIJ IIIA, plaques III et IV et casques FAST, leurs limites et comment vérifier une certification.',
+
+  // Compléments
+  'securite-domicile':
+    'Accès, éclairage, détecteurs et alerte, sans jamais bloquer une issue de secours ; un plan que chaque membre du foyer connaît.',
+  'stockage-domicile':
+    'Stocker au sec, au frais, sans encombrer les issues ni surcharger les étagères, et retrouver chaque lot grâce à son emplacement.',
+  'intrusion-attaque':
+    'S’échapper si une sortie sûre existe, sinon se cacher et s’enfermer, puis alerter le 17 ou le 112 dès que c’est sans danger.',
+  'epidemie-continuite':
+    'Réserve de traitements, hygiène, isolement d’un malade et contacts avec les personnes isolées, en suivant les consignes de santé publique.',
+  'evaluer-risques-foyer':
+    'Consulter Géorisques et la mairie pour connaître les risques de son adresse, puis noter dépendances, personnes fragiles et ressources.',
+  'rester-abri-partir':
+    'Appliquer d’abord la consigne officielle ; sinon sortir si le danger est dans le logement, s’abriter s’il est dehors.',
+  'emport-quotidien':
+    'Ce que l’on garde toujours sur soi : téléphone chargé, lampe, contacts d’urgence, traitement du jour, eau.',
+  'recharge-solaire':
+    'Un panneau solaire produit bien moins en hiver et par temps couvert : il complète une réserve de batteries, il ne la remplace pas.',
+  'plaie-penetrante':
+    'Toujours urgente : alerter, comprimer le saignement, laisser l’objet planté, installer la victime et ne rien lui donner à boire.',
 
   // Communication
   morse:

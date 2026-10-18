@@ -7,6 +7,7 @@
  */
 import type { BundledGuide } from '../db/guides';
 import { COMMUNICATION } from './fiches/communication';
+import { COMPLEMENTS } from './fiches/complements';
 import { EAU, ORIENTATION } from './fiches/eau-orientation';
 import { FAMILLES } from './fiches/familles';
 import { MEDICAL } from './fiches/medical';
@@ -34,6 +35,7 @@ const ALL: BundledGuide[] = [
   ...FAMILLES,
   ...ORGANISATION,
   ...PROTECTION,
+  ...COMPLEMENTS,
 ];
 
 /** Résumé « En bref » rédigé pour chaque fiche, à la place du premier paragraphe. */

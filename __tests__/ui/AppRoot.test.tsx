@@ -1414,7 +1414,7 @@ describe('écrans', () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Guides' }));
     await fireEvent.press(
-      await screen.findByLabelText(/^Équipement et protection, 1 fiche$/),
+      await screen.findByLabelText(/^Équipement et protection, \d+ fiches?$/),
     );
     await fireEvent.press(
       await screen.findByText(
@@ -1444,7 +1444,9 @@ describe('écrans', () => {
     expect(await screen.findByText('0 sur 9 vérifiés')).toBeTruthy();
     // Fermeture : retour à la liste du dossier.
     await fireEvent.press(screen.getByText('Toutes les fiches'));
-    expect(await screen.findByText('Équipement et protection')).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Équipement et protection')).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText('Tableau comparatif')).toBeNull();
 
     await fireEvent.changeText(
