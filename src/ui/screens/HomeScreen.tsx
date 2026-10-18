@@ -211,8 +211,8 @@ export function HomeScreen() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Hypothèses du calcul. Modifier dans les réglages"
-          onPress={() => navigation.open('settings')}
+          accessibilityLabel="Hypothèses du calcul. Modifier dans Mon foyer"
+          onPress={() => navigation.open('household')}
           style={({ pressed }) => pressed && styles.pressed}
         >
           <Text style={text.subtle}>

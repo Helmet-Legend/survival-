@@ -11,6 +11,7 @@ import {
   Moon,
   Phone,
   Users,
+  ListChecks,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -139,6 +140,13 @@ export function EmergencyScreen() {
           }}
         />
       ) : null}
+      <Button
+        icon={ListChecks}
+        chevron
+        label="Check-list rapide · kit 72 h"
+        accessibilityLabel="Ouvrir la check-list du kit 72 heures"
+        onPress={() => navigation.open('preparation')}
+      />
 
       <Panel
         title="Ma position"

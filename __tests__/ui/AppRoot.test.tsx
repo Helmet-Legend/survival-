@@ -827,6 +827,7 @@ describe('écrans', () => {
     expect(screen.queryByLabelText(/périmé. Ouvrir le stock/)).toBeNull();
 
     await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Mon foyer et hypothèses'));
     await fireEvent.press(await screen.findByText('2 L'));
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(
@@ -922,6 +923,25 @@ describe('écrans', () => {
     expect(
       screen.getByRole('tab', { name: 'Fiches' }).props.accessibilityState,
     ).toEqual({ selected: true });
+  });
+
+  it('règle le foyer dans Mon foyer et ouvre le kit depuis l’urgence', async () => {
+    await openApp();
+    await fireEvent.press(
+      screen.getByLabelText('Hypothèses du calcul. Modifier dans Mon foyer'),
+    );
+    expect(await screen.findByText('Mon foyer')).toBeTruthy();
+    await fireEvent.press(await screen.findByText('2 L'));
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    expect(
+      await screen.findByLabelText('Eau disponible : 30 L, 15 j d’autonomie'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la check-list du kit 72 heures'),
+    );
+    await fireEvent.press(await screen.findByLabelText('Retour à l’urgence'));
+    expect(await screen.findByText('Ma position')).toBeTruthy();
   });
 
   it('affiche l’indice de préparation et ses actions', async () => {
@@ -1076,8 +1096,13 @@ describe('écrans', () => {
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
     expect(screen.getByText('2 pers.')).toBeTruthy();
 
-    // Et toujours depuis les réglages.
-    await fireEvent.press(screen.getByLabelText('Réglages'));
+    // Et depuis Mon foyer, dans l’onglet Préparer.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie',
+      ),
+    );
     await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
     expect(await screen.findByText('1 pers.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
@@ -1603,7 +1628,7 @@ describe('écrans', () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     await fireEvent.changeText(
-      await screen.findByLabelText('Rechercher un guide'),
+      await screen.findByLabelText('Rechercher une fiche'),
       'severe',
     );
     await fireEvent.press(await screen.findByText('Hypothermie'));
@@ -1655,7 +1680,7 @@ describe('écrans', () => {
     expect(screen.queryByText('Tableau comparatif')).toBeNull();
 
     await fireEvent.changeText(
-      screen.getByLabelText('Rechercher un guide'),
+      screen.getByLabelText('Rechercher une fiche'),
       'casque FAST',
     );
     expect(
