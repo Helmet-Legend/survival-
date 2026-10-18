@@ -25,6 +25,21 @@ export interface MeetingPoint {
   position: string;
 }
 
+/**
+ * Plan de communication PACE : moyen principal, de repli, de secours et
+ * d'urgence, du plus courant au dernier recours.
+ */
+export interface CommsPlan {
+  primary: string;
+  alternate: string;
+  contingency: string;
+  emergency: string;
+  /** Canal et code radio convenus (« PMR446 canal 8, CTCSS 12 »). */
+  radio: string;
+  /** Horaires de vacation : quand allumer la radio. */
+  schedule: string;
+}
+
 export interface FamilyPlan {
   contacts: PlanContact[];
   /** Point de regroupement près du domicile. */
@@ -42,6 +57,28 @@ export interface FamilyPlan {
   /** Dernier exercice, `AAAA-MM-JJ`. */
   lastDrill: string | null;
   notes: string;
+  comms: CommsPlan;
+}
+
+/**
+ * Canaux PMR446 analogiques (radio sans licence en Europe) : 16 canaux de
+ * 446,00625 à 446,19375 MHz, espacés de 12,5 kHz.
+ */
+export const PMR446_CHANNELS: ReadonlyArray<{ channel: number; mhz: string }> =
+  Array.from({ length: 16 }, (_, i) => ({
+    channel: i + 1,
+    mhz: (446.00625 + i * 0.0125).toFixed(5).replace('.', ','),
+  }));
+
+export function emptyComms(): CommsPlan {
+  return {
+    primary: '',
+    alternate: '',
+    contingency: '',
+    emergency: '',
+    radio: '',
+    schedule: '',
+  };
 }
 
 export const CONTACTS_MAX = 12;
@@ -60,6 +97,7 @@ export function emptyPlan(): FamilyPlan {
     roles: '',
     lastDrill: null,
     notes: '',
+    comms: emptyComms(),
   };
 }
 
@@ -122,6 +160,19 @@ export function validatePlan(input: FamilyPlan): FamilyPlan {
     roles: clean(input.roles, 'roles', TEXT_MAX),
     lastDrill,
     notes: clean(input.notes, 'notes', TEXT_MAX),
+    comms: comms(input.comms),
+  };
+}
+
+function comms(value: unknown): CommsPlan {
+  const v = (value ?? {}) as Partial<CommsPlan>;
+  return {
+    primary: clean(v.primary, 'comms.primary', SHORT_MAX),
+    alternate: clean(v.alternate, 'comms.alternate', SHORT_MAX),
+    contingency: clean(v.contingency, 'comms.contingency', SHORT_MAX),
+    emergency: clean(v.emergency, 'comms.emergency', SHORT_MAX),
+    radio: clean(v.radio, 'comms.radio', SHORT_MAX),
+    schedule: clean(v.schedule, 'comms.schedule', SHORT_MAX),
   };
 }
 
@@ -133,7 +184,12 @@ export async function loadFamilyPlan(db: SqlDatabase): Promise<FamilyPlan> {
     return emptyPlan();
   }
   try {
-    return { ...emptyPlan(), ...JSON.parse(String(rows[0].data)) };
+    const stored = JSON.parse(String(rows[0].data)) as Partial<FamilyPlan>;
+    return {
+      ...emptyPlan(),
+      ...stored,
+      comms: { ...emptyComms(), ...stored.comms },
+    };
   } catch {
     return emptyPlan();
   }
@@ -163,7 +219,8 @@ export function isPlanEmpty(plan: FamilyPlan): boolean {
     plan.shutoffWater === '' &&
     plan.shutoffGas === '' &&
     plan.shutoffPower === '' &&
-    plan.roles === ''
+    plan.roles === '' &&
+    Object.values(plan.comms).every(v => v === '')
   );
 }
 
@@ -208,6 +265,15 @@ export function planText(plan: FamilyPlan): string {
     plan.shutoffPower ? `Électricité : ${plan.shutoffPower}` : '',
   ]);
   add('QUI FAIT QUOI', [plan.roles]);
+  const c = plan.comms;
+  add('COMMUNICATION', [
+    c.primary ? `1. Principal : ${c.primary}` : '',
+    c.alternate ? `2. Repli : ${c.alternate}` : '',
+    c.contingency ? `3. Secours : ${c.contingency}` : '',
+    c.emergency ? `4. Urgence : ${c.emergency}` : '',
+    c.radio ? `Radio : ${c.radio}` : '',
+    c.schedule ? `Vacations : ${c.schedule}` : '',
+  ]);
   add('NOTES', [plan.notes]);
   if (plan.lastDrill) {
     const [y, m, d] = plan.lastDrill.split('-');

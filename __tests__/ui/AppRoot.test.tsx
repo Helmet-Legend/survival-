@@ -410,8 +410,8 @@ describe('cycle de vie', () => {
 
     await fireEvent.press(screen.getByText('Arrêt cardiaque'));
     expect(
-      await screen.findByText(/massage cardiaque|compressions/i),
-    ).toBeTruthy();
+      (await screen.findAllByText(/massage cardiaque|compressions/i)).length,
+    ).toBeGreaterThan(0);
     open.mockRestore();
   });
 
@@ -599,6 +599,25 @@ describe('écrans', () => {
 
     await fireEvent.press(screen.getByLabelText('Ajouter : Radio à piles'));
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
+  });
+
+  it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
+    await openApp();
+    expect(screen.queryByTestId('red-light')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent(
+      await screen.findByLabelText('Mode lumière rouge'),
+      'valueChange',
+      true,
+    );
+    expect(await screen.findByTestId('red-light')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    expect(screen.getByTestId('red-light')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(await screen.findByText('Quitter la lumière rouge'));
+    expect(screen.queryByTestId('red-light')).toBeNull();
   });
 
   it('retire une unité en un geste et règle l’eau à 2 L', async () => {
@@ -849,6 +868,14 @@ describe('écrans', () => {
     );
     expect(await screen.findByText('Hypothermie')).toBeTruthy();
     expect(screen.queryByText('Rendre l’eau potable')).toBeNull();
+
+    // Schéma pas à pas : étapes encadrées reliées par des flèches.
+    await fireEvent.press(screen.getByText('Bilan rapide d’une victime'));
+    expect(
+      await screen.findByText('SÉCURISER la zone et se protéger'),
+    ).toBeTruthy();
+    expect(screen.getAllByText('↓')).toHaveLength(3);
+    expect(screen.queryByText(/^◇/)).toBeNull();
   });
 
   it('montre les trois péremptions les plus proches sur l’accueil', async () => {

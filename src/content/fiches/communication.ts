@@ -82,4 +82,18 @@ export const COMMUNICATION = [
     '- Garder une batterie externe chargée et un câble dans le sac d’évacuation.',
     '- Noter sur papier les numéros importants : le téléphone peut tomber en panne.',
   ]),
+
+  fiche('message-urgence', C, 'Rédiger un message de détresse utile', [
+    'Un message bref, factuel et structuré facilite la localisation et le rappel.',
+    '## Les 5 informations',
+    '= QUI  Nom ou groupe, nombre de personnes',
+    '= OÙ  Coordonnées GPS si fiables, commune, chemin, repère visible',
+    '= QUOI  Nature du problème et dangers présents',
+    '= ÉTAT  Blessures, conscience, respiration, besoins urgents',
+    '= RAPPEL  Numéro joignable et autonomie restante',
+    'Exemple de structure : « 2 personnes, blessure à la cheville, conscientes. Position GPS … / dernier repère … . Eau pour 6 h, téléphone à 25 %. Rappel au … »',
+    '- Envoyer les coordonnées avec le système de référence clairement indiqué et vérifier qu’elles correspondent au bon endroit.',
+    '- Économiser la batterie et garder le téléphone disponible pour un rappel.',
+    '! Ne pas inventer des coordonnées ou se déplacer vers un point dangereux pour obtenir du réseau. En urgence en France : 112 ; suivre les questions et consignes de l’opérateur.',
+  ]),
 ];
