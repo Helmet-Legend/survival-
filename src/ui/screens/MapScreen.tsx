@@ -1,6 +1,7 @@
 /**
- * Carte : conversion de coordonnées (MGRS, UTM, DMS) et calcul d'azimut
- * vers un point MGRS. Tout est calculé sur l'appareil, sans réseau.
+ * Position : conversion de coordonnées (MGRS, UTM, DMS) et calcul d'azimut
+ * vers un point MGRS. Tout est calculé sur l'appareil, sans réseau ; la
+ * position peut venir du GPS du téléphone, à la demande.
  */
 import {
   Check,
@@ -35,6 +36,7 @@ import {
   type MgrsDigits,
 } from '../../geo/geoConverter';
 import {
+  Button,
   Chip,
   EmptyState,
   Field,
@@ -43,6 +45,7 @@ import {
   Reading,
 } from '../components/controls';
 import { formatNumber, parseDecimal } from '../format';
+import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text } from '../theme';
 
 type Mode = 'coords' | 'bearing';
@@ -167,9 +170,32 @@ function CompassRose({ heading }: { heading: number }) {
 }
 
 export function MapScreen() {
+  const { location } = useSession();
   const [mode, setMode] = useState<Mode>('coords');
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
+  const [gps, setGps] = useState<{
+    state: 'idle' | 'locating' | 'done' | 'error';
+    message?: string;
+  }>({ state: 'idle' });
+  const locate = async () => {
+    setGps({ state: 'locating' });
+    try {
+      const fix = await location.getPosition();
+      setLat(fix.latitude.toFixed(6));
+      setLon(fix.longitude.toFixed(6));
+      setGps({
+        state: 'done',
+        message: `${fix.stale ? 'Dernière position connue' : 'Position GPS'}${
+          fix.accuracy === null
+            ? ''
+            : ` · précision ± ${formatNumber(fix.accuracy, 0)} m`
+        }`,
+      });
+    } catch (e) {
+      setGps({ state: 'error', message: message(e) });
+    }
+  };
   const [digits, setDigits] = useState<MgrsDigits>(5);
   const [target, setTarget] = useState('');
   const [declination, setDeclination] = useState('');
@@ -238,6 +264,27 @@ export function MapScreen() {
 
       {mode === 'coords' ? (
         <>
+          {location.available ? (
+            <Button
+              variant="primary"
+              icon={LocateFixed}
+              label={
+                gps.state === 'locating'
+                  ? 'Recherche du GPS…'
+                  : 'Utiliser ma position GPS'
+              }
+              disabled={gps.state === 'locating'}
+              onPress={() => {
+                void locate();
+              }}
+            />
+          ) : null}
+          {gps.message ? (
+            <Notice
+              tone={gps.state === 'error' ? 'error' : 'ok'}
+              message={gps.message}
+            />
+          ) : null}
           <View style={styles.pair}>
             <View style={styles.half}>
               <Field

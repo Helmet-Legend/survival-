@@ -121,7 +121,7 @@ export const ORIENTATION = [
       '2. Tourner le cadran jusqu’à aligner ses lignes avec le nord de la carte.',
       '3. Corriger de la déclinaison magnétique (indiquée en marge de la carte).',
       '4. Tenir la boussole à plat, tourner sur vous-même jusqu’à ce que l’aiguille se place dans la flèche du cadran : marcher dans la direction de la flèche.',
-      'L’onglet Carte calcule distance, azimut vrai, gisement et cap boussole entre deux positions MGRS.',
+      'L’onglet Position calcule distance, azimut vrai, gisement et cap boussole entre deux positions MGRS.',
     ],
     { priority: 'importante' },
   ),

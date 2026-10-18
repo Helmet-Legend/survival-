@@ -1267,7 +1267,7 @@ describe('écrans', () => {
 
   it('convertit une position en MGRS et calcule un cap', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Carte' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Position' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '45,83265');
     await fireEvent.changeText(screen.getByLabelText('Longitude'), '6.86518');
     expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
@@ -1290,6 +1290,33 @@ describe('écrans', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Coordonnées' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '85');
     expect(await screen.findByText(/Zone polaire/)).toBeTruthy();
+  });
+
+  it('remplit la position avec le GPS du téléphone', async () => {
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        location={{
+          available: true,
+          getPosition: async () => ({
+            latitude: 45.83265,
+            longitude: 6.86518,
+            accuracy: 8,
+            stale: false,
+          }),
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Position' }));
+    await fireEvent.press(screen.getByText('Utiliser ma position GPS'));
+    expect(
+      await screen.findByText('Position GPS · précision ± 8 m'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Latitude').props.value).toBe('45.832650');
+    expect(await screen.findByText(/^32T LR 34199 77670$/)).toBeTruthy();
   });
 
   it('affiche les vraies quantités sur l’accueil, les stocks et les guides', async () => {

@@ -62,7 +62,7 @@ export const PREPARATION = [
       '4. Savoir couper l’eau, le gaz et l’électricité du logement.',
       '5. Connaître l’école des enfants et son plan de mise en sûreté.',
       '6. S’entraîner une fois par an : sortir avec le sac en moins de 5 minutes.',
-      'Enregistrez les points de ralliement dans l’onglet Carte et les contacts sur papier dans le sac.',
+      'Enregistrez les points de ralliement dans l’onglet Position et les contacts sur papier dans le sac.',
     ],
     { priority: 'importante', sources: [REF.sgdsn, REF.georisques] },
   ),

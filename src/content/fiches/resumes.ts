@@ -226,7 +226,7 @@ export const RESUMES: Record<string, string> = {
 
   // Orientation
   'boussole-carte':
-    'Lire une carte et utiliser une boussole ; l’onglet Carte calcule distance et azimut entre deux positions.',
+    'Lire une carte et utiliser une boussole ; l’onglet Position calcule distance et azimut entre deux positions.',
   'orientation-soleil-etoiles':
     'Trouver les points cardinaux avec le soleil ou les étoiles quand la boussole manque.',
   mgrs: 'Lire et transmettre une position MGRS : zone, carré de 100 km, puis coordonnées.',
