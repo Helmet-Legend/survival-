@@ -97,6 +97,7 @@ const TABLE_ORDER = [
   'crisis_checklists',
   'crisis_checklist_items',
   'family_plan',
+  'preparation_marks',
 ];
 
 /** Tables sauvegardées : tout sauf les guides (réinstallés) et l'index FTS. */

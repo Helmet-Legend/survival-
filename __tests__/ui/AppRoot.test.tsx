@@ -393,12 +393,10 @@ describe('cycle de vie', () => {
     );
     await fireEvent.press(screen.getByText('Enregistrer le plan'));
     expect(await screen.findByText('Plan familial enregistré.')).toBeTruthy();
-    const share = jest
-      .spyOn(Share, 'share')
-      .mockResolvedValue({
-        action: Share.sharedAction,
-        activityType: undefined,
-      });
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({
+      action: Share.sharedAction,
+      activityType: undefined,
+    });
     await fireEvent.press(screen.getByText('Partager le plan'));
     await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
     const shared = share.mock.calls[0][0] as { message: string };
@@ -579,6 +577,29 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
     return ctx;
   }
+
+  it('vérifie le kit 72 h d’après le stock et ouvre la fiche d’un manque', async () => {
+    await openApp();
+    await fireEvent.press(
+      screen.getByLabelText('Ouvrir la préparation par paliers'),
+    );
+    // 30 L pour 1 personne à 3 L par jour : 10 jours d'eau, 18 de vivres.
+    expect(await screen.findByText('10 j sur 3')).toBeTruthy();
+    expect(screen.getByText('18 j sur 3')).toBeTruthy();
+    expect(screen.getByText('2 sur 13 prêts')).toBeTruthy();
+    await fireEvent.press(screen.getByText('7 jours'));
+    expect(await screen.findByText('10 j sur 7')).toBeTruthy();
+    await fireEvent.press(screen.getByText('10 jours'));
+    expect(await screen.findByText('10 j sur 10')).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('checkbox', { name: 'Argent liquide' }),
+    );
+    expect(await screen.findByText('3 sur 13 prêts')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Ajouter : Radio à piles'));
+    expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
+  });
 
   it('retire une unité en un geste et règle l’eau à 2 L', async () => {
     await openApp();
