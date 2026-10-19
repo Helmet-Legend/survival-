@@ -35,7 +35,10 @@ import {
   PhotoRepository,
 } from '../inventory';
 import { nativeFiles, type FileAccess } from '../device/files';
+import { nativeCompass, type CompassSource } from '../device/compass';
 import { nativeLocation, type LocationSource } from '../device/location';
+import { defaultTileFetch, MapTileStore, type TileFetch } from '../geo/tiles';
+import { WaypointRepository } from '../geo/waypoints';
 import { nativeReminders } from '../device/reminders';
 import {
   nativeScreenCapture,
@@ -121,6 +124,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   reminders?: ReminderScheduler;
   /** Position GPS ; le module natif Android par défaut. */
   location?: LocationSource;
+  /** Boussole ; le module natif Android par défaut. */
+  compass?: CompassSource;
+  /** Téléchargement des tuiles de carte ; `fetch` par défaut. */
+  tileFetch?: TileFetch;
   /** Fichiers (sauvegarde, export) ; le module natif Android par défaut. */
   files?: FileAccess;
   /** Chiffrement des sauvegardes ; sans lui, la sauvegarde est masquée. */
@@ -140,6 +147,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [reminders] = useState(() => props.reminders ?? nativeReminders());
   const [files] = useState(() => props.files ?? nativeFiles());
   const [location] = useState(() => props.location ?? nativeLocation());
+  const [compass] = useState(() => props.compass ?? nativeCompass());
+  const [tileFetch] = useState<TileFetch>(
+    () => props.tileFetch ?? defaultTileFetch,
+  );
   const [scanSource] = useState(() => props.scanSource ?? nativeScanSource());
   const [productFetch] = useState<ProductFetch>(
     () => props.productFetch ?? defaultProductFetch,
@@ -190,6 +201,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       reminders,
       files,
       location,
+      compass,
+      waypoints: new WaypointRepository(db),
+      tiles: new MapTileStore(db),
+      tileFetch,
       backupCrypto,
       scanSource,
       productFetch,

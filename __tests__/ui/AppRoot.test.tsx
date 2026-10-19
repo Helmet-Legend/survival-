@@ -1268,6 +1268,7 @@ describe('écrans', () => {
   it('convertit une position en MGRS et calcule un cap', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Position' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Coordonnées' }));
     await fireEvent.changeText(screen.getByLabelText('Latitude'), '45,83265');
     await fireEvent.changeText(screen.getByLabelText('Longitude'), '6.86518');
     expect(await screen.findByText('32T LR 34199 77670')).toBeTruthy();
@@ -1311,12 +1312,137 @@ describe('écrans', () => {
     );
     await unlockWith(MASTER);
     await fireEvent.press(await screen.findByRole('tab', { name: 'Position' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Coordonnées' }));
     await fireEvent.press(screen.getByText('Utiliser ma position GPS'));
     expect(
       await screen.findByText('Position GPS · précision ± 8 m'),
     ).toBeTruthy();
     expect(screen.getByLabelText('Latitude').props.value).toBe('45.832650');
     expect(await screen.findByText(/^32T LR 34199 77670$/)).toBeTruthy();
+  });
+
+  it('enregistre ma position comme point et donne distance et direction', async () => {
+    const ctx = await existingVault();
+    let fix = { latitude: 45.83265, longitude: 6.86518 };
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        location={{
+          available: true,
+          getPosition: async () => ({ ...fix, accuracy: 8, stale: false }),
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Position' }));
+    expect(await screen.findByText('Aucun point enregistré')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Enregistrer ma position GPS comme point'),
+    );
+    expect(await screen.findByText('Nouveau point')).toBeTruthy();
+    expect(screen.getByLabelText('Latitude').props.value).toBe('45.832650');
+    await fireEvent.changeText(screen.getByLabelText('Nom du point'), 'Maison');
+    await fireEvent.press(screen.getByRole('button', { name: 'Domicile' }));
+    await fireEvent.press(screen.getByText('Enregistrer le point'));
+    expect(await screen.findByText('MGRS')).toBeTruthy();
+    expect(screen.getByText('32T LR 34199 77670')).toBeTruthy();
+
+    // Un peu plus loin, au sud : la fiche donne distance et direction.
+    fix = { latitude: 45.82365, longitude: 6.86518 };
+    await fireEvent.press(screen.getByText('Actualiser ma position'));
+    expect(await screen.findByText('1,0 km')).toBeTruthy();
+    expect(screen.getByLabelText('Direction : nord')).toBeTruthy();
+
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await fireEvent.press(screen.getByText('Partager par SMS'));
+    expect(open).toHaveBeenCalledWith(
+      `sms:?body=${encodeURIComponent(
+        'Maison : 45.83265, 6.86518 · MGRS 32T LR 34199 77670',
+      )}`,
+    );
+    open.mockRestore();
+
+    await fireEvent.press(screen.getByLabelText('Retour aux points'));
+    expect(
+      await screen.findByLabelText('Maison, Domicile, 1,0 km · nord (0°)'),
+    ).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Maison, Domicile, 1,0 km · nord (0°)'),
+    );
+    await fireEvent.press(await screen.findByText('Supprimer'));
+    await fireEvent.press(screen.getByText('Supprimer le point'));
+    expect(await screen.findByText('Aucun point enregistré')).toBeTruthy();
+  });
+
+  it('demande confirmation avant de partager une cache', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Position' }));
+    await fireEvent.press(await screen.findByText('Saisir un point'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom du point'),
+      'Réserve',
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Cache' }));
+    await fireEvent.changeText(
+      screen.getByLabelText('Ou référence MGRS'),
+      '32T LR 34199 77670',
+    );
+    await fireEvent.press(screen.getByText('Enregistrer le point'));
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await fireEvent.press(await screen.findByText('Partager par SMS'));
+    expect(open).not.toHaveBeenCalled();
+    expect(screen.getByText(/Point sensible/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Partager quand même'));
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
+  });
+
+  it('télécharge une zone de carte et la supprime', async () => {
+    const ctx = await existingVault();
+    const urls: string[] = [];
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        location={{
+          available: true,
+          getPosition: async () => ({
+            latitude: 45.92,
+            longitude: 6.87,
+            accuracy: 8,
+            stale: false,
+          }),
+        }}
+        tileFetch={async url => {
+          urls.push(url);
+          return 'data:image/png;base64,AAAA';
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Position' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Carte' }));
+    expect(await screen.findByText(/Aucune zone téléchargée/)).toBeTruthy();
+    await fireEvent.press(screen.getByText('Télécharger une zone'));
+    await fireEvent.press(screen.getByRole('button', { name: '2 km' }));
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom de la zone'),
+      'Village',
+    );
+    await fireEvent.press(screen.getByLabelText('Télécharger la zone de 2 km'));
+    expect(
+      await screen.findByText('« Village » est disponible hors ligne.'),
+    ).toBeTruthy();
+    expect(urls.length).toBeGreaterThan(300);
+    expect(urls[0]).toContain('data.geopf.fr');
+    expect(
+      await screen.findByText(/Place occupée par les cartes/),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Supprimer la zone Village'));
+    await fireEvent.press(screen.getByText('Supprimer la carte'));
+    expect(await screen.findByText(/Aucune zone téléchargée/)).toBeTruthy();
   });
 
   it('affiche les vraies quantités sur l’accueil, les stocks et les guides', async () => {
