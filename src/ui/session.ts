@@ -8,7 +8,10 @@ import type {
   PhotoRepository,
 } from '../inventory';
 import type { FileAccess } from '../device/files';
+import type { CompassSource } from '../device/compass';
 import type { LocationSource } from '../device/location';
+import type { MapTileStore, TileFetch } from '../geo/tiles';
+import type { WaypointRepository } from '../geo/waypoints';
 import type { ScreenCaptureSetting } from '../device/screenCapture';
 import type { Argon2Params } from '../crypto/params';
 import type { Argon2Engine, RandomSource } from '../crypto/types';
@@ -33,8 +36,16 @@ export interface Session {
   screenCapture: ScreenCaptureSetting;
   /** Rappels de péremption du téléphone (indisponibles hors Android). */
   reminders: ReminderScheduler;
-  /** Position GPS à la demande (écran Urgence). */
+  /** Position GPS à la demande (écrans Urgence et Position). */
   location: LocationSource;
+  /** Boussole du téléphone (indisponible hors Android). */
+  compass: CompassSource;
+  /** Points de repère enregistrés. */
+  waypoints: WaypointRepository;
+  /** Cartes hors ligne gardées dans le coffre. */
+  tiles: MapTileStore;
+  /** Téléchargement d'une tuile, fait seulement à la demande. */
+  tileFetch: TileFetch;
   /** Fichiers choisis par l'utilisateur (sauvegarde, export). */
   files: FileAccess;
   /** Chiffrement des sauvegardes (null : sauvegarde indisponible). */

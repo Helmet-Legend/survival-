@@ -1,7 +1,9 @@
 /**
- * Position : conversion de coordonnées (MGRS, UTM, DMS) et calcul d'azimut
- * vers un point MGRS. Tout est calculé sur l'appareil, sans réseau ; la
- * position peut venir du GPS du téléphone, à la demande.
+ * Position : points de repère enregistrés, carte hors ligne, conversion de
+ * coordonnées (MGRS, UTM, DMS) et calcul d'azimut vers un point MGRS. Tout
+ * est calculé sur l'appareil, sans réseau ; la position vient du GPS du
+ * téléphone, à la demande. Seul le téléchargement d'une carte utilise
+ * internet, quand on le demande.
  */
 import {
   Check,
@@ -11,7 +13,13 @@ import {
   MapPin,
   Navigation,
 } from 'lucide-react-native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Clipboard,
   Pressable,
@@ -44,11 +52,22 @@ import {
   Panel,
   Reading,
 } from '../components/controls';
+import type { Position } from '../../device/location';
 import { formatNumber, parseDecimal } from '../format';
+import { MapPanel } from './map/MapPanel';
+import type { MapView } from './map/OfflineMap';
+import { PointsView, type PointsRoute } from './map/PointsView';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text } from '../theme';
 
-type Mode = 'coords' | 'bearing';
+type Mode = 'points' | 'map' | 'coords' | 'bearing';
+
+const MODES: Array<[Mode, string]> = [
+  ['points', 'Points'],
+  ['map', 'Carte'],
+  ['coords', 'Coordonnées'],
+  ['bearing', 'Azimut'],
+];
 
 const PRECISIONS: Array<[MgrsDigits, string]> = [
   [5, '1 m'],
@@ -171,19 +190,37 @@ function CompassRose({ heading }: { heading: number }) {
 
 export function MapScreen() {
   const { location } = useSession();
-  const [mode, setMode] = useState<Mode>('coords');
+  const [mode, setMode] = useState<Mode>('points');
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
   const [gps, setGps] = useState<{
     state: 'idle' | 'locating' | 'done' | 'error';
     message?: string;
   }>({ state: 'idle' });
-  const locate = async () => {
+  // Dernière position mesurée, partagée par les points et la carte.
+  const [here, setHere] = useState<Position | null>(null);
+  const [pointsRoute, setPointsRoute] = useState<PointsRoute>({
+    kind: 'list',
+  });
+  const [mapView, setMapView] = useState<MapView | null>(null);
+  const [touchingMap, setTouchingMap] = useState(false);
+
+  // Une seule mesure à la fois (le suivi en marchant en relance souvent).
+  const pending = useRef<Promise<Position | null> | null>(null);
+  const measure = useCallback((): Promise<Position | null> => {
+    if (pending.current === null) {
+      pending.current = measureOnce().finally(() => {
+        pending.current = null;
+      });
+    }
+    return pending.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- measureOnce ne dépend que de location
+  }, [location]);
+  const measureOnce = async (): Promise<Position | null> => {
     setGps({ state: 'locating' });
     try {
       const fix = await location.getPosition();
-      setLat(fix.latitude.toFixed(6));
-      setLon(fix.longitude.toFixed(6));
+      setHere(fix);
       setGps({
         state: 'done',
         message: `${fix.stale ? 'Dernière position connue' : 'Position GPS'}${
@@ -192,10 +229,20 @@ export function MapScreen() {
             : ` · précision ± ${formatNumber(fix.accuracy, 0)} m`
         }`,
       });
+      return fix;
     } catch (e) {
       setGps({ state: 'error', message: message(e) });
+      return null;
     }
   };
+  const locate = async () => {
+    const fix = await measure();
+    if (fix !== null) {
+      setLat(fix.latitude.toFixed(6));
+      setLon(fix.longitude.toFixed(6));
+    }
+  };
+  const gpsError = gps.state === 'error' ? gps.message ?? null : null;
   const [digits, setDigits] = useState<MgrsDigits>(5);
   const [target, setTarget] = useState('');
   const [declination, setDeclination] = useState('');
@@ -248,21 +295,56 @@ export function MapScreen() {
     <ScrollView
       contentContainerStyle={styles.page}
       keyboardShouldPersistTaps="handled"
+      scrollEnabled={!touchingMap}
     >
       <View style={styles.chips}>
-        <Chip
-          label="Coordonnées"
-          selected={mode === 'coords'}
-          onPress={() => setMode('coords')}
-        />
-        <Chip
-          label="Azimut"
-          selected={mode === 'bearing'}
-          onPress={() => setMode('bearing')}
-        />
+        {MODES.map(([m, label]) => (
+          <Chip
+            key={m}
+            label={label}
+            selected={mode === m}
+            onPress={() => {
+              setMode(m);
+              if (m === 'points') {
+                setPointsRoute({ kind: 'list' });
+              }
+            }}
+          />
+        ))}
       </View>
 
-      {mode === 'coords' ? (
+      {mode === 'points' ? (
+        <PointsView
+          route={pointsRoute}
+          setRoute={setPointsRoute}
+          here={here}
+          locate={measure}
+          locating={gps.state === 'locating'}
+          gpsError={gpsError}
+          onShowOnMap={point => {
+            setMapView({ center: point, zoom: 15 });
+            setMode('map');
+          }}
+        />
+      ) : mode === 'map' ? (
+        <MapPanel
+          view={mapView}
+          setView={setMapView}
+          here={here}
+          locate={measure}
+          locating={gps.state === 'locating'}
+          gpsError={gpsError}
+          onPointPress={point => {
+            setPointsRoute({ kind: 'detail', id: point.id });
+            setMode('points');
+          }}
+          onLongPress={at => {
+            setPointsRoute({ kind: 'new', at });
+            setMode('points');
+          }}
+          onTouching={setTouchingMap}
+        />
+      ) : mode === 'coords' ? (
         <>
           {location.available ? (
             <Button
@@ -481,7 +563,7 @@ const styles = StyleSheet.create({
     paddingBottom: space.xl,
     gap: space.m,
   },
-  chips: { flexDirection: 'row', gap: space.s },
+  chips: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   pair: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   half: { flex: 1, minWidth: 120 },
   grow: { flex: 1, minWidth: 0 },

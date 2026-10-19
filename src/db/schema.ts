@@ -612,6 +612,63 @@ const migration14: Migration = {
   ],
 };
 
+/**
+ * Cartographie hors ligne : les points enregistrés gagnent des types
+ * (domicile, regroupement, ravitaillement, autre) ; les tuiles de carte
+ * téléchargées et leurs zones sont gardées dans le coffre, pour que la
+ * région consultée reste chiffrée. Elles ne vont pas dans les sauvegardes
+ * (re-téléchargeables, trop lourdes).
+ */
+const migration15: Migration = {
+  version: 15,
+  name: 'cartographie hors ligne',
+  statements: [
+    `CREATE TABLE poi_locations_new (
+       id         TEXT PRIMARY KEY NOT NULL,
+       label      TEXT NOT NULL CHECK (length(trim(label)) > 0),
+       latitude   REAL NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+       longitude  REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+       mgrs       TEXT,
+       type       TEXT NOT NULL
+                  CHECK (type IN ('home', 'meeting', 'water_source', 'shelter',
+                                  'resource', 'cache', 'danger', 'other')),
+       notes      TEXT,
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    `INSERT INTO poi_locations_new (id, label, latitude, longitude, mgrs, type,
+       notes, created_at, updated_at)
+     SELECT id, label, latitude, longitude, mgrs, type, notes, created_at,
+       updated_at
+     FROM poi_locations`,
+    'DROP TABLE poi_locations',
+    'ALTER TABLE poi_locations_new RENAME TO poi_locations',
+    'CREATE INDEX idx_poi_locations_type ON poi_locations (type)',
+    touchTrigger('poi_locations'),
+
+    `CREATE TABLE map_areas (
+       id         TEXT PRIMARY KEY NOT NULL,
+       label      TEXT NOT NULL CHECK (length(trim(label)) > 0),
+       latitude   REAL NOT NULL CHECK (latitude BETWEEN -85.06 AND 85.06),
+       longitude  REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+       radius_km  REAL NOT NULL CHECK (radius_km > 0 AND radius_km <= 100),
+       min_zoom   INTEGER NOT NULL CHECK (min_zoom BETWEEN 0 AND 19),
+       max_zoom   INTEGER NOT NULL CHECK (max_zoom BETWEEN min_zoom AND 19),
+       source     TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 30),
+       tiles      INTEGER NOT NULL DEFAULT 0 CHECK (tiles >= 0),
+       complete   INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean('complete')}),
+       created_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    `CREATE TABLE map_tiles (
+       z    INTEGER NOT NULL CHECK (z BETWEEN 0 AND 19),
+       x    INTEGER NOT NULL CHECK (x >= 0),
+       y    INTEGER NOT NULL CHECK (y >= 0),
+       data TEXT NOT NULL CHECK (length(data) > 0),
+       PRIMARY KEY (z, x, y)
+     ) STRICT`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -627,6 +684,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration12,
   migration13,
   migration14,
+  migration15,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

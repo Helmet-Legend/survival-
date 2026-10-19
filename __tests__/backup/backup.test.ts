@@ -12,6 +12,8 @@ import {
   utf8ToText,
 } from '../../src/backup/base64';
 import { prepareDatabase } from '../../src/db/connection';
+import { MapTileStore } from '../../src/geo/tiles';
+import { WaypointRepository } from '../../src/geo/waypoints';
 import {
   BagRepository,
   DocumentRepository,
@@ -89,6 +91,29 @@ describe('sauvegarde chiffrée', () => {
       await new PhotoRepository(target).list('item', riz?.id ?? ''),
     ).toHaveLength(1);
     expect((await target.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
+  });
+
+  it('sauvegarde les points mais pas les cartes hors ligne', async () => {
+    const source = await freshDb();
+    await new WaypointRepository(source).create({
+      label: 'Source',
+      type: 'water_source',
+      latitude: 45,
+      longitude: 6,
+    });
+    await new MapTileStore(source).putTile(8, 1, 1, 'data:image/png;base64,QQ');
+    const { text } = await createBackup(source, PASSWORD, options());
+
+    const target = await freshDb();
+    await new MapTileStore(target).putTile(8, 2, 2, 'data:image/png;base64,QQ');
+    await restoreBackup(target, text, PASSWORD, new JsArgon2());
+    expect((await new WaypointRepository(target).list())[0].label).toBe(
+      'Source',
+    );
+    const tiles = new MapTileStore(target);
+    expect(await tiles.hasTile(8, 1, 1)).toBe(false);
+    // Les cartes déjà téléchargées sur ce téléphone restent.
+    expect(await tiles.hasTile(8, 2, 2)).toBe(true);
   });
 
   it('refuse un mot de passe faux ou un fichier modifié sans rien changer', async () => {
