@@ -29,8 +29,11 @@ interface NativeLocationModule {
   }>;
 }
 
-/** Le GPS peut mettre une minute à capter, à l'extérieur. */
-const TIMEOUT_MS = 60_000;
+/**
+ * Attente maximale d'une mesure fraîche ; au-delà, la dernière position
+ * connue est rendue (marquée « ancienne ») si le téléphone en a une.
+ */
+const TIMEOUT_MS = 30_000;
 
 export function nativeLocation(): LocationSource {
   const native =
