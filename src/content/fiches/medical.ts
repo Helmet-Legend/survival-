@@ -20,7 +20,7 @@ export const MEDICAL = [
       '= 114  Urgences par SMS (sourds, ou quand parler est dangereux)',
       '## Message à passer',
       '1. Votre nom et le numéro d’où vous appelez.',
-      '2. L’adresse ou la position exacte (MGRS ou coordonnées depuis l’onglet Carte).',
+      '2. L’adresse ou la position exacte (MGRS ou coordonnées depuis l’onglet Position).',
       '3. Ce qui s’est passé, le nombre de victimes et leur état.',
       '4. Les gestes déjà faits.',
       'Ne raccrochez que lorsque l’opérateur vous le dit.',

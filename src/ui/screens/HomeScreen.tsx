@@ -12,7 +12,7 @@ import {
   Flashlight,
   Hourglass,
   ListChecks,
-  Map as MapIcon,
+  Compass,
   ScanBarcode,
   Users,
 } from 'lucide-react-native';
@@ -358,9 +358,9 @@ export function HomeScreen() {
           onPress={() => navigation.open('scan')}
         />
         <QuickLink
-          icon={MapIcon}
-          label="Carte"
-          accessibilityLabel="Ouvrir la carte"
+          icon={Compass}
+          label="Position"
+          accessibilityLabel="Ouvrir Position : coordonnées et azimut"
           onPress={() => navigation.goTo('map')}
         />
         <QuickLink

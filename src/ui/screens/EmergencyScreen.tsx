@@ -165,7 +165,7 @@ export function EmergencyScreen() {
         ) : (
           <Text style={text.muted}>
             GPS indisponible sur cet appareil : saisissez votre position dans
-            l’onglet Carte.
+            l’onglet Position.
           </Text>
         )}
         {position ? (

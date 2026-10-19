@@ -70,7 +70,7 @@ const TAB_BACK: Record<Tab, string> = {
   stock: 'Retour aux stocks',
   prepare: 'Retour à Préparer',
   guides: 'Retour aux fiches',
-  map: 'Retour à la carte',
+  map: 'Retour à la position',
 };
 
 const OVERLAY_BACK: Record<Overlay, string> = {

@@ -3,7 +3,7 @@ import {
   BookOpen,
   Box,
   House,
-  Map as MapIcon,
+  Compass,
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -18,7 +18,7 @@ const TABS: Array<[Tab, string, LucideIcon]> = [
   ['stock', 'Stocks', Box],
   ['prepare', 'Préparer', ShieldCheck],
   ['guides', 'Fiches', BookOpen],
-  ['map', 'Carte', MapIcon],
+  ['map', 'Position', Compass],
 ];
 
 export function BottomNav(props: {
