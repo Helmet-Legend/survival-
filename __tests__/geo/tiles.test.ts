@@ -95,7 +95,7 @@ describe('cartes hors ligne', () => {
       downloadArea(store, area, IGN_PLAN, async () => {
         throw new Error('offline');
       }),
-    ).rejects.toThrow('vérifiez la connexion');
+    ).rejects.toThrow('Téléchargement impossible (offline)');
     expect((await store.listAreas())[0].complete).toBe(false);
   });
 

@@ -37,7 +37,8 @@ import {
 import { nativeFiles, type FileAccess } from '../device/files';
 import { nativeCompass, type CompassSource } from '../device/compass';
 import { nativeLocation, type LocationSource } from '../device/location';
-import { defaultTileFetch, MapTileStore, type TileFetch } from '../geo/tiles';
+import { nativeTileFetch } from '../device/tileFetch';
+import { MapTileStore, type TileFetch } from '../geo/tiles';
 import { WaypointRepository } from '../geo/waypoints';
 import { nativeReminders } from '../device/reminders';
 import {
@@ -149,7 +150,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [location] = useState(() => props.location ?? nativeLocation());
   const [compass] = useState(() => props.compass ?? nativeCompass());
   const [tileFetch] = useState<TileFetch>(
-    () => props.tileFetch ?? defaultTileFetch,
+    () => props.tileFetch ?? nativeTileFetch(),
   );
   const [scanSource] = useState(() => props.scanSource ?? nativeScanSource());
   const [productFetch] = useState<ProductFetch>(

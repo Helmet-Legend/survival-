@@ -340,6 +340,7 @@ export class MapTileStore {
 /** Télécharge une tuile et la rend en URI `data:image/…;base64,…`. */
 export type TileFetch = (url: string) => Promise<string>;
 
+/** Repli sans module natif (aperçu web) : `fetch` et `FileReader`. */
 export const defaultTileFetch: TileFetch = async url => {
   const response = await fetch(url);
   if (!response.ok) {
@@ -424,11 +425,12 @@ export async function downloadArea(
         try {
           await store.putTile(z, x, y, await fetchTile(source.url(z, x, y)));
           received++;
-        } catch {
+        } catch (e) {
           progress.failed++;
           if (received === 0 && progress.failed >= 8) {
+            const reason = e instanceof Error ? e.message : String(e);
             fatal = new DownloadError(
-              'Téléchargement impossible : vérifiez la connexion internet.',
+              `Téléchargement impossible (${reason}) : vérifiez la connexion internet, puis « Reprendre ».`,
             );
           }
         }
