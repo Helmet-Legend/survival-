@@ -17,9 +17,10 @@ import com.facebook.react.bridge.ReactMethod
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Position GPS à la demande (écran Urgence), sans réseau ni services
- * Google : le GPS du téléphone suffit. Rien n'est enregistré ni suivi en
- * arrière-plan ; une seule mesure par appui.
+ * Position à la demande (écrans Urgence et Position), sans services
+ * Google : GPS et localisation réseau du téléphone, la première mesure
+ * gagne ; à défaut, la dernière position connue. Rien n'est enregistré ni
+ * suivi en arrière-plan ; une seule mesure par appui.
  */
 class LocationModule(private val context: ReactApplicationContext) :
     ReactContextBaseJavaModule(context) {
@@ -77,11 +78,20 @@ class LocationModule(private val context: ReactApplicationContext) :
 
     listener = LocationListener { finish(it) }
     main.post {
-      try {
-        val provider = providers.first()
-        @Suppress("DEPRECATION")
-        manager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
-      } catch (e: Exception) {
+      // Tous les fournisseurs actifs à la fois, la première mesure gagne :
+      // le réseau (Wi-Fi, antennes) répond en quelques secondes là où le GPS
+      // seul peut ne rien capter à l'intérieur.
+      var requested = 0
+      for (provider in providers) {
+        try {
+          @Suppress("DEPRECATION")
+          manager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+          requested++
+        } catch (e: Exception) {
+          // Fournisseur refusé (ex. GPS avec la seule position approximative).
+        }
+      }
+      if (requested == 0) {
         finish(null)
       }
     }

@@ -279,6 +279,12 @@ export function MapScreen() {
               }}
             />
           ) : null}
+          {gps.state === 'locating' ? (
+            <Text style={text.subtle}>
+              Jusqu’à 30 secondes. À l’intérieur, le GPS capte mal : près d’une
+              fenêtre ou dehors, c’est plus rapide.
+            </Text>
+          ) : null}
           {gps.message ? (
             <Notice
               tone={gps.state === 'error' ? 'error' : 'ok'}
