@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class LocationPackage : ReactPackage {
   override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
-      listOf(LocationModule(context), CompassModule(context))
+      listOf(LocationModule(context), CompassModule(context), TilesModule(context))
 
   override fun createViewManagers(
       context: ReactApplicationContext
