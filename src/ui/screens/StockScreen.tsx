@@ -75,6 +75,7 @@ import { DateRow, MeasureRow } from '../stockForms/FormRows';
 import {
   CATEGORY_ILLUSTRATIONS,
   ILLUSTRATION_FADE,
+  ILLUSTRATION_FADE_SIDE,
 } from '../stockForms/illustrations';
 import { itemFacts, itemTypeLabel, itemUnitLabel } from '../stockForms/details';
 import { useSession } from '../session';
@@ -192,6 +193,40 @@ function bagAlerts(list: readonly BagSummary[]): number {
 
 function articles(count: number): string {
   return `${count} article${count > 1 ? 's' : ''}`;
+}
+
+/** Bandeau illustré en tête d'une catégorie : décoratif, le texte reste lisible. */
+function CategoryBanner(props: { category: ItemCategory; detail: string }) {
+  const color = CATEGORY_COLORS[props.category];
+  return (
+    <View
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={`${CATEGORY_LABELS[props.category]} : ${
+        props.detail
+      }`}
+      style={[styles.banner, { borderColor: tint(color, '55') }]}
+    >
+      <Image
+        source={CATEGORY_ILLUSTRATIONS[props.category]}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
+        style={styles.bannerImage}
+      />
+      <SvgXml
+        xml={ILLUSTRATION_FADE_SIDE}
+        width="100%"
+        height="100%"
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.bannerText}>
+        <Text style={[text.label, { color }]}>
+          {CATEGORY_TITLES[props.category]}
+        </Text>
+        <Text style={styles.bannerDetail}>{props.detail}</Text>
+      </View>
+    </View>
+  );
 }
 
 type StockFilter = ItemCategory | 'all' | 'watch' | 'documents' | 'bags';
@@ -641,6 +676,24 @@ export function StockScreen() {
               </View>
               <ChevronRight color={colors.text} size={22} />
             </Pressable>
+          ) : null}
+
+          {data &&
+          filter !== 'all' &&
+          filter !== 'watch' &&
+          filter !== 'bags' ? (
+            <CategoryBanner
+              category={filter}
+              detail={[
+                categoryAmount(
+                  filter,
+                  data.all.filter(i => i.category === filter),
+                ),
+                articles(data.all.filter(i => i.category === filter).length),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            />
           ) : null}
 
           {filter === 'weapon' && query.trim() === '' && data ? (
@@ -1437,6 +1490,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
+  banner: {
+    height: 104,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  bannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+  },
+  bannerText: { paddingHorizontal: space.l, gap: space.xs, maxWidth: '70%' },
+  bannerDetail: { color: colors.text, fontSize: 16, fontWeight: '700' },
   tileImage: {
     position: 'absolute',
     top: 0,
