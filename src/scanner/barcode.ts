@@ -108,6 +108,15 @@ function gs1Date(value: string): string | undefined {
  * ignorés. Null si le texte n'est pas au format GS1 ou sans GTIN valide.
  */
 export function parseGs1(raw: string): ScanRead | null {
+  // Forme lisible « (01)…(17)…(10)… » : ramenée à la forme brute.
+  if (/^\(\d{2,4}\)/.test(raw.trim())) {
+    const pieces = raw.trim().split(/\((\d{2,4})\)/);
+    const fields: string[] = [];
+    for (let i = 1; i + 1 < pieces.length; i += 2) {
+      fields.push(pieces[i] + pieces[i + 1]);
+    }
+    raw = fields.join(GS);
+  }
   let s = raw.replace(/^\](d2|C1|Q3)/, '');
   if (s.startsWith(GS)) {
     s = s.slice(1);
