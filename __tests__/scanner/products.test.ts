@@ -251,6 +251,22 @@ describe('Data Matrix des médicaments', () => {
       lot: 'LOT7',
     });
     expect(parseGs1(`${GS}010${CIP}`)).toEqual({ code: CIP });
+    // Boîte réelle : série, lot puis péremption (mois seul, jour 00).
+    expect(
+      parseGs1(`01034009302818572178427771786858${GS}10ABDHD0015${GS}17261100`),
+    ).toEqual({
+      code: '3400930281857',
+      lot: 'ABDHD0015',
+      expiry: '2026-11-30',
+    });
+    // Forme lisible renvoyée par certains lecteurs.
+    expect(
+      parseGs1('(01)03400930281857(21)78427771786858(10)ABDHD0015(17)261130'),
+    ).toEqual({
+      code: '3400930281857',
+      lot: 'ABDHD0015',
+      expiry: '2026-11-30',
+    });
     expect(parseGs1('texte quelconque')).toBeNull();
     expect(parseGs1('0103400930000001')).toBeNull();
     expect(readFromScanner(`010${CIP}17271231`, 'DATA_MATRIX')).toEqual({

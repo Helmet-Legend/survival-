@@ -118,6 +118,8 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("com.google.zxing:core:3.5.3")
+    // Lecture des Data Matrix (médicaments) : zxing-cpp, sans service Google.
+    implementation("io.github.zxing-cpp:android:2.3.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

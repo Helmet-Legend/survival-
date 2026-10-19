@@ -41,6 +41,7 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.Result
 import com.google.zxing.common.HybridBinarizer
+import zxingcpp.BarcodeReader as CppReader
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -77,6 +78,31 @@ class ScanActivity : AppCompatActivity() {
                         BarcodeFormat.DATA_MATRIX),
                 DecodeHintType.TRY_HARDER to true))
       }
+
+  /**
+   * Lecteur principal (zxing-cpp) : bien plus fiable sur les petits Data
+   * Matrix des boîtes de médicaments, même avec du texte imprimé à côté.
+   * Le lecteur Java ci-dessus reste en secours si la bibliothèque native
+   * ne se charge pas ou ne trouve rien.
+   */
+  private val cppReader: CppReader? =
+      runCatching {
+            CppReader().apply {
+              options.formats =
+                  setOf(
+                      CppReader.Format.EAN_13,
+                      CppReader.Format.EAN_8,
+                      CppReader.Format.UPC_A,
+                      CppReader.Format.UPC_E,
+                      CppReader.Format.DATA_MATRIX)
+              options.tryHarder = true
+              options.tryRotate = true
+              options.tryDownscale = true
+              // Texte brut : les séparateurs GS1 (GS) restent dans le texte.
+              options.textMode = CppReader.TextMode.PLAIN
+            }
+          }
+          .getOrNull()
 
   private val permission =
       registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -212,7 +238,8 @@ class ScanActivity : AppCompatActivity() {
                         ResolutionSelector.Builder()
                             .setResolutionStrategy(
                                 ResolutionStrategy(
-                                    Size(1280, 720),
+                                    // Assez de pixels pour un Data Matrix d'1 cm.
+                                    Size(1920, 1080),
                                     ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
                             .build())
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -231,6 +258,13 @@ class ScanActivity : AppCompatActivity() {
   private fun analyze(image: ImageProxy) {
     try {
       if (finished) {
+        return
+      }
+      val found = runCatching { cppReader?.read(image) }.getOrNull()?.firstOrNull()
+      val cppCode = found?.text
+      if (found != null && !cppCode.isNullOrEmpty()) {
+        val format = found.format.name
+        runOnUiThread { onRead(cppCode, format) }
         return
       }
       // Plan de luminance (Y) seul, sans le pas de ligne du capteur.
