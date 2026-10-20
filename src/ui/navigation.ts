@@ -13,6 +13,7 @@ export type Overlay =
   | 'emergency'
   | 'familyPlan'
   | 'preparation'
+  | 'gear'
   | 'calculators'
   | 'scan'
   | 'history'
@@ -80,6 +81,7 @@ const OVERLAY_BACK: Record<Overlay, string> = {
   emergency: 'Retour à l’urgence',
   familyPlan: 'Retour au plan familial',
   preparation: 'Retour aux check-lists',
+  gear: 'Retour au matériel de base',
   calculators: 'Retour aux calculateurs',
   scan: 'Retour au scanner',
   history: 'Retour à l’historique',
