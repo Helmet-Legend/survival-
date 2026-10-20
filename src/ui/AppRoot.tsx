@@ -85,8 +85,7 @@ import { CrisisScreen } from './screens/CrisisScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
-import { BaseGearScreen } from './screens/BaseGearScreen';
-import { PreparationScreen } from './screens/PreparationScreen';
+import { KitScreen } from './screens/KitScreen';
 import {
   loadRedLight,
   RED_LIGHT_SUPPORTED,
@@ -336,15 +335,18 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         <RedLightContext.Provider value={redLight}>
           <NavigationContext.Provider value={navigation}>
             {overlay === 'stockForm' ? null : (
-              <View style={styles.bar}>
+              <View style={[styles.bar, overlay !== null && styles.barCompact]}>
                 <IconButton
                   icon={Lock}
                   label="Verrouiller"
                   onPress={() => lock()}
                 />
+                {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
                 <View style={styles.brandBox}>
-                  <Brand size={24} />
-                  <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                  <Brand size={overlay === null ? 24 : 18} />
+                  {overlay === null ? (
+                    <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -385,9 +387,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               ) : overlay === 'familyPlan' ? (
                 <FamilyPlanScreen />
               ) : overlay === 'preparation' ? (
-                <PreparationScreen />
-              ) : overlay === 'gear' ? (
-                <BaseGearScreen />
+                <KitScreen />
               ) : overlay === 'calculators' ? (
                 <CalculatorsScreen />
               ) : overlay === 'scan' ? (
@@ -539,6 +539,7 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
     paddingBottom: space.m,
   },
+  barCompact: { paddingTop: space.xs, paddingBottom: space.xs },
   cover: {
     position: 'absolute',
     top: 0,

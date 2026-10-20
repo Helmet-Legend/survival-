@@ -143,8 +143,8 @@ export function EmergencyScreen() {
       <Button
         icon={ListChecks}
         chevron
-        label="Check-list rapide · kit 72 h"
-        accessibilityLabel="Ouvrir la check-list du kit 72 heures"
+        label="Kit et matériel"
+        accessibilityLabel="Ouvrir le kit et matériel"
         onPress={() => navigation.open('preparation')}
       />
 

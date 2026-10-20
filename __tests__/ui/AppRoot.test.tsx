@@ -587,7 +587,7 @@ describe('écrans', () => {
     return ctx;
   }
 
-  it('liste le matériel de base, coche à la main, exporte et imprime', async () => {
+  it('réunit kit 72 h et matériel, coche à la main, exporte et imprime', async () => {
     const out: { csv?: string; html?: string } = {};
     await openApp({
       files: {
@@ -604,8 +604,15 @@ describe('écrans', () => {
     });
     await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir la liste du matériel de base'),
+      await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
+    // 30 L pour 1 personne à 3 L par jour : 10 jours d'eau, 18 de vivres.
+    expect(await screen.findByText('10 j sur 3')).toBeTruthy();
+    expect(screen.getByText('18 j sur 3')).toBeTruthy();
+    await fireEvent.press(screen.getByText('7 jours'));
+    expect(await screen.findByText('10 j sur 7')).toBeTruthy();
+    await fireEvent.press(screen.getByText('72 h'));
+
     const cash = await screen.findByRole('checkbox', {
       name: 'Argent liquide',
     });
@@ -613,16 +620,22 @@ describe('écrans', () => {
     await fireEvent.press(cash);
     expect(await screen.findByText('Coché à la main')).toBeTruthy();
 
+    // Famille complète : repliée ; un appui l'ouvre.
+    expect(screen.getByLabelText(/^Eau, \d+ sur \d+$/)).toBeTruthy();
+
     await fireEvent.press(
       screen.getByLabelText('Exporter la liste en tableur (Excel)'),
     );
     expect(await screen.findByText('Liste exportée en tableur.')).toBeTruthy();
     expect(out.csv).toContain('Argent liquide;Je l’ai;');
+    expect(out.csv).toContain(
+      'Eau;Réserve d’eau potable;Dans le stock;10 j sur 3;',
+    );
 
     await fireEvent.press(
       screen.getByLabelText('Imprimer la liste ou l’enregistrer en PDF'),
     );
-    expect(out.html).toContain('<h1>Matériel de base</h1>');
+    expect(out.html).toContain('<h1>Kit et matériel</h1>');
 
     // Sans arme enregistrée, le volet armes s’affiche à la demande.
     expect(screen.queryByText('Coffre-fort ou armoire forte')).toBeNull();
@@ -631,6 +644,12 @@ describe('écrans', () => {
       await screen.findByText('Coffre-fort ou armoire forte'),
     ).toBeTruthy();
 
+    // Essentiel 72 h : le kit officiel seulement.
+    // La puce vient avant les badges des lignes.
+    await fireEvent.press(screen.getAllByText('Essentiel 72 h')[0]);
+    expect(screen.queryByText('Boussole')).toBeNull();
+    expect(screen.getByText('Radio à piles ou à manivelle')).toBeTruthy();
+
     // « À prévoir » masque ce qui est déjà là.
     await fireEvent.press(screen.getByText(/^À prévoir \(\d+\)$/));
     expect(screen.queryByText('Argent liquide')).toBeNull();
@@ -638,26 +657,15 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Boussole')).toBeTruthy();
   });
 
-  it('vérifie le kit 72 h d’après le stock et ouvre la fiche d’un manque', async () => {
+  it('ouvre le kit depuis l’accueil et ajoute un manque', async () => {
     await openApp();
+    await fireEvent.press(screen.getByLabelText('Ouvrir le kit et matériel'));
     await fireEvent.press(
-      screen.getByLabelText('Ouvrir la préparation par paliers'),
+      await screen.findByText('À prévoir', { exact: false }),
     );
-    // 30 L pour 1 personne à 3 L par jour : 10 jours d'eau, 18 de vivres.
-    expect(await screen.findByText('10 j sur 3')).toBeTruthy();
-    expect(screen.getByText('18 j sur 3')).toBeTruthy();
-    expect(screen.getByText('2 sur 13 prêts')).toBeTruthy();
-    await fireEvent.press(screen.getByText('7 jours'));
-    expect(await screen.findByText('10 j sur 7')).toBeTruthy();
-    await fireEvent.press(screen.getByText('10 jours'));
-    expect(await screen.findByText('10 j sur 10')).toBeTruthy();
-
     await fireEvent.press(
-      screen.getByRole('checkbox', { name: 'Argent liquide' }),
+      screen.getByLabelText('Ajouter : Radio à piles ou à manivelle'),
     );
-    expect(await screen.findByText('3 sur 13 prêts')).toBeTruthy();
-
-    await fireEvent.press(screen.getByLabelText('Ajouter : Radio à piles'));
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
@@ -688,11 +696,9 @@ describe('écrans', () => {
 
   it('calcule les besoins en eau par usage et les besoins électriques', async () => {
     await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
     await fireEvent.press(
-      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
-    );
-    await fireEvent.press(
-      await screen.findByText('Calculateurs eau et électricité'),
+      await screen.findByLabelText('Ouvrir les calculateurs'),
     );
     expect(await screen.findByText('Eau du foyer')).toBeTruthy();
     // 1 personne, 3 L de boisson, objectif de 14 jours : 42 L, 30 L en stock.
@@ -940,16 +946,12 @@ describe('écrans', () => {
     );
     await screen.findByText('Simulateur de crise');
     await fireEvent.press(screen.getByLabelText('Retour à Préparer'));
-    // Plan d’action puis calculateurs : chaque retour remonte d’un écran.
+    // Urgence puis kit : chaque retour remonte d’un écran.
+    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir le plan d’action'),
+      await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
-    await fireEvent.press(
-      await screen.findByText('Calculateurs eau et électricité'),
-    );
-    await fireEvent.press(
-      await screen.findByLabelText('Retour au plan d’action'),
-    );
+    await fireEvent.press(await screen.findByLabelText('Retour à l’urgence'));
     await fireEvent.press(await screen.findByLabelText('Retour à Préparer'));
     expect(
       await screen.findByLabelText('Ouvrir le plan d’achats'),
@@ -971,12 +973,11 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Lampe frontale')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Retour'));
     await fireEvent.press(await screen.findByRole('tab', { name: 'Accueil' }));
+    // Raccourci vers le plan d’achats ; le retour ramène à l’accueil.
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir les fiches pratiques'),
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
-    expect(
-      screen.getByRole('tab', { name: 'Fiches' }).props.accessibilityState,
-    ).toEqual({ selected: true });
+    expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
   });
 
   it('règle le foyer dans Mon foyer et ouvre le kit depuis l’urgence', async () => {
@@ -992,7 +993,7 @@ describe('écrans', () => {
     ).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir la check-list du kit 72 heures'),
+      await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
     await fireEvent.press(await screen.findByLabelText('Retour à l’urgence'));
     expect(await screen.findByText('Ma position')).toBeTruthy();
@@ -1025,10 +1026,10 @@ describe('écrans', () => {
 
   it('échelonne les achats et les rappelle sur l’accueil', async () => {
     await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
     await fireEvent.press(
-      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
-    await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
     await fireEvent.press(await screen.findByText('6 mois'));
     await fireEvent.press(screen.getByText('Créer le plan'));
     expect(
@@ -1046,9 +1047,9 @@ describe('écrans', () => {
         }).props.accessibilityState,
       ).toEqual({ checked: true }),
     );
-    // Ouvert depuis le plan d’action : le retour y ramène, puis à l’accueil.
-    await fireEvent.press(screen.getByLabelText('Retour au plan d’action'));
-    await fireEvent.press(await screen.findByLabelText('Retour à l’accueil'));
+    // Ouvert depuis Préparer : le retour y ramène.
+    await fireEvent.press(screen.getByLabelText('Retour à Préparer'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(
       await screen.findByLabelText(
         /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
@@ -1058,10 +1059,10 @@ describe('écrans', () => {
 
   it('chiffre les achats, applique un budget et met à jour sans perdre les coches', async () => {
     await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
     await fireEvent.press(
-      screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
-    await fireEvent.press(await screen.findByText('Plan d’achats échelonné'));
     await fireEvent.press(await screen.findByText('Créer le plan'));
     await screen.findByText(/^Plan créé/);
     const radioName = 'Radio à piles, Pour suivre les consignes des autorités.';
@@ -1089,9 +1090,9 @@ describe('écrans', () => {
       screen.getByRole('checkbox', { name: radioName }).props
         .accessibilityState,
     ).toEqual({ checked: true });
-    // Ouvert depuis le plan d’action : le retour y ramène, puis à l’accueil.
-    await fireEvent.press(screen.getByLabelText('Retour au plan d’action'));
-    await fireEvent.press(await screen.findByLabelText('Retour à l’accueil'));
+    // Ouvert depuis Préparer : le retour y ramène.
+    await fireEvent.press(screen.getByLabelText('Retour à Préparer'));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(
       await screen.findByLabelText(
         /^Achats du mois : \d+ à faire\. Ouvrir le plan d’achats$/,
@@ -1517,9 +1518,9 @@ describe('écrans', () => {
       screen.getByLabelText('Nourriture : 36 000 kcal, 1 article'),
     ).toBeTruthy();
     expect(screen.getByLabelText('Outils : 0 article')).toBeTruthy();
-    expect(
-      screen.getByLabelText('Armement : 0 munition, 0 arme, 0 article'),
-    ).toBeTruthy();
+    // Sans arme : pas de carte Armement vide, la puce reste.
+    expect(screen.queryByLabelText(/^Armement :/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Armement' })).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     const firstAid = BUNDLED_GUIDES.filter(g => g.category === 'Santé').length;

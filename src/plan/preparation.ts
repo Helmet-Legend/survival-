@@ -237,6 +237,19 @@ export async function setMark(
   }
 }
 
+/** Jours d'autonomie en eau et en vivres du foyer (stock général). */
+export async function loadHomeAutonomy(
+  db: SqlDatabase,
+  asOf: string,
+): Promise<{ water: number; food: number }> {
+  const [household, lots] = await Promise.all([
+    loadHousehold(db),
+    loadConsumableLots(db),
+  ]);
+  const autonomy = computeResilience(lots, household, asOf);
+  return { water: autonomy.water.days, food: autonomy.food.days };
+}
+
 const daysLabel = (have: number, need: number) => `${have} j sur ${need}`;
 
 /**
