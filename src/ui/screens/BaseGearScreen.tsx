@@ -16,9 +16,12 @@ import { localToday } from '../../lib/dates';
 import {
   gearCsv,
   gearHtml,
+  GEAR_REFS,
   GEAR_SECTIONS,
+  gearRefsLabel,
   getBaseGear,
   setGearMark,
+  SHOW_WEAPONS_MARK,
   type GearResult,
 } from '../../plan/baseGear';
 import {
@@ -36,7 +39,7 @@ import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
 
 export function BaseGearScreen() {
-  const { db, repo, bags, documents, files } = useSession();
+  const { db, repo, bags, documents, files, armory } = useSession();
   const navigation = useNavigation();
   const [missingOnly, setMissingOnly] = useState(false);
   const [notice, setNotice] = useState<{
@@ -44,15 +47,17 @@ export function BaseGearScreen() {
     message: string;
   } | null>(null);
   const { data, error, reload } = useLoader(async () => {
-    const [items, docs, bagList] = await Promise.all([
+    const [items, docs, bagList, weapons] = await Promise.all([
       repo.listItems(),
       documents.list(),
       bags.list(),
+      armory.listWeapons(),
     ]);
     return getBaseGear(db, {
       items,
       documentCount: docs.length,
       bagNames: bagList.map(b => b.name),
+      weaponCount: weapons.length,
     });
   });
 
@@ -127,6 +132,7 @@ export function BaseGearScreen() {
     } else if (definition.add) {
       navigation.openStockForm({
         category: definition.add.category,
+        recordType: definition.add.recordType,
         prefill: definition.add.prefill,
       });
     }
@@ -138,7 +144,9 @@ export function BaseGearScreen() {
       <Text style={text.muted}>
         L’équipement courant d’un foyer préparé, reconnu dans votre stock
         (maison et sacs). Ce que vous avez sans l’avoir saisi se coche d’un
-        appui. Liste indicative : adaptez-la à votre foyer.
+        appui. Chaque élément indique la liste officielle qui le recommande ; «
+        conseil courant » signale ceux qu’aucune ne cite. Liste indicative :
+        adaptez-la à votre foyer.
       </Text>
 
       <Panel>
@@ -186,6 +194,15 @@ export function BaseGearScreen() {
           selected={missingOnly}
           onPress={() => setMissingOnly(true)}
         />
+        {data.weaponsOptional ? (
+          <Chip
+            label="Volet armes"
+            selected={data.weapons}
+            onPress={() => {
+              void toggle(SHOW_WEAPONS_MARK, !data.weapons);
+            }}
+          />
+        ) : null}
       </View>
 
       {GEAR_SECTIONS.map(section => {
@@ -215,6 +232,16 @@ export function BaseGearScreen() {
       {missingOnly && data.have === data.total ? (
         <Text style={text.subtle}>Rien à prévoir : tout est là.</Text>
       ) : null}
+      <Panel title="Sources">
+        {[...new Set(data.results.flatMap(r => r.definition.refs))].map(id => {
+          const ref = GEAR_REFS[id];
+          return (
+            <Text key={id} style={text.subtle}>
+              {ref.short} : {ref.title}
+            </Text>
+          );
+        })}
+      </Panel>
     </ScrollView>
   );
 }
@@ -250,6 +277,15 @@ function GearRow(props: {
         <View style={styles.grow}>
           <Text style={text.body}>{definition.label}</Text>
           {sub ? <Text style={text.subtle}>{sub}</Text> : null}
+          <Text
+            style={
+              definition.refs.length === 0 ? styles.unofficial : styles.ref
+            }
+          >
+            {definition.refs.length === 0
+              ? gearRefsLabel(definition)
+              : `Source : ${gearRefsLabel(definition)}`}
+          </Text>
         </View>
       </Pressable>
       {canAdd ? (
@@ -302,6 +338,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderActive,
   },
+  ref: { ...text.subtle, fontSize: 12, color: colors.cyanSoft },
+  unofficial: { ...text.subtle, fontSize: 12, fontStyle: 'italic' },
   addText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   pressed: { opacity: 0.82 },
 });

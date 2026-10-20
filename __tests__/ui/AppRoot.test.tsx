@@ -624,6 +624,13 @@ describe('écrans', () => {
     );
     expect(out.html).toContain('<h1>Matériel de base</h1>');
 
+    // Sans arme enregistrée, le volet armes s’affiche à la demande.
+    expect(screen.queryByText('Coffre-fort ou armoire forte')).toBeNull();
+    await fireEvent.press(screen.getByText('Volet armes'));
+    expect(
+      await screen.findByText('Coffre-fort ou armoire forte'),
+    ).toBeTruthy();
+
     // « À prévoir » masque ce qui est déjà là.
     await fireEvent.press(screen.getByText(/^À prévoir \(\d+\)$/));
     expect(screen.queryByText('Argent liquide')).toBeNull();

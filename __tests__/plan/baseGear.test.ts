@@ -3,6 +3,10 @@ import { BagRepository, InventoryRepository } from '../../src/inventory';
 import {
   gearCsv,
   gearHtml,
+  GEAR_REFS,
+  GEAR_SECTIONS,
+  gearRefsLabel,
+  SHOW_WEAPONS_MARK,
   getBaseGear,
   setGearMark,
 } from '../../src/plan/baseGear';
@@ -55,6 +59,7 @@ describe('matériel de base', () => {
       items: await repo.listItems(),
       documentCount: 0,
       bagNames: ['Sac de Paul'],
+      weaponCount: 0,
     });
     const by = Object.fromEntries(
       report.results.map(r => [r.definition.id, r]),
@@ -75,16 +80,26 @@ describe('matériel de base', () => {
 
     const csv = gearCsv(report);
     expect(
-      csv.startsWith('﻿Famille;Matériel;Statut;Dans le stock;Conseil\r\n'),
+      csv.startsWith(
+        '﻿Famille;Matériel;Statut;Dans le stock;Conseil;Source\r\n',
+      ),
     ).toBe(true);
-    expect(csv).toContain('Eau;Filtre à eau;Dans le stock;Paille filtrante;');
-    expect(csv).toContain('Argent liquide;Je l’ai;');
-    expect(csv).toContain('Éclairage et énergie;Piles de rechange;À prévoir;;');
+    expect(csv).toContain(
+      'Eau;Filtre à eau;Dans le stock;Paille filtrante;;Conseil courant, hors listes officielles',
+    );
+    expect(csv).toContain(
+      'Argent liquide;Je l’ai;;Les paiements par carte peuvent être coupés.;SGDSN, Géorisques, Canada, Belgique',
+    );
+    expect(csv).toContain(
+      'Éclairage et énergie;Piles de rechange;À prévoir;;;SGDSN, Géorisques, Ready.gov, Canada, Belgique',
+    );
 
     const html = gearHtml(report, '15/10/2026');
     expect(html).toContain('<h2>Outils</h2>');
     expect(html).toContain('Dans le stock : Couteau suisse');
     expect(html).not.toContain('Couteau de chasse');
+    expect(html).toContain('<td class="src">Conseil courant</td>');
+    expect(html).toContain('Sources : Guide « Tous responsables');
   });
 
   it('échappe les noms dans la page imprimable', async () => {
@@ -102,9 +117,111 @@ describe('matériel de base', () => {
       items: await repo.listItems(),
       documentCount: 2,
       bagNames: [],
+      weaponCount: 0,
     });
     const html = gearHtml(report, '15/10/2026');
     expect(html).toContain('Lampe &lt;b&gt;&quot;X&quot;&lt;/b&gt; &amp; co');
     expect(html).toContain('2 dans le dossier Documents');
+  });
+
+  it('cite une liste officielle pour chaque élément, sauf les conseils courants', () => {
+    const all = GEAR_SECTIONS.flatMap(section => section.items);
+    const ids = all.map(g => g.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const gear of all) {
+      expect(gear.refs.every(ref => ref in GEAR_REFS)).toBe(true);
+    }
+    expect(all.filter(g => g.refs.length === 0).map(g => g.id)).toEqual([
+      'water_filter',
+      'cookware',
+      'compass',
+      'rope',
+      'weapon_lock',
+      'ammo',
+      'magazines',
+      'cleaning',
+      'weapon_case',
+      'shooting_protection',
+      'weapon_papers',
+      'tourniquet',
+    ]);
+    expect(gearRefsLabel(all.find(g => g.id === 'keys')!)).toBe(
+      'SGDSN, Géorisques, Canada',
+    );
+  });
+
+  it('ajoute le volet armes sans rien en citer dans les exports', async () => {
+    const { db, repo } = await setup();
+    await repo.createItem(
+      {
+        name: 'Federal 9 mm',
+        category: 'weapon',
+        unit: 'unit',
+        caliber: '9x19',
+        attributes: { recordType: 'ammo' },
+      },
+      { quantity: 50 },
+    );
+    await repo.createItem(
+      {
+        name: 'Kit Otis',
+        category: 'weapon',
+        unit: 'unit',
+        subtype: 'cleaning',
+        attributes: { recordType: 'accessory' },
+      },
+      { quantity: 1 },
+    );
+    // Faux amis : rien de tout cela ne coche un autre élément.
+    for (const name of [
+      'Huile d’olive',
+      'Lentilles vertes',
+      'Sac de couchage',
+    ]) {
+      await repo.createItem(
+        { name, category: 'food', unit: 'kg' },
+        { quantity: 1 },
+      );
+    }
+    const items = await repo.listItems();
+    const base = { items, documentCount: 0, bagNames: [] };
+
+    const without = await getBaseGear(db, { ...base, weaponCount: 0 });
+    expect(without.weapons).toBe(false);
+    expect(without.weaponsOptional).toBe(true);
+    expect(without.results.some(r => r.section.weapons)).toBe(false);
+    expect(gearHtml(without, '15/10/2026')).not.toContain(
+      'sécurité intérieure',
+    );
+
+    // Sur demande, sans arme enregistrée.
+    await setGearMark(db, SHOW_WEAPONS_MARK, true);
+    expect((await getBaseGear(db, { ...base, weaponCount: 0 })).weapons).toBe(
+      true,
+    );
+    await setGearMark(db, SHOW_WEAPONS_MARK, false);
+
+    const report = await getBaseGear(db, { ...base, weaponCount: 1 });
+    expect(report.weaponsOptional).toBe(false);
+    const by = Object.fromEntries(
+      report.results.map(r => [r.definition.id, r]),
+    );
+    expect(by.ammo.detail).toBe('Federal 9 mm');
+    expect(by.cleaning.detail).toBe('Kit Otis');
+    expect(by.magazines.status).toBe('missing');
+    expect(by.weapon_safe.status).toBe('missing');
+    expect(by.powerbank.status).toBe('missing');
+    expect(by.glasses.status).toBe('missing');
+    expect(by.baby.status).toBe('missing');
+
+    const csv = gearCsv(report);
+    expect(csv).toContain(
+      'Armes (si vous en détenez);Munitions adaptées à vos armes;Dans le stock;;',
+    );
+    expect(csv).not.toContain('Federal');
+    expect(csv).not.toContain('Otis');
+    const html = gearHtml(report, '15/10/2026');
+    expect(html).not.toContain('Federal');
+    expect(html).toContain('Code de la sécurité intérieure');
   });
 });
