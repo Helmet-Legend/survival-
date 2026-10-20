@@ -335,8 +335,8 @@ export function HomeScreen() {
       <View style={styles.quickGrid}>
         <QuickLink
           icon={ListChecks}
-          label="Kit 72 h"
-          accessibilityLabel="Ouvrir la préparation par paliers"
+          label="Kit et matériel"
+          accessibilityLabel="Ouvrir le kit et matériel"
           onPress={() => navigation.open('preparation')}
         />
         <QuickLink

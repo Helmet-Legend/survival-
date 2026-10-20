@@ -6,7 +6,6 @@
 import {
   Calculator,
   ChevronRight,
-  ClipboardCheck,
   ClipboardList,
   Hourglass,
   House,
@@ -124,17 +123,10 @@ export function PrepareScreen() {
       <Text style={[text.label, styles.section]}>Où j’en suis</Text>
       <NavRow
         icon={ListChecks}
-        title="Check-lists par paliers"
-        detail="Maison et sacs · 3, 7 ou 10 jours"
-        accessibilityLabel="Ouvrir les check-lists par paliers"
+        title="Kit et matériel"
+        detail="Kit 72 h, matériel par famille, sacs · tableur et impression"
+        accessibilityLabel="Ouvrir le kit et matériel"
         onPress={open('preparation')}
-      />
-      <NavRow
-        icon={ClipboardCheck}
-        title="Matériel de base"
-        detail="Liste par famille · tableur et impression"
-        accessibilityLabel="Ouvrir la liste du matériel de base"
-        onPress={open('gear')}
       />
       <NavRow
         icon={ClipboardList}

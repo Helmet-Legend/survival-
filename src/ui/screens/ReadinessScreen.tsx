@@ -61,7 +61,7 @@ export function runReadinessAction(
 
 const ACTION_LABELS: Record<ReadinessAction['kind'], string> = {
   add: 'Ajouter au stock',
-  preparation: 'Voir le kit 72 h',
+  preparation: 'Voir le kit et matériel',
   familyPlan: 'Ouvrir le plan familial',
   documents: 'Ouvrir les documents',
   bags: 'Ouvrir les sacs',

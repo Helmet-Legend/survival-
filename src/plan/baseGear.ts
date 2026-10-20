@@ -787,14 +787,19 @@ export interface GearResult {
   definition: GearDefinition;
   section: GearSection;
   status: GearStatus;
-  /** Ce qui a été trouvé (« Lampe frontale, Torche »). */
+  /** Ce qui a été trouvé (« Lampe frontale, Torche »), ou « 6 j sur 3 ». */
   detail: string | null;
+  /** Eau et vivres comptés en jours : ni coche ni « dans le stock ». */
+  counted?: boolean;
 }
 
 export interface GearReport {
   results: GearResult[];
   have: number;
   total: number;
+  /** Éléments du kit 72 h officiel (SGDSN) présents, sur leur total. */
+  essentialHave: number;
+  essentialTotal: number;
   /** Volet armes inclus. */
   weapons: boolean;
   /** Aucune arme enregistrée : le volet armes s'affiche à la demande. */
@@ -806,7 +811,9 @@ export interface GearReport {
  * feuille imprimée ou un tableur sort du coffre chiffré).
  */
 function exportDetail(r: GearResult): string | null {
-  return r.status === 'stock' && !r.section.weapons ? r.detail : null;
+  return (r.status === 'stock' || r.counted === true) && !r.section.weapons
+    ? r.detail
+    : null;
 }
 
 function plain(text: string): string {
@@ -874,9 +881,22 @@ export async function getBaseGear(
     bagNames: readonly string[];
     /** Nombre d'armes enregistrées : le volet armes s'affiche s'il y en a. */
     weaponCount: number;
+    /**
+     * Jours d'eau et de vivres du foyer, et jours demandés (palier) : l'eau
+     * et les vivres se comptent alors en jours, comme pour l'indice.
+     */
+    autonomy?: { days: number; water: number; food: number };
   },
 ): Promise<GearReport> {
-  const marks = await loadMarks(db, GEAR_SCOPE);
+  const [own, home] = await Promise.all([
+    loadMarks(db, GEAR_SCOPE),
+    loadMarks(db, 'home'),
+  ]);
+  const marks = new Set([
+    ...own,
+    ...[...home].filter(id => SHARED_MARKS.has(id)),
+  ]);
+  const { autonomy } = input;
   const weapons = input.weaponCount > 0 || marks.has(SHOW_WEAPONS_MARK);
   const results: GearResult[] = [];
   for (const section of GEAR_SECTIONS) {
@@ -884,6 +904,24 @@ export async function getBaseGear(
       continue;
     }
     for (const definition of section.items) {
+      const days =
+        autonomy === undefined
+          ? undefined
+          : definition.id === 'water_reserve'
+          ? autonomy.water
+          : definition.id === 'food'
+          ? autonomy.food
+          : undefined;
+      if (autonomy !== undefined && days !== undefined) {
+        results.push({
+          definition,
+          section,
+          status: days >= autonomy.days ? 'stock' : 'missing',
+          detail: `${days} j sur ${autonomy.days}`,
+          counted: true,
+        });
+        continue;
+      }
       let detail: string | null;
       if (definition.source === 'documents') {
         detail =
@@ -910,21 +948,40 @@ export async function getBaseGear(
       });
     }
   }
+  const essentials = results.filter(r => isEssential(r.definition));
   return {
     results,
     have: results.filter(r => r.status !== 'missing').length,
     total: results.length,
+    essentialHave: essentials.filter(r => r.status !== 'missing').length,
+    essentialTotal: essentials.length,
     weapons,
     weaponsOptional: input.weaponCount === 0,
   };
 }
 
-export function setGearMark(
+/**
+ * Coches communes avec le kit 72 h de la maison (`preparation_marks`,
+ * périmètre `home`) : l'indice de préparation les lit là.
+ */
+const SHARED_MARKS: ReadonlySet<string> = new Set(['cash', 'keys']);
+
+export async function setGearMark(
   db: SqlDatabase,
   id: string,
   checked: boolean,
 ): Promise<void> {
-  return setMark(db, GEAR_SCOPE, id, checked);
+  if (SHARED_MARKS.has(id)) {
+    await setMark(db, GEAR_SCOPE, id, false);
+    await setMark(db, 'home', id, checked);
+    return;
+  }
+  await setMark(db, GEAR_SCOPE, id, checked);
+}
+
+/** Élément du kit 72 h officiel (guide « Tous responsables »). */
+export function isEssential(gear: GearDefinition): boolean {
+  return gear.refs.includes('sgdsn');
 }
 
 export const GEAR_STATUS_LABELS: Record<GearStatus, string> = {
@@ -1007,7 +1064,7 @@ export function gearHtml(report: GearReport, date: string): string {
       section.title,
     )}</h2><table><tr><th></th><th>Matériel</th><th>Source</th><th>Notes</th></tr>${rows}</table>`;
   }).join('');
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Matériel de base</title><style>
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Kit et matériel</title><style>
 body{font-family:sans-serif;color:#111;margin:24px;font-size:12pt}
 h1{font-size:18pt;margin:0}p{margin:4px 0 12px;color:#444}
 h2{font-size:13pt;margin:16px 0 4px;border-bottom:1px solid #999}
@@ -1019,7 +1076,7 @@ td.box{width:22px;font-size:15pt}td.note{width:30%}
 td.src{width:18%;font-size:9pt;color:#555}
 footer{margin-top:16px;font-size:9pt;color:#555}
 small{color:#555}
-</style></head><body><h1>Matériel de base</h1><p>${escapeHtml(date)} · ${
+</style></head><body><h1>Kit et matériel</h1><p>${escapeHtml(date)} · ${
     report.have
   } sur ${
     report.total

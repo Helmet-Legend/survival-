@@ -85,8 +85,7 @@ import { CrisisScreen } from './screens/CrisisScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
-import { BaseGearScreen } from './screens/BaseGearScreen';
-import { PreparationScreen } from './screens/PreparationScreen';
+import { KitScreen } from './screens/KitScreen';
 import {
   loadRedLight,
   RED_LIGHT_SUPPORTED,
@@ -385,9 +384,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               ) : overlay === 'familyPlan' ? (
                 <FamilyPlanScreen />
               ) : overlay === 'preparation' ? (
-                <PreparationScreen />
-              ) : overlay === 'gear' ? (
-                <BaseGearScreen />
+                <KitScreen />
               ) : overlay === 'calculators' ? (
                 <CalculatorsScreen />
               ) : overlay === 'scan' ? (

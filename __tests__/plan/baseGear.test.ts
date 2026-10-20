@@ -75,8 +75,10 @@ describe('matériel de base', () => {
     expect(report.have).toBe(
       report.results.filter(r => r.status !== 'missing').length,
     );
-    // Les coches de cette liste ne touchent pas celles des check-lists.
-    expect((await loadMarks(db, 'home')).size).toBe(0);
+    // Argent liquide et double des clés : coches communes avec le kit 72 h
+    // de la maison, que lit l’indice de préparation.
+    expect([...(await loadMarks(db, 'home'))]).toEqual(['cash']);
+    expect((await loadMarks(db, 'gear')).size).toBe(0);
 
     const csv = gearCsv(report);
     expect(
@@ -223,5 +225,32 @@ describe('matériel de base', () => {
     const html = gearHtml(report, '15/10/2026');
     expect(html).not.toContain('Federal');
     expect(html).toContain('Code de la sécurité intérieure');
+  });
+
+  it('compte l’eau et les vivres en jours selon le palier', async () => {
+    const { db, repo } = await setup();
+    const report = await getBaseGear(db, {
+      items: await repo.listItems(),
+      documentCount: 0,
+      bagNames: [],
+      weaponCount: 0,
+      autonomy: { days: 7, water: 10, food: 4 },
+    });
+    const by = Object.fromEntries(
+      report.results.map(r => [r.definition.id, r]),
+    );
+    expect(by.water_reserve).toMatchObject({
+      status: 'stock',
+      detail: '10 j sur 7',
+      counted: true,
+    });
+    expect(by.food).toMatchObject({ status: 'missing', detail: '4 j sur 7' });
+    expect(report.essentialTotal).toBe(
+      report.results.filter(r => r.definition.refs.includes('sgdsn')).length,
+    );
+    expect(report.essentialHave).toBe(1);
+    expect(gearCsv(report)).toContain(
+      'Alimentation;Vivres non périssables;À prévoir;4 j sur 7;',
+    );
   });
 });
