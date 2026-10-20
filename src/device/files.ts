@@ -13,11 +13,17 @@ export interface FileAccess {
   saveText(fileName: string, mime: string, text: string): Promise<boolean>;
   /** Propose l'ouverture d'un fichier ; son texte, ou null si annulé. */
   openText(): Promise<string | null>;
+  /**
+   * Ouvre l'impression du système sur une page HTML (imprimante ou
+   * « Enregistrer au format PDF ») ; absent si le téléphone ne sait pas.
+   */
+  printHtml?(jobName: string, html: string): Promise<void>;
 }
 
 interface NativeFilesModule {
   saveText(fileName: string, mime: string, text: string): Promise<boolean>;
   openText(): Promise<string | null>;
+  printHtml?(jobName: string, html: string): Promise<void>;
 }
 
 export function nativeFiles(): FileAccess {
@@ -34,10 +40,17 @@ export function nativeFiles(): FileAccess {
   }
   // Le sélecteur du système passe l'application en arrière-plan : le
   // verrouillage automatique est suspendu le temps du choix.
+  const print = native.printHtml;
   return {
     available: true,
     saveText: (fileName, mime, text) =>
       whileAway(() => native.saveText(fileName, mime, text)),
     openText: () => whileAway(() => native.openText()),
+    ...(print
+      ? {
+          printHtml: (jobName: string, html: string) =>
+            whileAway(() => print(jobName, html)),
+        }
+      : {}),
   };
 }

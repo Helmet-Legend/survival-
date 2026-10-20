@@ -572,7 +572,10 @@ describe('cycle de vie', () => {
 describe('écrans', () => {
   async function openApp(
     extra: Partial<
-      Pick<Parameters<typeof AppRoot>[0], 'scanSource' | 'productFetch'>
+      Pick<
+        Parameters<typeof AppRoot>[0],
+        'scanSource' | 'productFetch' | 'files'
+      >
     > = {},
   ) {
     const ctx = await existingVault();
@@ -583,6 +586,50 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
     return ctx;
   }
+
+  it('liste le matériel de base, coche à la main, exporte et imprime', async () => {
+    const out: { csv?: string; html?: string } = {};
+    await openApp({
+      files: {
+        available: true,
+        saveText: async (_name, _mime, text) => {
+          out.csv = text;
+          return true;
+        },
+        openText: async () => null,
+        printHtml: async (_job, html) => {
+          out.html = html;
+        },
+      },
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la liste du matériel de base'),
+    );
+    const cash = await screen.findByRole('checkbox', {
+      name: 'Argent liquide',
+    });
+    expect(cash.props.accessibilityState.checked).toBe(false);
+    await fireEvent.press(cash);
+    expect(await screen.findByText('Coché à la main')).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText('Exporter la liste en tableur (Excel)'),
+    );
+    expect(await screen.findByText('Liste exportée en tableur.')).toBeTruthy();
+    expect(out.csv).toContain('Argent liquide;Je l’ai;');
+
+    await fireEvent.press(
+      screen.getByLabelText('Imprimer la liste ou l’enregistrer en PDF'),
+    );
+    expect(out.html).toContain('<h1>Matériel de base</h1>');
+
+    // « À prévoir » masque ce qui est déjà là.
+    await fireEvent.press(screen.getByText(/^À prévoir \(\d+\)$/));
+    expect(screen.queryByText('Argent liquide')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Ajouter : Boussole'));
+    expect(await screen.findByDisplayValue('Boussole')).toBeTruthy();
+  });
 
   it('vérifie le kit 72 h d’après le stock et ouvre la fiche d’un manque', async () => {
     await openApp();

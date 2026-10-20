@@ -1,20 +1,33 @@
 package com.resilios.files
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.UiThreadUtil
 import kotlin.concurrent.thread
 
 /**
  * Enregistrer ou ouvrir un fichier choisi par l'utilisateur (carte SD, clé
  * USB, dossier Téléchargements…) avec le sélecteur du système : aucune
  * permission de stockage n'est nécessaire. Sert aux sauvegardes chiffrées
- * et à l'export du stock.
+ * et à l'export du stock. Imprime aussi une page HTML (imprimante ou PDF)
+ * avec le service d'impression du système.
  */
 class FilesModule(private val context: ReactApplicationContext) :
     ReactContextBaseJavaModule(context), ActivityEventListener {
@@ -60,6 +73,90 @@ class FilesModule(private val context: ReactApplicationContext) :
     } catch (e: Exception) {
       fail("OPEN_FAILED", e.message ?: "Ouverture impossible")
     }
+  }
+
+  /** Page en cours d'impression : gardée tant que le système la lit. */
+  private var printView: WebView? = null
+
+  /**
+   * Ouvre l'impression du système sur `html` (sans JavaScript ni réseau) ;
+   * résout quand l'impression est terminée ou annulée.
+   */
+  @ReactMethod
+  fun printHtml(jobName: String, html: String, promise: Promise) {
+    val activity = context.currentActivity
+    if (activity == null) {
+      promise.reject("NO_ACTIVITY", "Application au second plan")
+      return
+    }
+    UiThreadUtil.runOnUiThread {
+      try {
+        val view = WebView(activity)
+        view.settings.javaScriptEnabled = false
+        view.settings.blockNetworkLoads = true
+        view.settings.allowFileAccess = false
+        var started = false
+        view.webViewClient =
+            object : WebViewClient() {
+              override fun shouldOverrideUrlLoading(
+                  v: WebView,
+                  request: WebResourceRequest
+              ) = true
+
+              override fun onPageFinished(v: WebView, url: String?) {
+                if (started) {
+                  return
+                }
+                started = true
+                try {
+                  print(activity, v, jobName, promise)
+                } catch (e: Exception) {
+                  printView = null
+                  promise.reject("PRINT_FAILED", e.message ?: "Impression impossible", e)
+                }
+              }
+            }
+        printView = view
+        view.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+      } catch (e: Exception) {
+        printView = null
+        promise.reject("PRINT_FAILED", e.message ?: "Impression impossible", e)
+      }
+    }
+  }
+
+  private fun print(activity: Activity, view: WebView, jobName: String, promise: Promise) {
+    val manager = activity.getSystemService(Context.PRINT_SERVICE) as PrintManager
+    val inner = view.createPrintDocumentAdapter(jobName)
+    val adapter =
+        object : PrintDocumentAdapter() {
+          override fun onStart() = inner.onStart()
+
+          override fun onLayout(
+              oldAttributes: PrintAttributes?,
+              newAttributes: PrintAttributes,
+              cancellationSignal: CancellationSignal?,
+              callback: LayoutResultCallback,
+              extras: Bundle?
+          ) = inner.onLayout(oldAttributes, newAttributes, cancellationSignal, callback, extras)
+
+          override fun onWrite(
+              pages: Array<out PageRange>,
+              destination: ParcelFileDescriptor,
+              cancellationSignal: CancellationSignal?,
+              callback: WriteResultCallback
+          ) = inner.onWrite(pages, destination, cancellationSignal, callback)
+
+          override fun onFinish() {
+            inner.onFinish()
+            printView = null
+            promise.resolve(null)
+          }
+        }
+    manager.print(
+        jobName,
+        adapter,
+        PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build())
   }
 
   override fun onActivityResult(
