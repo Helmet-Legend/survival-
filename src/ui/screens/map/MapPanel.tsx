@@ -31,7 +31,7 @@ import {
 } from '../../components/controls';
 import { formatNumber } from '../../format';
 import { useSession } from '../../session';
-import { colors, space, text } from '../../theme';
+import { colors, radius as corners, space, text, tint } from '../../theme';
 import { useLoader } from '../../useLoader';
 import { clearTileCache, OfflineMap, type MapView } from './OfflineMap';
 import { loadAllPoints } from './PointsView';
@@ -186,31 +186,41 @@ export function MapPanel(props: {
 
   return (
     <View style={styles.page}>
-      <OfflineMap
-        store={tiles}
-        view={view}
-        onViewChange={setView}
-        points={data?.points ?? []}
-        here={props.here}
-        onPointPress={props.onPointPress}
-        onLongPress={props.onLongPress}
-        onLocate={() => {
-          props
-            .locate()
-            .then(fix => {
-              if (fix) {
-                setView({ center: fix, zoom: Math.max(view.zoom, 15) });
-              }
-            })
-            .catch(() => undefined);
-        }}
-        locating={props.locating}
-        crosshair={picking}
-        revision={revision}
-        attribution={IGN_PLAN.attribution}
-        height={380}
-        onTouching={props.onTouching}
-      />
+      <View>
+        <OfflineMap
+          store={tiles}
+          view={view}
+          onViewChange={setView}
+          points={data?.points ?? []}
+          here={props.here}
+          onPointPress={props.onPointPress}
+          onLongPress={props.onLongPress}
+          onLocate={() => {
+            props
+              .locate()
+              .then(fix => {
+                if (fix) {
+                  setView({ center: fix, zoom: Math.max(view.zoom, 15) });
+                }
+              })
+              .catch(() => undefined);
+          }}
+          locating={props.locating}
+          crosshair={picking}
+          revision={revision}
+          attribution={IGN_PLAN.attribution}
+          height={380}
+          onTouching={props.onTouching}
+        />
+        {data && data.areas.length === 0 && !busy && !picking ? (
+          <View pointerEvents="none" style={styles.empty}>
+            <Text style={styles.emptyTitle}>Aucune carte téléchargée</Text>
+            <Text style={styles.emptyText}>
+              Placez la zone voulue au centre, puis « Télécharger une zone ».
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={text.subtle}>
         Glissez pour déplacer, pincez ou + / − pour zoomer. Appui long : nouveau
         point à cet endroit.
@@ -400,4 +410,19 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   section: { marginTop: space.s },
   title: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  empty: {
+    position: 'absolute',
+    left: space.l,
+    right: space.l,
+    top: 210,
+    padding: space.m,
+    gap: 4,
+    borderRadius: corners.card,
+    backgroundColor: tint(colors.bg, 'e6'),
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  emptyText: { ...text.subtle, textAlign: 'center' },
 });

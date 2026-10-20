@@ -335,15 +335,18 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         <RedLightContext.Provider value={redLight}>
           <NavigationContext.Provider value={navigation}>
             {overlay === 'stockForm' ? null : (
-              <View style={styles.bar}>
+              <View style={[styles.bar, overlay !== null && styles.barCompact]}>
                 <IconButton
                   icon={Lock}
                   label="Verrouiller"
                   onPress={() => lock()}
                 />
+                {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
                 <View style={styles.brandBox}>
-                  <Brand size={24} />
-                  <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                  <Brand size={overlay === null ? 24 : 18} />
+                  {overlay === null ? (
+                    <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -536,6 +539,7 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
     paddingBottom: space.m,
   },
+  barCompact: { paddingTop: space.xs, paddingBottom: space.xs },
   cover: {
     position: 'absolute',
     top: 0,

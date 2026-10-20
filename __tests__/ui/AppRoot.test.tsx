@@ -973,12 +973,11 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Lampe frontale')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Retour'));
     await fireEvent.press(await screen.findByRole('tab', { name: 'Accueil' }));
+    // Raccourci vers le plan d’achats ; le retour ramène à l’accueil.
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir les fiches pratiques'),
+      await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
-    expect(
-      screen.getByRole('tab', { name: 'Fiches' }).props.accessibilityState,
-    ).toEqual({ selected: true });
+    expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
   });
 
   it('règle le foyer dans Mon foyer et ouvre le kit depuis l’urgence', async () => {
@@ -1519,9 +1518,9 @@ describe('écrans', () => {
       screen.getByLabelText('Nourriture : 36 000 kcal, 1 article'),
     ).toBeTruthy();
     expect(screen.getByLabelText('Outils : 0 article')).toBeTruthy();
-    expect(
-      screen.getByLabelText('Armement : 0 munition, 0 arme, 0 article'),
-    ).toBeTruthy();
+    // Sans arme : pas de carte Armement vide, la puce reste.
+    expect(screen.queryByLabelText(/^Armement :/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Armement' })).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
     const firstAid = BUNDLED_GUIDES.filter(g => g.category === 'Santé').length;

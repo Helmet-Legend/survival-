@@ -6,14 +6,14 @@
  */
 import {
   BatteryCharging,
-  BookOpen,
   CalendarClock,
   ChevronRight,
+  ClipboardList,
   Flashlight,
   Hourglass,
   ListChecks,
-  Compass,
   ScanBarcode,
+  ShoppingCart,
   Users,
 } from 'lucide-react-native';
 import React from 'react';
@@ -280,6 +280,50 @@ export function HomeScreen() {
         )}
       </Panel>
 
+      {/* Péremptions : l'information la plus urgente, avant les raccourcis. */}
+      <Panel
+        title="Péremptions à surveiller"
+        right={
+          alerts.length > HOME_ALERTS ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Voir les ${alerts.length} péremptions`}
+              onPress={() => navigation.open('plan')}
+              hitSlop={12}
+            >
+              <Text style={styles.link}>Tout voir ({alerts.length}) ›</Text>
+            </Pressable>
+          ) : (
+            <CalendarClock color={colors.purple} size={20} />
+          )
+        }
+      >
+        {alerts.length === 0 ? (
+          <Text style={text.muted}>
+            Aucune péremption dans les 90 prochains jours.
+          </Text>
+        ) : (
+          alerts.slice(0, HOME_ALERTS).map(alert => (
+            <View key={alert.lotId} style={styles.alert}>
+              <View style={styles.grow}>
+                <Text style={text.body} numberOfLines={1}>
+                  {alert.itemName}
+                </Text>
+                <Text style={text.subtle}>
+                  {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
+                  {formatRelativeDays(alert.daysLeft)}
+                  {alert.bagName ? ` · ${alert.bagName}` : ''}
+                </Text>
+              </View>
+              <StatusChip
+                tone={BUCKET_TONES[alert.bucket]}
+                label={BUCKET_LABELS[alert.bucket]}
+              />
+            </View>
+          ))
+        )}
+      </Panel>
+
       {/* Ressources essentielles, en tuiles compactes. */}
       <View style={styles.tiles}>
         <ResourceTile
@@ -358,61 +402,18 @@ export function HomeScreen() {
           onPress={() => navigation.open('scan')}
         />
         <QuickLink
-          icon={Compass}
-          label="Position"
-          accessibilityLabel="Ouvrir Position : coordonnées et azimut"
-          onPress={() => navigation.goTo('map')}
+          icon={ShoppingCart}
+          label="Plan d’achats"
+          accessibilityLabel="Ouvrir le plan d’achats"
+          onPress={() => navigation.open('purchases')}
         />
         <QuickLink
-          icon={BookOpen}
-          label="Fiches"
-          accessibilityLabel="Ouvrir les fiches pratiques"
-          onPress={() => navigation.goTo('guides')}
+          icon={ClipboardList}
+          label="À racheter"
+          accessibilityLabel="Ouvrir le plan d’action : à racheter et péremptions"
+          onPress={() => navigation.open('plan')}
         />
       </View>
-
-      <Panel
-        title="Péremptions à surveiller"
-        right={
-          alerts.length > HOME_ALERTS ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Voir les ${alerts.length} péremptions`}
-              onPress={() => navigation.open('plan')}
-              hitSlop={12}
-            >
-              <Text style={styles.link}>Tout voir ({alerts.length}) ›</Text>
-            </Pressable>
-          ) : (
-            <CalendarClock color={colors.purple} size={20} />
-          )
-        }
-      >
-        {alerts.length === 0 ? (
-          <Text style={text.muted}>
-            Aucune péremption dans les 90 prochains jours.
-          </Text>
-        ) : (
-          alerts.slice(0, HOME_ALERTS).map(alert => (
-            <View key={alert.lotId} style={styles.alert}>
-              <View style={styles.grow}>
-                <Text style={text.body} numberOfLines={1}>
-                  {alert.itemName}
-                </Text>
-                <Text style={text.subtle}>
-                  {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
-                  {formatRelativeDays(alert.daysLeft)}
-                  {alert.bagName ? ` · ${alert.bagName}` : ''}
-                </Text>
-              </View>
-              <StatusChip
-                tone={BUCKET_TONES[alert.bucket]}
-                label={BUCKET_LABELS[alert.bucket]}
-              />
-            </View>
-          ))
-        )}
-      </Panel>
     </ScrollView>
   );
 }

@@ -352,6 +352,16 @@ export function StockScreen() {
   const today = localToday();
   const showCategories = filter === 'all' && query.trim() === '';
 
+  // Sans arme ni article d'armement, pas de carte « 0 munition » dans la vue
+  // d'ensemble ; la puce Armement reste pour en enregistrer une.
+  const visibleCategories = STOCK_ORDER.filter(
+    c =>
+      c !== 'weapon' ||
+      data === null ||
+      data.weapons.length > 0 ||
+      data.all.some(i => i.category === 'weapon'),
+  );
+
   return (
     <ScrollView
       contentContainerStyle={styles.page}
@@ -555,7 +565,7 @@ export function StockScreen() {
           />
 
           {showCategories && data
-            ? STOCK_ORDER.map(c => {
+            ? visibleCategories.map(c => {
                 const inCategory = data.all.filter(i => i.category === c);
                 const amount = categoryAmount(c, inCategory);
                 const alerts = inCategory.filter(

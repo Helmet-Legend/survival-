@@ -297,19 +297,33 @@ export function MapScreen() {
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!touchingMap}
     >
-      <View style={styles.chips}>
+      {/* Quatre modes sur une ligne, chacun à la largeur de son libellé. */}
+      <View style={styles.modes}>
         {MODES.map(([m, label]) => (
-          <Chip
+          <Pressable
             key={m}
-            label={label}
-            selected={mode === m}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mode === m }}
             onPress={() => {
               setMode(m);
               if (m === 'points') {
                 setPointsRoute({ kind: 'list' });
               }
             }}
-          />
+            style={({ pressed }) => [
+              styles.mode,
+              mode === m && styles.modeOn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={[styles.modeText, mode === m && styles.modeTextOn]}
+            >
+              {label}
+            </Text>
+          </Pressable>
         ))}
       </View>
 
@@ -564,6 +578,28 @@ const styles = StyleSheet.create({
     gap: space.m,
   },
   chips: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
+  modes: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    padding: 3,
+    gap: 3,
+  },
+  mode: {
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    paddingHorizontal: space.s,
+  },
+  modeOn: { backgroundColor: colors.primary },
+  modeText: { color: colors.text, fontSize: 12, fontWeight: '600' },
+  modeTextOn: { color: colors.bg, fontWeight: '700' },
   pair: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   half: { flex: 1, minWidth: 120 },
   grow: { flex: 1, minWidth: 0 },
