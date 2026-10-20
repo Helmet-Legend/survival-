@@ -9,6 +9,8 @@
 interface MedicineTable {
   generated: string | null;
   cip: Record<string, string>;
+  /** Spécialité (code CIS) de chaque présentation, par CIP 13. */
+  cis?: Record<string, string>;
 }
 
 let table: MedicineTable | null = null;
@@ -19,7 +21,11 @@ function load(): MedicineTable {
       // Chargée à la première lecture seulement : plusieurs mégaoctets.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const raw = require('./medicines.data.json') as Partial<MedicineTable>;
-      table = { generated: raw.generated ?? null, cip: raw.cip ?? {} };
+      table = {
+        generated: raw.generated ?? null,
+        cip: raw.cip ?? {},
+        cis: raw.cis ?? {},
+      };
     } catch {
       table = { generated: null, cip: {} };
     }
@@ -37,6 +43,11 @@ export function medicineName(code: string): string | null {
     return null;
   }
   return load().cip[code] ?? null;
+}
+
+/** Code CIS de la spécialité d'une présentation (ruptures ANSM). */
+export function medicineCis(code: string): string | null {
+  return load().cis?.[code] ?? null;
 }
 
 /** Date de génération et nombre de présentations connues. */

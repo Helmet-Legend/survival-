@@ -17,6 +17,7 @@ import type { Argon2Params } from '../crypto/params';
 import type { Argon2Engine, RandomSource } from '../crypto/types';
 import type { ReminderScheduler } from '../resilience/reminders';
 import type { PhotoSource } from '../photo/photoSource';
+import type { AlertFetch } from '../alerts/types';
 import type { ProductFetch } from '../scanner/products';
 import type { ScanSource } from '../scanner/scanSource';
 import type { VaultDatabase } from '../vault';
@@ -54,6 +55,8 @@ export interface Session {
   scanSource: ScanSource;
   /** Requête vers Open Food Facts, faite seulement avec l'accord donné. */
   productFetch: ProductFetch;
+  /** Téléchargement des alertes (désactivées par défaut). */
+  alertFetch: AlertFetch;
 }
 
 export interface BackupCrypto {

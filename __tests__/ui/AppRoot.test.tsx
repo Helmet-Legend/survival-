@@ -574,7 +574,7 @@ describe('écrans', () => {
     extra: Partial<
       Pick<
         Parameters<typeof AppRoot>[0],
-        'scanSource' | 'productFetch' | 'files'
+        'scanSource' | 'productFetch' | 'files' | 'alertFetch'
       >
     > = {},
   ) {
@@ -586,6 +586,82 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
     return ctx;
   }
+
+  it('active les alertes et annonce une vigilance orange sur l’accueil', async () => {
+    const calls: string[] = [];
+    await openApp({
+      alertFetch: async url => {
+        calls.push(url);
+        const body = url.includes('meteoalarm')
+          ? {
+              warnings: [
+                {
+                  alert: {
+                    info: [
+                      {
+                        language: 'fr-FR',
+                        parameter: [
+                          { valueName: 'awareness_level', value: '3; orange' },
+                          {
+                            valueName: 'awareness_type',
+                            value: '12; flooding',
+                          },
+                        ],
+                        area: [{ areaDesc: 'Gard' }],
+                        instruction: 'Évitez les abords des cours d’eau.',
+                        expires: '2099-01-01T00:00:00+00:00',
+                      },
+                    ],
+                  },
+                },
+              ],
+            }
+          : url.includes('ecogaz')
+          ? { results: [] }
+          : [];
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(body),
+        };
+      },
+    });
+    // Désactivées par défaut : aucun bandeau, aucun téléchargement.
+    expect(screen.queryByText('ALERTE EN COURS')).toBeNull();
+    expect(calls).toEqual([]);
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Ouvrir les alertes : vigilances, rappels, ruptures',
+      ),
+    );
+    await fireEvent(
+      await screen.findByLabelText('Recevoir les alertes en ligne'),
+      'valueChange',
+      true,
+    );
+    await fireEvent.changeText(
+      await screen.findByLabelText('Départements suivis'),
+      '30',
+    );
+    await fireEvent(
+      screen.getByLabelText('Départements suivis'),
+      'submitEditing',
+    );
+    expect(await screen.findByText('Vigilance orange crues')).toBeTruthy();
+    expect(screen.getByText('Évitez les abords des cours d’eau.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(await screen.findByText('ALERTE EN COURS')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText(
+        /^Vigilance orange crues, Gard\. Ouvrir les alertes$/,
+      ),
+    );
+    expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
+    expect(screen.getByText('Vigilance orange crues')).toBeTruthy();
+  });
 
   it('réunit kit 72 h et matériel, coche à la main, exporte et imprime', async () => {
     const out: { csv?: string; html?: string } = {};

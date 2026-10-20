@@ -74,6 +74,7 @@ export function buildTable(cisText, cipText) {
     }
   }
   const cip = {};
+  const cis = {};
   for (const line of cipText.split(/\r?\n/)) {
     const cols = line.split('\t');
     const code = clean(cols[6]);
@@ -83,8 +84,9 @@ export function buildTable(cisText, cipText) {
     }
     const presentation = clean(cols[2]).slice(0, 80);
     cip[code] = presentation ? `${name} — ${presentation}` : name;
+    cis[code] = cols[0];
   }
-  return cip;
+  return { cip, cis };
 }
 
 async function main() {
@@ -94,13 +96,13 @@ async function main() {
       fetchFile('CIS_bdpm.txt', localDir),
       fetchFile('CIS_CIP_bdpm.txt', localDir),
     ]);
-    const cip = buildTable(cisText, cipText);
+    const { cip, cis } = buildTable(cisText, cipText);
     const count = Object.keys(cip).length;
     if (count < 1000) {
       throw new Error(`seulement ${count} présentations reconnues`);
     }
     const generated = new Date().toISOString().slice(0, 10);
-    await writeFile(OUT, JSON.stringify({ generated, cip }));
+    await writeFile(OUT, JSON.stringify({ generated, cip, cis }));
     console.log(
       `Base des médicaments : ${count} présentations (${generated}).`,
     );

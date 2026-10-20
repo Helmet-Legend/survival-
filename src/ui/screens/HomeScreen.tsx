@@ -29,6 +29,7 @@ import {
   type ExpiryAlert,
 } from '../../resilience/resilienceCalculator';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
+import { AlertBanner } from '../components/AlertBanner';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import { Notice, Panel, StatusChip, Stepper } from '../components/controls';
 import {
@@ -63,6 +64,7 @@ import {
   text,
   tint,
 } from '../theme';
+import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
 
 /** Même borne que dans les Réglages. */
@@ -73,6 +75,7 @@ const HOME_ALERTS = 3;
 export function HomeScreen() {
   const { db, repo, documents, bags } = useSession();
   const navigation = useNavigation();
+  const { alerts: officialAlerts } = useAlerts();
   const { data, error, reload } = useLoader(async () => {
     const today = localToday();
     const [
@@ -147,6 +150,12 @@ export function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      {/* Alerte en cours : en premier, rouge ou orange. */}
+      <AlertBanner
+        alerts={officialAlerts}
+        onPress={() => navigation.open('alerts')}
+      />
+
       {/* Synthèse : jauge compacte, objectif, ressource limitante. */}
       <View style={styles.summary}>
         <View style={styles.summaryRow}>

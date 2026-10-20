@@ -12,6 +12,7 @@ import {
   Phone,
   Users,
   ListChecks,
+  TriangleAlert,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -146,6 +147,13 @@ export function EmergencyScreen() {
         label="Kit et matériel"
         accessibilityLabel="Ouvrir le kit et matériel"
         onPress={() => navigation.open('preparation')}
+      />
+      <Button
+        icon={TriangleAlert}
+        chevron
+        label="Alertes en cours"
+        accessibilityLabel="Ouvrir les alertes : vigilances, rappels, ruptures"
+        onPress={() => navigation.open('alerts')}
       />
 
       <Panel
