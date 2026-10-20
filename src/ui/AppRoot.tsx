@@ -17,6 +17,8 @@ import React, {
 } from 'react';
 import {
   AppState,
+  Image,
+  type ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -344,18 +346,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
           <NavigationContext.Provider value={navigation}>
             {overlay === 'stockForm' ? null : (
               <View style={[styles.bar, overlay !== null && styles.barCompact]}>
-                <IconButton
-                  icon={Lock}
-                  label="Verrouiller"
-                  onPress={() => lock()}
-                />
-                {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
-                <View style={styles.brandBox}>
-                  <Brand size={overlay === null ? 24 : 18} />
-                  {overlay === null ? (
-                    <Text style={styles.vaultBadge}>Coffre chiffré</Text>
-                  ) : null}
-                </View>
+                {/* SOS seul à gauche, loin des autres boutons : moins d'appuis par erreur. */}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Ouvrir l’écran Urgence"
@@ -370,16 +361,39 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                   <TriangleAlert color={SOS_TEXT} size={18} strokeWidth={2.4} />
                   <Text style={styles.sosText}>SOS</Text>
                 </Pressable>
-                <IconButton
-                  icon={Settings}
-                  label="Réglages"
-                  color={overlay === 'settings' ? colors.primary : colors.text}
-                  onPress={() =>
-                    overlay === 'settings'
-                      ? navigation.close()
-                      : navigation.open('settings')
-                  }
-                />
+                {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
+                <View style={styles.brandBox}>
+                  <Image
+                    source={LOGO}
+                    style={overlay === null ? styles.logo : styles.logoSmall}
+                    accessibilityIgnoresInvertColors
+                  />
+                  <View style={styles.brandText}>
+                    <Brand size={overlay === null ? 20 : 18} />
+                    {overlay === null ? (
+                      <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                    ) : null}
+                  </View>
+                </View>
+                <View style={styles.tools}>
+                  <IconButton
+                    icon={Lock}
+                    label="Verrouiller"
+                    onPress={() => lock()}
+                  />
+                  <IconButton
+                    icon={Settings}
+                    label="Réglages"
+                    color={
+                      overlay === 'settings' ? colors.primary : colors.text
+                    }
+                    onPress={() =>
+                      overlay === 'settings'
+                        ? navigation.close()
+                        : navigation.open('settings')
+                    }
+                  />
+                </View>
               </View>
             )}
             <KeyboardAvoidingView
@@ -512,13 +526,28 @@ function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
   );
 }
 
+/** Tête de loup du logo, détourée en rond. */
+const LOGO_FILE: number | string = require('./assets/fenrir-logo.png');
+// Aperçu web : `require` donne une URL de données.
+const LOGO: ImageSourcePropType =
+  typeof LOGO_FILE === 'string' ? { uri: LOGO_FILE } : LOGO_FILE;
+
 /** Rouge clair lisible sur le fond rouge sombre du bouton SOS. */
 const SOS_TEXT = '#FF8A96';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  brandBox: { flex: 1, alignItems: 'center', gap: 2 },
+  brandBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.s,
+  },
+  brandText: { alignItems: 'center', gap: 2 },
+  logo: { width: 42, height: 42, borderRadius: 21 },
+  logoSmall: { width: 32, height: 32, borderRadius: 16 },
   vaultBadge: { color: colors.success, fontSize: 11, fontWeight: '600' },
   sos: {
     flexDirection: 'row',
@@ -530,8 +559,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.danger,
     backgroundColor: colors.dangerSurface,
-    marginRight: space.xs,
+    marginRight: space.m,
   },
+  tools: { flexDirection: 'row', alignItems: 'center', marginLeft: space.m },
   sosOn: { backgroundColor: '#4A121D' },
   sosText: {
     color: SOS_TEXT,
@@ -549,7 +579,8 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
     paddingBottom: space.m,
   },
-  barCompact: { paddingTop: space.xs, paddingBottom: space.xs },
+  // Assez d’espace sous le SOS pour ne pas toucher le bouton Retour.
+  barCompact: { paddingTop: space.xs, paddingBottom: space.m },
   cover: {
     position: 'absolute',
     top: 0,

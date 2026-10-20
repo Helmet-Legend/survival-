@@ -8,12 +8,13 @@ import {
   BatteryCharging,
   CalendarClock,
   ChevronRight,
-  ClipboardList,
-  Flashlight,
+  CircleAlert,
+  CirclePlus,
   Hourglass,
   ListChecks,
   ScanBarcode,
   ShoppingCart,
+  Target,
   Users,
 } from 'lucide-react-native';
 import React from 'react';
@@ -25,22 +26,17 @@ import {
   getExpiryAlerts,
   getResilienceReport,
   loadTargetDays,
-  saveHousehold,
   type ExpiryAlert,
 } from '../../resilience/resilienceCalculator';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
 import { AlertBanner } from '../components/AlertBanner';
 import { AutonomyGauge } from '../components/AutonomyGauge';
-import { Notice, Panel, StatusChip, Stepper } from '../components/controls';
+import { Notice } from '../components/controls';
 import {
   autonomyStatus,
-  BUCKET_LABELS,
-  BUCKET_TONES,
   formatDate,
   formatEuros,
   formatNumber,
-  formatRelativeDays,
-  UNIT_LABELS,
 } from '../format';
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation, type Navigation } from '../navigation';
@@ -67,16 +63,11 @@ import {
 import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
 
-/** Même borne que dans les Réglages. */
-const MAX_MEMBERS = 12;
-/** Péremptions affichées sur l'accueil ; la liste complète est au plan. */
-const HOME_ALERTS = 3;
-
 export function HomeScreen() {
   const { db, repo, documents, bags } = useSession();
   const navigation = useNavigation();
   const { alerts: officialAlerts } = useAlerts();
-  const { data, error, reload } = useLoader(async () => {
+  const { data, error } = useLoader(async () => {
     const today = localToday();
     const [
       report,
@@ -134,7 +125,7 @@ export function HomeScreen() {
       </View>
     );
   }
-  const { today, report, alerts, targetDays, energy } = data;
+  const { today, report, targetDays, energy } = data;
   const { household } = report;
   const status = autonomyStatus(report.days, targetDays);
   const limiting = report.limitingFactor === 'water' ? 'eau' : 'vivres';
@@ -142,11 +133,14 @@ export function HomeScreen() {
   const noFood =
     report.limitingFactor === 'food' && report.food.available === 0;
   const members = household.members;
-  const changeMembers = async (delta: number) => {
-    await saveHousehold(db, { ...household, members: members + delta });
-    await reload();
-  };
   const todos = buildTodos(data, navigation);
+
+  const pct = (days: number | null) =>
+    days === null ? null : Math.min(100, Math.round((days / targetDays) * 100));
+  const waterPct = pct(report.water.days);
+  const foodPct = pct(report.food.days);
+  const energyPct = pct(energy.days);
+  const progress = Math.min(1, report.days / targetDays);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -156,9 +150,18 @@ export function HomeScreen() {
         onPress={() => navigation.open('alerts')}
       />
 
-      {/* Synthèse : jauge compacte, objectif, ressource limitante. */}
+      {/* Autonomie : jauge, objectif, ressource limitante, puis les
+          ressources en pourcentage de l'objectif. */}
       <View style={styles.summary}>
-        <View style={styles.summaryRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Détail du calcul : ouvrir le plan d’action"
+          onPress={() => navigation.open('plan')}
+          style={({ pressed }) => [
+            styles.summaryRow,
+            pressed && styles.pressed,
+          ]}
+        >
           <AutonomyGauge
             compact
             days={report.days}
@@ -167,10 +170,10 @@ export function HomeScreen() {
           />
           <View style={styles.summaryText}>
             <Text style={text.label}>Autonomie du foyer</Text>
-            <View style={styles.chips}>
-              <StatusChip tone={status.tone} label={status.label} />
+            <View style={styles.goal}>
+              <Target color={colors.warning} size={16} strokeWidth={2.2} />
+              <Text style={styles.goalText}>Objectif {targetDays} jours</Text>
             </View>
-            <Text style={styles.targetText}>objectif {targetDays} j</Text>
             {noFood ? null : (
               <>
                 <Text style={styles.limitingText}>
@@ -181,8 +184,21 @@ export function HomeScreen() {
                 </Text>
               </>
             )}
+            <View style={styles.bar}>
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    width: `${Math.round(progress * 100)}%`,
+                    backgroundColor:
+                      progress >= 1 ? colors.success : colors.primary,
+                  },
+                ]}
+              />
+            </View>
           </View>
-        </View>
+          <ChevronRight color={colors.textMuted} size={20} />
+        </Pressable>
         {noFood ? (
           <Pressable
             accessibilityRole="button"
@@ -201,189 +217,135 @@ export function HomeScreen() {
             <ChevronRight color={colors.text} size={20} />
           </Pressable>
         ) : null}
-        <View style={styles.household}>
-          <Users color={colors.cyan} size={20} strokeWidth={2} />
-          <Text style={[styles.householdTitle, styles.grow]}>Foyer</Text>
-          <Stepper
-            value={`${members} pers.`}
-            onDecrease={() => {
-              void changeMembers(-1);
-            }}
-            onIncrease={() => {
-              void changeMembers(1);
-            }}
-            canDecrease={members > 1}
-            canIncrease={members < MAX_MEMBERS}
-            decreaseLabel="Retirer une personne"
-            increaseLabel="Ajouter une personne"
+        <View style={styles.stats}>
+          <Stat
+            icon={Users}
+            color={colors.cyan}
+            value={String(members)}
+            unit="pers."
+            sub="foyer ›"
+            accessibilityLabel={`Foyer : ${members} personne${
+              members > 1 ? 's' : ''
+            }. Hypothèses du calcul. Modifier dans Mon foyer`}
+            onPress={() => navigation.open('household')}
+          />
+          <Stat
+            icon={WaterIcon}
+            color={colors.water}
+            value={compact(report.water.available)}
+            unit="litres"
+            sub={waterPct === null ? '—' : `${waterPct} %`}
+            accessibilityLabel={`Eau disponible : ${formatNumber(
+              report.water.available,
+            )} L, ${report.water.days} j d’autonomie`}
+            onPress={() => navigation.goTo('stock', { category: 'water' })}
+          />
+          <Stat
+            icon={FoodIcon}
+            color={colors.food}
+            value={compact(report.food.available)}
+            unit="kcal"
+            sub={foodPct === null ? '—' : `${foodPct} %`}
+            accessibilityLabel={`Réserves alimentaires : ${formatNumber(
+              report.food.available,
+              0,
+            )} kcal, ${report.food.days} j d’autonomie`}
+            onPress={() => navigation.goTo('stock', { category: 'food' })}
+          />
+          <Stat
+            icon={BatteryCharging}
+            color={colors.energy}
+            value={energy.days === null ? '—' : `${energy.days} j`}
+            unit="énergie"
+            sub={energyPct === null ? '—' : `${energyPct} %`}
+            accessibilityLabel={`Énergie stockée : ${formatNumber(
+              energy.usableWh,
+              0,
+            )} Wh utiles, ${
+              energy.days === null
+                ? 'Capacités non renseignées'
+                : `${energy.days} j de recharge`
+            }`}
+            onPress={() => navigation.goTo('stock', { category: 'power' })}
           />
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Hypothèses du calcul. Modifier dans Mon foyer"
-          onPress={() => navigation.open('household')}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={text.subtle}>
-            Calcul : {formatNumber(household.waterLitersPerPersonDay)} L d’eau
-            et {formatNumber(household.kcalPerPersonDay, 0)} kcal par personne
-            et par jour, péremptions comprises. Modifier ›
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Détail du calcul : ouvrir le plan d’action"
-          onPress={() => navigation.open('plan')}
-          hitSlop={8}
-          style={({ pressed }) => [styles.detail, pressed && styles.pressed]}
-        >
-          <Text style={styles.link}>Détail du calcul et à racheter ›</Text>
-        </Pressable>
+        <Text style={[text.subtle, styles.calc]}>
+          % de l’objectif · {formatNumber(household.waterLitersPerPersonDay)} L
+          et {formatNumber(household.kcalPerPersonDay, 0)} kcal par personne et
+          par jour, péremptions comprises.
+        </Text>
       </View>
 
-      {/* À faire en priorité : trois actions au plus, tirées du stock réel. */}
-      <Panel
-        title="À faire en priorité"
-        right={
-          todos.length > TODO_MAX ? (
-            <Text style={text.subtle}>
-              {TODO_MAX} sur {todos.length}
-            </Text>
-          ) : undefined
-        }
-      >
+      {/* À faire en priorité : gravité en couleur, une action par ligne. */}
+      <View style={styles.panel}>
+        <View style={styles.panelHead}>
+          <Text style={[text.label, styles.grow]}>À faire en priorité</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Voir tout : plan d’action, à racheter et péremptions"
+            onPress={() => navigation.open('plan')}
+            hitSlop={12}
+          >
+            <Text style={styles.link}>Voir tout</Text>
+          </Pressable>
+        </View>
         {todos.length === 0 ? (
           <Text style={text.muted}>
             Rien d’urgent : stock à jour et préparation sans action en attente.
           </Text>
         ) : (
-          todos.slice(0, TODO_MAX).map(todo => (
-            <Pressable
-              key={todo.key}
-              accessibilityRole="button"
-              accessibilityLabel={todo.accessibilityLabel}
-              onPress={todo.onPress}
-              style={({ pressed }) => [styles.todo, pressed && styles.pressed]}
-            >
-              <View
-                style={[
-                  styles.todoTag,
-                  { borderColor: tint(todo.color, '88') },
+          todos.slice(0, TODO_MAX).map(todo => {
+            const Icon = todo.icon;
+            return (
+              <Pressable
+                key={todo.key}
+                accessibilityRole="button"
+                accessibilityLabel={todo.accessibilityLabel}
+                onPress={todo.onPress}
+                style={({ pressed }) => [
+                  styles.todo,
+                  { borderLeftColor: todo.color },
+                  pressed && styles.pressed,
                 ]}
               >
-                <Text style={[styles.todoTagText, { color: todo.color }]}>
-                  {todo.tag}
-                </Text>
-              </View>
-              <View style={styles.grow}>
-                <Text style={styles.todoTitle}>{todo.title}</Text>
-                {todo.detail ? (
-                  <Text style={text.subtle} numberOfLines={2}>
-                    {todo.detail}
+                <View
+                  style={[
+                    styles.todoIcon,
+                    { backgroundColor: tint(todo.color, '22') },
+                  ]}
+                >
+                  <Icon color={todo.color} size={22} strokeWidth={2.2} />
+                </View>
+                <View style={styles.grow}>
+                  <Text style={styles.todoTitle} numberOfLines={2}>
+                    {todo.title}
                   </Text>
-                ) : null}
-              </View>
-              <Text style={styles.link}>{todo.action}</Text>
-            </Pressable>
-          ))
+                  {todo.detail ? (
+                    <Text style={text.subtle} numberOfLines={2}>
+                      {todo.detail}
+                    </Text>
+                  ) : null}
+                </View>
+                <View
+                  style={[
+                    styles.todoButton,
+                    {
+                      borderColor: tint(todo.color, 'cc'),
+                      backgroundColor: tint(todo.color, '26'),
+                    },
+                  ]}
+                >
+                  <Text style={[styles.todoButtonText, { color: todo.color }]}>
+                    {todo.action}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })
         )}
-      </Panel>
-
-      {/* Péremptions : l'information la plus urgente, avant les raccourcis. */}
-      <Panel
-        title="Péremptions à surveiller"
-        right={
-          alerts.length > HOME_ALERTS ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Voir les ${alerts.length} péremptions`}
-              onPress={() => navigation.open('plan')}
-              hitSlop={12}
-            >
-              <Text style={styles.link}>Tout voir ({alerts.length}) ›</Text>
-            </Pressable>
-          ) : (
-            <CalendarClock color={colors.purple} size={20} />
-          )
-        }
-      >
-        {alerts.length === 0 ? (
-          <Text style={text.muted}>
-            Aucune péremption dans les 90 prochains jours.
-          </Text>
-        ) : (
-          alerts.slice(0, HOME_ALERTS).map(alert => (
-            <View key={alert.lotId} style={styles.alert}>
-              <View style={styles.grow}>
-                <Text style={text.body} numberOfLines={1}>
-                  {alert.itemName}
-                </Text>
-                <Text style={text.subtle}>
-                  {formatNumber(alert.quantity)} {UNIT_LABELS[alert.unit]} ·{' '}
-                  {formatRelativeDays(alert.daysLeft)}
-                  {alert.bagName ? ` · ${alert.bagName}` : ''}
-                </Text>
-              </View>
-              <StatusChip
-                tone={BUCKET_TONES[alert.bucket]}
-                label={BUCKET_LABELS[alert.bucket]}
-              />
-            </View>
-          ))
-        )}
-      </Panel>
-
-      {/* Ressources essentielles, en tuiles compactes. */}
-      <View style={styles.tiles}>
-        <ResourceTile
-          icon={WaterIcon}
-          color={colors.water}
-          value={`${report.water.days} j`}
-          name="Eau"
-          accessibilityLabel={`Eau disponible : ${formatNumber(
-            report.water.available,
-          )} L, ${report.water.days} j d’autonomie`}
-          onPress={() => navigation.goTo('stock', { category: 'water' })}
-        />
-        <ResourceTile
-          icon={FoodIcon}
-          color={colors.food}
-          value={`${report.food.days} j`}
-          name="Vivres"
-          accessibilityLabel={`Réserves alimentaires : ${formatNumber(
-            report.food.available,
-            0,
-          )} kcal, ${report.food.days} j d’autonomie`}
-          onPress={() => navigation.goTo('stock', { category: 'food' })}
-        />
-        <ResourceTile
-          icon={BatteryCharging}
-          color={colors.energy}
-          value={energy.days === null ? '—' : `${energy.days} j`}
-          name="Énergie"
-          accessibilityLabel={`Énergie stockée : ${formatNumber(
-            energy.usableWh,
-            0,
-          )} Wh utiles, ${
-            energy.days === null
-              ? 'Capacités non renseignées'
-              : `${energy.days} j de recharge`
-          }`}
-          onPress={() => navigation.goTo('stock', { category: 'power' })}
-        />
-        <ResourceTile
-          icon={Flashlight}
-          color={colors.equipment}
-          value={`${energy.lights}/${members}`}
-          name="Lampes"
-          accessibilityLabel={`Éclairage : ${energy.lights} ${
-            energy.lights > 1 ? 'lampes' : 'lampe'
-          }, pour ${members} personne${members > 1 ? 's' : ''}`}
-          onPress={() => navigation.goTo('stock', { category: 'energy' })}
-        />
       </View>
 
-      {/* Accès rapides : les écrans les plus utilisés, à un geste. */}
+      {/* Accès rapides : quatre écrans, à un geste. */}
       <Text style={[text.label, styles.section]}>Accès rapides</Text>
       <View style={styles.quickGrid}>
         <QuickLink
@@ -410,18 +372,6 @@ export function HomeScreen() {
           accessibilityLabel="Scanner des codes-barres"
           onPress={() => navigation.open('scan')}
         />
-        <QuickLink
-          icon={ShoppingCart}
-          label="Plan d’achats"
-          accessibilityLabel="Ouvrir le plan d’achats"
-          onPress={() => navigation.open('purchases')}
-        />
-        <QuickLink
-          icon={ClipboardList}
-          label="À racheter"
-          accessibilityLabel="Ouvrir le plan d’action : à racheter et péremptions"
-          onPress={() => navigation.open('plan')}
-        />
       </View>
     </ScrollView>
   );
@@ -432,7 +382,7 @@ const TODO_MAX = 3;
 
 interface Todo {
   key: string;
-  tag: string;
+  icon: typeof WaterIcon;
   color: string;
   title: string;
   detail: string | null;
@@ -462,7 +412,7 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
     const s = n > 1 ? 's' : '';
     todos.push({
       key: 'expired',
-      tag: 'Périmé',
+      icon: CircleAlert,
       color: colors.danger,
       title: `${n} lot${s} périmé${s}`,
       detail: [...new Set(expired.map(a => a.itemName))].join(', '),
@@ -471,13 +421,30 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
       onPress: () => navigation.goTo('stock', { category: 'watch' }),
     });
   }
+  const soon = data.alerts.filter(
+    a => a.bucket !== 'expired' && a.daysLeft <= 30,
+  );
+  if (soon.length > 0) {
+    const n = soon.length;
+    const s = n > 1 ? 's' : '';
+    todos.push({
+      key: 'soon',
+      icon: CalendarClock,
+      color: colors.primary,
+      title: `${n} lot${s} à consommer sous 30 jours`,
+      detail: [...new Set(soon.map(a => a.itemName))].join(', '),
+      action: 'Voir',
+      accessibilityLabel: `${n} lot${s} à consommer sous 30 jours. Ouvrir le stock`,
+      onPress: () => navigation.goTo('stock', { category: 'watch' }),
+    });
+  }
   if (data.incompleteFood > 0) {
     const n = data.incompleteFood;
     const s = n > 1 ? 's' : '';
     todos.push({
       key: 'incomplete',
-      tag: 'À compléter',
-      color: colors.food,
+      icon: CircleAlert,
+      color: colors.danger,
       title: 'Données incomplètes',
       detail: `${n} aliment${s} sans valeur énergétique : non compté${s} dans l’autonomie.`,
       action: 'Compléter',
@@ -492,7 +459,7 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
       const cost = pending.reduce((sum, e) => sum + (e.price ?? 0), 0);
       todos.push({
         key: 'purchases',
-        tag: 'Achats',
+        icon: ShoppingCart,
         color: colors.primary,
         title: `${monthLabel(monthOf(data.today))} : ${pending.length} à faire`,
         detail: cost > 0 ? formatEuros(cost) : null,
@@ -508,10 +475,12 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
   if (next) {
     todos.push({
       key: `readiness-${next.id}`,
-      tag: `+${next.max - next.points} pts`,
-      color: colors.cyan,
+      icon: CirclePlus,
+      color: colors.success,
       title: next.todo ?? next.label,
-      detail: `Indice de préparation ${data.readiness.score}/100`,
+      detail: `+${next.max - next.points} pts · indice de préparation ${
+        data.readiness.score
+      }/100`,
       action: 'Faire',
       accessibilityLabel: `À faire : ${next.todo ?? next.label}`,
       onPress: () => runReadinessAction(navigation, next.action),
@@ -520,11 +489,18 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
   return todos;
 }
 
-function ResourceTile(props: {
+/** « 45 k » au-delà de 10 000 : tient dans une colonne étroite. */
+function compact(n: number): string {
+  return n >= 10000 ? `${formatNumber(n / 1000, 0)} k` : formatNumber(n, 0);
+}
+
+/** Une ressource dans la carte Autonomie : valeur et part de l'objectif. */
+function Stat(props: {
   icon: typeof WaterIcon;
   color: string;
   value: string;
-  name: string;
+  unit: string;
+  sub: string;
   accessibilityLabel: string;
   onPress: () => void;
 }) {
@@ -534,13 +510,18 @@ function ResourceTile(props: {
       accessibilityRole="button"
       accessibilityLabel={props.accessibilityLabel}
       onPress={props.onPress}
-      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.stat, pressed && styles.pressed]}
     >
       <Icon color={props.color} size={20} strokeWidth={2} />
-      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
         {props.value}
       </Text>
-      <Text style={text.subtle}>{props.name}</Text>
+      <Text style={styles.statUnit} numberOfLines={1}>
+        {props.unit}
+      </Text>
+      <Text style={[styles.statSub, { color: props.color }]} numberOfLines={1}>
+        {props.sub}
+      </Text>
     </Pressable>
   );
 }
@@ -559,8 +540,8 @@ function QuickLink(props: {
       onPress={props.onPress}
       style={({ pressed }) => [styles.quick, pressed && styles.pressed]}
     >
-      <Icon color={colors.cyan} size={24} strokeWidth={2} />
-      <Text style={styles.quickText} numberOfLines={1}>
+      <Icon color={colors.cyan} size={26} strokeWidth={2} />
+      <Text style={styles.quickText} numberOfLines={2}>
         {props.label}
       </Text>
     </Pressable>
@@ -600,51 +581,86 @@ const styles = StyleSheet.create({
     borderColor: tint(colors.food, '66'),
     backgroundColor: solidTint(colors.food, 0.07),
   },
-  household: {
+  goal: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.m,
-    paddingTop: space.s,
+    alignSelf: 'flex-start',
+    gap: space.xs,
+    paddingHorizontal: space.s,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: tint(colors.warning, '1f'),
+  },
+  goalText: {
+    color: colors.warning,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  bar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+    marginTop: space.xs,
+  },
+  barFill: { height: 6, borderRadius: 3 },
+  stats: {
+    flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+    paddingTop: space.m,
   },
-  householdTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  detail: { alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 2,
+  },
+  statValue: {
+    color: colors.text,
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  statUnit: { color: colors.textMuted, fontSize: 12 },
+  statSub: { fontSize: 14, fontWeight: '700' },
+  calc: { fontSize: 12 },
+  panel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.panel,
+    padding: space.m,
+    gap: space.s,
+  },
+  panelHead: { flexDirection: 'row', alignItems: 'center' },
   todo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.m,
-    minHeight: sizes.touch + 8,
+    minHeight: sizes.touch + 12,
     paddingVertical: space.s,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    paddingLeft: space.s,
+    paddingRight: space.xs,
+    borderLeftWidth: 3,
+    borderRadius: radius.s,
+    backgroundColor: colors.surfaceRaised,
   },
-  todoTag: {
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.s,
-    paddingVertical: 2,
-  },
-  todoTagText: { fontSize: 12, fontWeight: '700' },
-  todoTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  tiles: { flexDirection: 'row', gap: space.s },
-  tile: {
-    flex: 1,
+  todoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.s,
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: space.m,
-    paddingHorizontal: space.xs,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    justifyContent: 'center',
+  },
+  todoTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  todoButton: {
     borderWidth: 1,
-    borderRadius: radius.card,
+    borderRadius: radius.button,
+    paddingHorizontal: space.m,
+    paddingVertical: space.s,
   },
-  tileValue: {
-    color: colors.text,
-    fontFamily: fonts.mono,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  todoButtonText: { fontSize: 14, fontWeight: '700' },
   // Titre posé sur la photo : ombre portée pour rester lisible.
   section: {
     marginTop: space.xs,
@@ -652,10 +668,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 1 },
   },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  quickGrid: { flexDirection: 'row', gap: space.s },
   quick: {
-    flexBasis: '31%',
-    flexGrow: 1,
+    flex: 1,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xs,
@@ -665,7 +681,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.card,
   },
-  quickText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  quickText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   pressed: { opacity: 0.82 },
   grow: { flex: 1, minWidth: 0 },
   alert: {

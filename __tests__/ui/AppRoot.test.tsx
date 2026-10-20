@@ -748,7 +748,7 @@ describe('écrans', () => {
   it('montre les hypothèses du calcul et simule des scénarios', async () => {
     await openApp();
     expect(
-      screen.getByText(/Calcul : 3 L d’eau et 2 000 kcal par personne/),
+      screen.getByText(/% de l’objectif · 3 L et 2 000 kcal par personne/),
     ).toBeTruthy();
     expect(
       screen.getByLabelText(
@@ -1049,9 +1049,11 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Lampe frontale')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Retour'));
     await fireEvent.press(await screen.findByRole('tab', { name: 'Accueil' }));
-    // Raccourci vers le plan d’achats ; le retour ramène à l’accueil.
+    // « Voir tout » ouvre le plan d’action ; le retour ramène à l’accueil.
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir le plan d’achats'),
+      await screen.findByLabelText(
+        'Voir tout : plan d’action, à racheter et péremptions',
+      ),
     );
     expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
   });
@@ -1059,7 +1061,9 @@ describe('écrans', () => {
   it('règle le foyer dans Mon foyer et ouvre le kit depuis l’urgence', async () => {
     await openApp();
     await fireEvent.press(
-      screen.getByLabelText('Hypothèses du calcul. Modifier dans Mon foyer'),
+      screen.getByLabelText(
+        'Foyer : 1 personne. Hypothèses du calcul. Modifier dans Mon foyer',
+      ),
     );
     expect(await screen.findByText('Mon foyer')).toBeTruthy();
     await fireEvent.press(await screen.findByText('2 L'));
@@ -1222,10 +1226,16 @@ describe('écrans', () => {
 
   it('recalcule l’autonomie quand le foyer change', async () => {
     await openApp();
-    // Directement depuis l'accueil.
-    await fireEvent.press(screen.getByLabelText('Ajouter une personne'));
+    // Depuis la case Foyer de l'accueil.
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Foyer : 1 personne. Hypothèses du calcul. Modifier dans Mon foyer',
+      ),
+    );
+    await fireEvent.press(await screen.findByLabelText('Ajouter une personne'));
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
-    expect(screen.getByText('2 pers.')).toBeTruthy();
+    expect(screen.getByLabelText(/^Foyer : 2 personnes\./)).toBeTruthy();
 
     // Et depuis Mon foyer, dans l’onglet Préparer.
     await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
@@ -1235,15 +1245,15 @@ describe('écrans', () => {
       ),
     );
     await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
-    expect(await screen.findByText('1 pers.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(await screen.findByLabelText('10 jours')).toBeTruthy();
+    expect(screen.getByLabelText(/^Foyer : 1 personne\./)).toBeTruthy();
   });
 
   it('affiche l’état et la liste de réapprovisionnement', async () => {
     await openApp();
     // 10 jours d'eau pour un objectif de 14 : 12 L à racheter, vivres suffisants.
-    expect(screen.getByText('Sous l’objectif')).toBeTruthy();
+    expect(screen.getByText('Objectif 14 jours')).toBeTruthy();
     expect(screen.getByText('Ressource limitante : eau')).toBeTruthy();
     await fireEvent.press(
       screen.getByLabelText('Détail du calcul : ouvrir le plan d’action'),
@@ -1615,7 +1625,7 @@ describe('écrans', () => {
     expect(screen.queryByText(/^◇/)).toBeNull();
   });
 
-  it('montre les trois péremptions les plus proches sur l’accueil', async () => {
+  it('signale sur l’accueil les lots périmés et à consommer sous 30 jours', async () => {
     const ctx = makeManager();
     const db = await createVault(ctx.manager, content, { masterPin: MASTER });
     const repo = new InventoryRepository(db);
@@ -1637,11 +1647,20 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
 
     expect(screen.getByLabelText('1 lot périmé. Ouvrir le stock')).toBeTruthy();
-    expect(screen.getAllByText('Bouteilles').length).toBeGreaterThan(0);
-    expect(screen.getByText('Compote')).toBeTruthy();
-    expect(screen.getByText('Pâtes')).toBeTruthy();
-    expect(screen.queryByText('Lait')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('Voir les 4 péremptions'));
+    expect(screen.getByText('Bouteilles')).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        '2 lots à consommer sous 30 jours. Ouvrir le stock',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Compote, Pâtes')).toBeTruthy();
+    expect(screen.queryByText(/Lait/)).toBeNull();
+    // Toutes les péremptions dans le plan d’action.
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Voir tout : plan d’action, à racheter et péremptions',
+      ),
+    );
     expect(await screen.findByText('Lait')).toBeTruthy();
 
     // « À surveiller » dans les stocks : périmé d’abord, puis sous 30 jours.
