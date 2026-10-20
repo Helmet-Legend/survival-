@@ -17,15 +17,16 @@ jobs:
             echo
             echo "::endgroup::"
           }
-          probe "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-france" 9000
-          probe "https://feeds.meteoalarm.org/api/v1/warnings/feeds-france" 6000
-          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/rappelconso-v2-gtin-trie/records?limit=2" 8000
-          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/rappelconso-v2-gtin-trie/exports/csv?limit=3" 4000
-          probe "https://base-donnees-publique.medicaments.gouv.fr/download/file/CIS_CIP_Dispo_Spec.txt" 3000 latin1
-          probe "https://www.vigicrues.gouv.fr/services/v1.1/" 3000
-          probe "https://www.vigicrues.gouv.fr/services/1/InfoVigiCru.jsonld" 3000
-          probe "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json" 3000
-          probe "https://api.vigieau.gouv.fr/api/zones?lon=2.35&lat=48.85&profil=particulier" 3000
-          probe "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/signal-ecogaz/records?limit=3&order_by=gas_day%20desc" 3000
-          probe "https://www.seismicportal.eu/fdsnws/event/1/query?limit=2&format=json&minlat=40&maxlat=52&minlon=-6&maxlon=10" 3000
-          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records?limit=1" 3000
+          probe "https://feeds.meteoalarm.org/api/v1/warnings/feeds-france" 2500
+          probe "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/signal-ecogaz/records?limit=2" 2500
+          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records?limit=1&where=carburants_indisponibles%20is%20not%20null" 4000
+          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/exports/json?select=id,code_departement,carburants_indisponibles,carburants_en_rupture_temporaire,carburants_en_rupture_definitive&limit=3" 3000
+          probe "https://www.vigicrues.gouv.fr/services/v1.1/InfoVigiCru.json?TypEntVigiCru=7" 3000
+          probe "https://www.vigicrues.gouv.fr/services/InfoVigiCru.json?TypEntVigiCru=8" 3000
+          probe "https://www.vigicrues.gouv.fr/services/v1.1/TronEntVigiCru.json?CdEntVigiCru=AD1&TypEntVigiCru=8" 3000
+          probe "https://www.vigicrues.gouv.fr/services/vigicrues.geojson" 2000
+          probe "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/rappelconso-v2-gtin-trie/exports/json?select=gtin,numero_fiche,libelle,marque_produit,motif_rappel,conduites_a_tenir_par_le_consommateur,identification_produits,lien_vers_la_fiche_rappel,date_publication,date_de_fin_de_la_procedure_de_rappel&where=date_publication%3E%3D%222026-04-20%22" 1500
+          echo "TAILLE RAPPELS 6 MOIS: $(wc -c < body.bin)"
+          probe "https://api.vigieau.gouv.fr/api/zones?commune=75056&profil=particulier" 1500
+          probe "https://api.vigieau.gouv.fr/api/departements" 1500
+          probe "https://www.seismicportal.eu/fdsnws/event/1/query?limit=1&format=json&minmag=4&minlat=14&maxlat=52&minlon=-62&maxlon=56" 1500
