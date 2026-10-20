@@ -51,6 +51,7 @@ import {
   nativePhotoSource,
   type PhotoSource,
 } from '../photo/photoSource';
+import { defaultAlertFetch, type AlertFetch } from '../alerts/types';
 import { defaultProductFetch } from '../scanner/fetch';
 import type { ProductFetch } from '../scanner/products';
 import { nativeScanSource, type ScanSource } from '../scanner/scanSource';
@@ -85,6 +86,7 @@ import { CrisisScreen } from './screens/CrisisScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen } from './screens/EmergencyScreen';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
+import { AlertsScreen } from './screens/AlertsScreen';
 import { KitScreen } from './screens/KitScreen';
 import {
   loadRedLight,
@@ -137,6 +139,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   scanSource?: ScanSource;
   /** Recherche en ligne des produits ; `fetch` par défaut. */
   productFetch?: ProductFetch;
+  /** Téléchargement des alertes ; `fetch` par défaut. */
+  alertFetch?: AlertFetch;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
@@ -155,6 +159,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [scanSource] = useState(() => props.scanSource ?? nativeScanSource());
   const [productFetch] = useState<ProductFetch>(
     () => props.productFetch ?? defaultProductFetch,
+  );
+  const [alertFetch] = useState<AlertFetch>(
+    () => props.alertFetch ?? defaultAlertFetch,
   );
   const backupCrypto = props.backupCrypto ?? null;
   const insets = useSafeAreaInsets();
@@ -209,6 +216,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       backupCrypto,
       scanSource,
       productFetch,
+      alertFetch,
     };
     sessionRef.current = session;
     loadRedLight(db)
@@ -386,6 +394,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <EmergencyScreen />
               ) : overlay === 'familyPlan' ? (
                 <FamilyPlanScreen />
+              ) : overlay === 'alerts' ? (
+                <AlertsScreen />
               ) : overlay === 'preparation' ? (
                 <KitScreen />
               ) : overlay === 'calculators' ? (

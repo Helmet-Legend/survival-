@@ -2,7 +2,14 @@
  * Réglages : accès à Mon foyer (hypothèses du calcul), rappels de
  * péremption, confidentialité et verrouillage.
  */
-import { Bell, Lock, Moon, ShieldCheck, Users } from 'lucide-react-native';
+import {
+  Bell,
+  Lock,
+  Moon,
+  ShieldCheck,
+  Users,
+  TriangleAlert,
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
@@ -84,6 +91,13 @@ export function SettingsScreen(props: { onLock: () => void }) {
         label="Mon foyer et hypothèses"
         accessibilityLabel="Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie"
         onPress={() => navigation.open('household')}
+      />
+      <Button
+        icon={TriangleAlert}
+        chevron
+        label="Alertes"
+        accessibilityLabel="Ouvrir les alertes : vigilances, rappels, ruptures"
+        onPress={() => navigation.open('alerts')}
       />
 
       {reminders.available ? (

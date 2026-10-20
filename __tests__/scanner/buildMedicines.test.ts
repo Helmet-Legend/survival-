@@ -36,8 +36,12 @@ describe('génération de la base des médicaments', () => {
     ].join('\n');
     const build = loadBuildTable();
     expect(build(cis, cip)).toEqual({
-      '3400930000007':
-        'DOLIPRANE 1000 mg, comprimé — plaquette(s) PVC de 8 comprimé(s)',
+      cip: {
+        '3400930000007':
+          'DOLIPRANE 1000 mg, comprimé — plaquette(s) PVC de 8 comprimé(s)',
+      },
+      // Spécialité de chaque présentation, pour les ruptures ANSM.
+      cis: { '3400930000007': '60234100' },
     });
   });
 });
