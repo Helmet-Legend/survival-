@@ -21,6 +21,7 @@ import {
   gearRefsLabel,
   getBaseGear,
   setGearMark,
+  SHOW_WEAPONS_MARK,
   type GearResult,
 } from '../../plan/baseGear';
 import {
@@ -38,7 +39,7 @@ import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
 
 export function BaseGearScreen() {
-  const { db, repo, bags, documents, files } = useSession();
+  const { db, repo, bags, documents, files, armory } = useSession();
   const navigation = useNavigation();
   const [missingOnly, setMissingOnly] = useState(false);
   const [notice, setNotice] = useState<{
@@ -46,15 +47,17 @@ export function BaseGearScreen() {
     message: string;
   } | null>(null);
   const { data, error, reload } = useLoader(async () => {
-    const [items, docs, bagList] = await Promise.all([
+    const [items, docs, bagList, weapons] = await Promise.all([
       repo.listItems(),
       documents.list(),
       bags.list(),
+      armory.listWeapons(),
     ]);
     return getBaseGear(db, {
       items,
       documentCount: docs.length,
       bagNames: bagList.map(b => b.name),
+      weaponCount: weapons.length,
     });
   });
 
@@ -129,6 +132,7 @@ export function BaseGearScreen() {
     } else if (definition.add) {
       navigation.openStockForm({
         category: definition.add.category,
+        recordType: definition.add.recordType,
         prefill: definition.add.prefill,
       });
     }
@@ -190,6 +194,15 @@ export function BaseGearScreen() {
           selected={missingOnly}
           onPress={() => setMissingOnly(true)}
         />
+        {data.weaponsOptional ? (
+          <Chip
+            label="Volet armes"
+            selected={data.weapons}
+            onPress={() => {
+              void toggle(SHOW_WEAPONS_MARK, !data.weapons);
+            }}
+          />
+        ) : null}
       </View>
 
       {GEAR_SECTIONS.map(section => {
@@ -220,11 +233,14 @@ export function BaseGearScreen() {
         <Text style={text.subtle}>Rien à prévoir : tout est là.</Text>
       ) : null}
       <Panel title="Sources">
-        {Object.values(GEAR_REFS).map(ref => (
-          <Text key={ref.short} style={text.subtle}>
-            {ref.short} : {ref.title}
-          </Text>
-        ))}
+        {[...new Set(data.results.flatMap(r => r.definition.refs))].map(id => {
+          const ref = GEAR_REFS[id];
+          return (
+            <Text key={id} style={text.subtle}>
+              {ref.short} : {ref.title}
+            </Text>
+          );
+        })}
       </Panel>
     </ScrollView>
   );

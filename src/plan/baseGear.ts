@@ -1,9 +1,10 @@
 /**
  * Matériel de base : l'équipement courant d'un foyer préparé, rangé par
  * famille. Chaque élément cite les listes officielles qui le recommandent
- * (SGDSN, Géorisques, Ready.gov) ; ceux qu'aucune ne cite sont marqués
- * « conseil courant ». Chaque élément est reconnu dans le stock (maison et
- * sacs) ou coché à la main.
+ * (France, États-Unis, Canada, Belgique, Croix-Rouge) ; ceux qu'aucune ne
+ * cite sont marqués « conseil courant ». Chaque élément est reconnu dans le
+ * stock (maison et sacs) ou coché à la main. Le volet armes n'apparaît que
+ * si une arme est enregistrée, ou sur demande.
  *
  * Aucune quantité n'est imposée : la liste dit quoi avoir, les check-lists
  * par paliers disent combien de jours tenir.
@@ -24,19 +25,35 @@ export interface GearDefinition {
   subtypes?: readonly string[];
   /** Types de la catégorie qui ne comptent pas (sans `subtypes`). */
   excludeSubtypes?: readonly string[];
+  /** Armement : munitions ou accessoires. */
+  recordType?: 'ammo' | 'accessory';
   /** Mots du nom qui conviennent aussi (sans accents, minuscules). */
   names?: readonly string[];
   /** Vérifié ailleurs que dans le stock. */
   source?: 'documents' | 'bags';
-  /** Où l'ajouter : catégorie et valeurs préremplies de la fiche. */
-  add?: { category: ItemCategory; prefill?: Record<string, string> };
+  /** Où l'ajouter : fiche (catégorie, type d'arme) et valeurs préremplies. */
+  add?: {
+    category: ItemCategory;
+    recordType?: 'ammo' | 'accessory';
+    prefill?: Record<string, string>;
+  };
   /** Listes officielles qui le recommandent ; vide : conseil courant. */
   refs: readonly GearRef[];
 }
 
-export type GearRef = 'sgdsn' | 'georisques' | 'readygov';
+export type GearRef =
+  | 'sgdsn'
+  | 'georisques'
+  | 'readygov'
+  | 'canada'
+  | 'belgique'
+  | 'croixrouge'
+  | 'csi';
 
-/** Listes officielles consultées (octobre 2026). */
+/**
+ * Listes consultées (octobre 2026). Une référence n'est portée que si la
+ * liste cite l'élément ; la presse et les sites marchands ne comptent pas.
+ */
 export const GEAR_REFS: Record<GearRef, { short: string; title: string }> = {
   sgdsn: {
     short: 'SGDSN',
@@ -45,11 +62,28 @@ export const GEAR_REFS: Record<GearRef, { short: string; title: string }> = {
   },
   georisques: {
     short: 'Géorisques',
-    title: 'Mon kit d’urgence 72 h (Géorisques, gouvernement français)',
+    title: 'Mon kit d’urgence 72 h (Géorisques, Sécurité civile)',
   },
   readygov: {
     short: 'Ready.gov',
-    title: 'Build a Kit, Emergency Supply List (Ready.gov, FEMA, États-Unis)',
+    title: 'Build a Kit (Ready.gov, FEMA, États-Unis)',
+  },
+  canada: {
+    short: 'Canada',
+    title: 'Trousse d’urgence (Préparez-vous, gouvernement du Canada)',
+  },
+  belgique: {
+    short: 'Belgique',
+    title: 'Kit d’urgence (Centre de crise national, Belgique)',
+  },
+  croixrouge: {
+    short: 'Croix-Rouge',
+    title: 'Catakit, sac d’urgence (Croix-Rouge française, association)',
+  },
+  csi: {
+    short: 'Code de la sécurité intérieure',
+    title:
+      'Code de la sécurité intérieure, conservation des armes détenues (articles R314)',
   },
 };
 
@@ -65,6 +99,11 @@ export function gearRefsLabel(gear: GearDefinition): string {
 export interface GearSection {
   id: string;
   title: string;
+  /**
+   * Volet armes : affiché si une arme est enregistrée ou sur demande ; les
+   * exports n'y citent aucun article (statut seulement).
+   */
+  weapons?: boolean;
   items: readonly GearDefinition[];
 }
 
@@ -75,12 +114,47 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'water_reserve',
-        refs: ['sgdsn', 'georisques'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'croixrouge',
+        ],
         label: 'Réserve d’eau potable',
         hint: '6 L par personne pour 72 h (2 L par jour), en bouteilles.',
         category: 'water',
         excludeSubtypes: ['filter'],
         add: { category: 'water' },
+      },
+      {
+        id: 'water_tablets',
+        refs: ['canada'],
+        label: 'Pastilles de purification',
+        names: ['pastille', 'purification', 'micropur', 'aquatabs'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Pastilles de purification', subtype: 'other' },
+        },
+      },
+      {
+        id: 'bleach',
+        refs: ['canada'],
+        label: 'Eau de Javel non parfumée',
+        hint: 'Pour désinfecter l’eau : suivre le dosage indiqué par les autorités sanitaires.',
+        names: ['javel'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Eau de Javel', subtype: 'hygiene' },
+        },
+      },
+      {
+        id: 'water_container',
+        refs: ['croixrouge'],
+        label: 'Jerrican ou bidon pliable vide',
+        hint: 'Pour aller chercher de l’eau à un point de distribution.',
+        names: ['jerrican', 'bidon vide', 'bidon pliable', 'container pliable'],
       },
       {
         id: 'water_filter',
@@ -94,23 +168,6 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Filtre à eau', subtype: 'other' },
         },
       },
-      {
-        id: 'water_tablets',
-        refs: [],
-        label: 'Pastilles de purification',
-        names: ['pastille', 'purification', 'micropur', 'aquatabs'],
-        add: {
-          category: 'medical',
-          prefill: { name: 'Pastilles de purification', subtype: 'other' },
-        },
-      },
-      {
-        id: 'water_container',
-        refs: [],
-        label: 'Jerrican ou bidon vide',
-        hint: 'Pour aller chercher de l’eau à un point de distribution.',
-        names: ['jerrican', 'bidon vide'],
-      },
     ],
   },
   {
@@ -119,7 +176,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'food',
-        refs: ['sgdsn', 'georisques'],
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
         label: 'Vivres non périssables',
         hint: 'De préférence sans cuisson.',
         category: 'food',
@@ -127,7 +184,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'can_opener',
-        refs: ['sgdsn', 'readygov'],
+        refs: ['sgdsn', 'readygov', 'canada'],
         label: 'Ouvre-boîte manuel',
         names: ['ouvre-boite', 'ouvre boite', 'ouvre-boites'],
         add: {
@@ -137,8 +194,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove',
-        refs: [],
-        label: 'Réchaud',
+        refs: ['canada'],
+        label: 'Petit réchaud',
         category: 'energy',
         subtypes: ['cooking'],
         names: ['rechaud'],
@@ -149,7 +206,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove_fuel',
-        refs: [],
+        refs: ['canada'],
         label: 'Combustible pour le réchaud',
         hint: 'Cartouches de gaz, alcool à brûler, tablettes…',
         category: 'power',
@@ -158,10 +215,33 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         add: { category: 'power', prefill: { subtype: 'gas' } },
       },
       {
+        id: 'baby',
+        refs: ['georisques', 'canada', 'belgique'],
+        label: 'Lait infantile, petits pots et couches',
+        hint: 'Si le foyer compte un bébé.',
+        names: [
+          'lait infantile',
+          'lait en poudre',
+          'petit pot',
+          'petits pots',
+          'couches bebe',
+          'couches jetables',
+        ],
+        add: { category: 'food' },
+      },
+      {
+        id: 'pets',
+        refs: ['canada', 'belgique'],
+        label: 'Nourriture et affaires des animaux',
+        hint: 'Si vous avez des animaux : nourriture, laisse, cage de transport.',
+        names: ['croquette', 'patee', 'litiere', 'animaux'],
+        add: { category: 'food' },
+      },
+      {
         id: 'cookware',
-        refs: ['readygov'],
+        refs: [],
         label: 'Gamelle et couverts',
-        names: ['gamelle', 'popote', 'couvert', 'quart'],
+        names: ['gamelle', 'popote', 'couverts'],
         add: {
           category: 'energy',
           prefill: { name: 'Gamelle', subtype: 'cooking' },
@@ -175,7 +255,14 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'light',
-        refs: ['sgdsn', 'georisques'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'croixrouge',
+        ],
         label: 'Lampe de poche ou frontale',
         category: 'energy',
         subtypes: ['lighting'],
@@ -187,7 +274,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'batteries',
-        refs: ['sgdsn', 'georisques'],
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
         label: 'Piles de rechange',
         category: 'power',
         subtypes: ['battery'],
@@ -199,8 +286,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'powerbank',
-        refs: ['georisques', 'readygov'],
-        label: 'Batterie externe et câble de charge',
+        refs: ['georisques', 'belgique'],
+        label: 'Batterie externe et chargeur de téléphone',
         category: 'power',
         subtypes: ['powerbank', 'solar'],
         names: ['batterie externe', 'powerbank', 'chargeur'],
@@ -211,7 +298,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'candles',
-        refs: ['georisques'],
+        refs: ['sgdsn', 'georisques', 'canada'],
         label: 'Bougies',
         category: 'power',
         subtypes: ['candle'],
@@ -223,12 +310,23 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'lighter',
-        refs: ['georisques'],
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'croixrouge'],
         label: 'Briquet ou allumettes',
         names: ['briquet', 'allumette', 'ferro'],
         add: {
           category: 'power',
           prefill: { name: 'Briquet', subtype: 'other' },
+        },
+      },
+      {
+        id: 'glowsticks',
+        refs: ['croixrouge'],
+        label: 'Bâtons lumineux de secours',
+        hint: 'Éclairent sans pile ni flamme.',
+        names: ['baton lumineux', 'batons lumineux', 'cyalume', 'lightstick'],
+        add: {
+          category: 'energy',
+          prefill: { name: 'Bâtons lumineux', subtype: 'lighting' },
         },
       },
     ],
@@ -239,8 +337,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'radio',
-        refs: ['sgdsn', 'georisques'],
-        label: 'Radio à piles ou à dynamo',
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
+        label: 'Radio à piles ou à manivelle',
         hint: 'Pour suivre les consignes des autorités.',
         category: 'energy',
         subtypes: ['communication'],
@@ -252,14 +350,26 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'whistle',
-        refs: ['readygov'],
+        refs: ['readygov', 'canada', 'belgique'],
         label: 'Sifflet',
-        hint: 'Pour signaler sa présence.',
+        hint: 'Pour signaler sa présence aux secours.',
         names: ['sifflet'],
         add: {
           category: 'tool',
           prefill: { name: 'Sifflet', subtype: 'other' },
         },
+      },
+      {
+        id: 'contacts',
+        refs: ['belgique', 'canada'],
+        label: 'Numéros utiles notés sur papier, stylo',
+        hint: 'Famille et urgences : sans téléphone, plus de répertoire.',
+      },
+      {
+        id: 'family_plan',
+        refs: ['canada'],
+        label: 'Copie papier du plan familial',
+        hint: 'Points de regroupement et rôles (Préparer → Plan familial).',
       },
       {
         id: 'paper_map',
@@ -281,12 +391,6 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Boussole', subtype: 'navigation' },
         },
       },
-      {
-        id: 'contacts',
-        refs: ['readygov'],
-        label: 'Papier, crayon et numéros utiles',
-        hint: 'Famille, voisins, mairie : sans téléphone, plus de répertoire.',
-      },
     ],
   },
   {
@@ -295,7 +399,14 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'firstaid',
-        refs: ['sgdsn', 'georisques'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'croixrouge',
+        ],
         label: 'Trousse de premiers secours',
         category: 'medical',
         subtypes: ['dressing', 'antiseptic'],
@@ -304,33 +415,33 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'medicine',
-        refs: ['sgdsn', 'georisques'],
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
         label: 'Médicaments habituels',
-        hint: 'Vos traitements, et une copie des ordonnances.',
+        hint: 'Vos traitements, une copie des ordonnances, et les médicaments courants conseillés par votre pharmacien.',
         category: 'medical',
         subtypes: ['medicine'],
         add: { category: 'medical', prefill: { subtype: 'medicine' } },
       },
       {
         id: 'glasses',
-        refs: ['georisques'],
+        refs: ['sgdsn', 'georisques', 'readygov'],
         label: 'Lunettes de rechange',
-        hint: 'Si vous en portez.',
-        names: ['lunettes'],
+        hint: 'Si vous en portez ; et le produit pour lentilles.',
+        names: ['lunettes de vue', 'lunettes de rechange'],
       },
       {
         id: 'masks',
-        refs: ['readygov'],
-        label: 'Masques',
+        refs: ['readygov', 'canada', 'croixrouge'],
+        label: 'Masques anti-poussière (FFP2)',
         names: ['masque', 'ffp2'],
         add: {
           category: 'medical',
-          prefill: { name: 'Masques', subtype: 'protection' },
+          prefill: { name: 'Masques FFP2', subtype: 'protection' },
         },
       },
       {
         id: 'disposable_gloves',
-        refs: [],
+        refs: ['croixrouge'],
         label: 'Gants jetables',
         names: ['gants jetables', 'gants nitrile', 'gants latex'],
         add: {
@@ -340,16 +451,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'hygiene',
-        refs: ['readygov'],
-        label: 'Savon et gel hydroalcoolique',
+        refs: ['readygov', 'canada'],
+        label: 'Savon, gel hydroalcoolique et articles de toilette',
+        hint: 'Avec les protections hygiéniques si besoin.',
         category: 'medical',
         subtypes: ['hygiene'],
-        names: ['savon', 'gel hydro'],
+        names: ['savon', 'gel hydro', 'dentifrice', 'brosse a dents'],
         add: { category: 'medical', prefill: { subtype: 'hygiene' } },
       },
       {
         id: 'wipes',
-        refs: ['readygov'],
+        refs: ['readygov', 'belgique'],
         label: 'Lingettes humides',
         hint: 'Pour se laver sans eau courante.',
         names: ['lingette'],
@@ -360,7 +472,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'toilet_paper',
-        refs: [],
+        refs: ['canada'],
         label: 'Papier toilette',
         names: ['papier toilette', 'papier hygienique'],
         add: {
@@ -370,10 +482,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'trash_bags',
-        refs: ['readygov'],
-        label: 'Sacs poubelle',
-        hint: 'Déchets, toilettes de fortune, protection contre la pluie.',
-        names: ['sac poubelle', 'sacs poubelle', 'sac-poubelle'],
+        refs: ['readygov', 'canada'],
+        label: 'Sacs poubelle et attaches',
+        hint: 'Déchets et toilettes de fortune.',
+        names: [
+          'sac poubelle',
+          'sacs poubelle',
+          'sac-poubelle',
+          'sac a ordures',
+        ],
         add: {
           category: 'tool',
           prefill: { name: 'Sacs poubelle', subtype: 'other' },
@@ -387,9 +504,9 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'survival_blanket',
-        refs: ['georisques'],
+        refs: ['sgdsn', 'georisques', 'croixrouge'],
         label: 'Couverture de survie',
-        names: ['couverture de survie', 'couverture survie'],
+        names: ['couverture de survie', 'couverture survie', 'mylar'],
         add: {
           category: 'energy',
           prefill: { name: 'Couverture de survie', subtype: 'sleeping' },
@@ -397,7 +514,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'sleeping',
-        refs: ['readygov'],
+        refs: ['readygov', 'canada', 'belgique'],
         label: 'Sac de couchage ou couverture',
         category: 'energy',
         subtypes: ['sleeping'],
@@ -409,20 +526,28 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'warm_clothes',
-        refs: ['georisques'],
-        label: 'Vêtements chauds et de pluie',
+        refs: ['sgdsn', 'georisques', 'belgique'],
+        label: 'Vêtements chauds',
         category: 'energy',
         subtypes: ['protection'],
         names: ['vetement', 'polaire', 'poncho', 'impermeable', 'veste'],
         add: { category: 'energy', prefill: { subtype: 'protection' } },
       },
       {
+        id: 'change_clothes',
+        refs: ['readygov', 'canada'],
+        label: 'Vêtements et chaussures de rechange',
+        hint: 'Des chaussures solides, pour marcher.',
+        names: ['chaussure', 'bottes', 'vetements de rechange'],
+      },
+      {
         id: 'tarp',
         refs: ['readygov'],
-        label: 'Bâche',
+        label: 'Bâche ou film plastique',
+        hint: 'Avec le ruban adhésif, pour calfeutrer une pièce.',
         category: 'energy',
         subtypes: ['shelter'],
-        names: ['bache', 'tente', 'tarp'],
+        names: ['bache', 'film plastique', 'tarp'],
         add: {
           category: 'energy',
           prefill: { name: 'Bâche', subtype: 'shelter' },
@@ -436,8 +561,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'knife',
-        refs: ['sgdsn'],
-        label: 'Couteau ou multi-outil',
+        refs: ['sgdsn', 'canada', 'belgique', 'croixrouge'],
+        label: 'Couteau multifonction',
         category: 'tool',
         subtypes: ['cutting', 'multitool'],
         names: ['couteau', 'multi-outil', 'multitool', 'leatherman'],
@@ -445,11 +570,12 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'hand_tools',
-        refs: ['georisques'],
-        label: 'Outils de base (tournevis, pince…)',
+        refs: ['readygov', 'canada'],
+        label: 'Pince ou clé pour couper gaz et eau',
+        hint: 'Repérez les robinets d’arrêt à l’avance.',
         category: 'tool',
         subtypes: ['clamping', 'mechanical'],
-        names: ['tournevis', 'pince'],
+        names: ['pince', 'cle a molette', 'cle anglaise', 'tournevis'],
         add: { category: 'tool', prefill: { subtype: 'clamping' } },
       },
       {
@@ -463,18 +589,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         },
       },
       {
-        id: 'rope',
-        refs: [],
-        label: 'Corde ou paracorde',
-        names: ['corde', 'paracorde', 'cordelette'],
-        add: {
-          category: 'tool',
-          prefill: { name: 'Paracorde', subtype: 'other' },
-        },
-      },
-      {
         id: 'work_gloves',
-        refs: [],
+        refs: ['canada'],
         label: 'Gants de travail',
         names: ['gants de travail', 'gants de protection', 'gants cuir'],
         add: {
@@ -492,6 +608,16 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Extincteur', subtype: 'other' },
         },
       },
+      {
+        id: 'rope',
+        refs: [],
+        label: 'Corde ou paracorde',
+        names: ['corde', 'paracorde', 'cordelette'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Paracorde', subtype: 'other' },
+        },
+      },
     ],
   },
   {
@@ -500,32 +626,160 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'documents',
-        refs: ['sgdsn', 'georisques'],
+        refs: ['sgdsn', 'georisques', 'canada', 'belgique'],
         label: 'Copies des documents essentiels',
-        hint: 'Pièces d’identité, carte Vitale, assurance.',
+        hint: 'Pièces d’identité, carte Vitale, assurances, dans une pochette étanche.',
         source: 'documents',
       },
       {
         id: 'cash',
-        refs: ['georisques'],
+        refs: ['sgdsn', 'georisques', 'canada', 'belgique'],
         label: 'Argent liquide',
         hint: 'Les paiements par carte peuvent être coupés.',
       },
       {
         id: 'keys',
-        refs: [],
-        label: 'Double des clés',
+        refs: ['sgdsn', 'georisques', 'canada'],
+        label: 'Double des clés (maison, voiture)',
       },
       {
         id: 'bag',
-        refs: ['georisques'],
+        refs: ['belgique', 'croixrouge'],
         label: 'Sac d’évacuation prêt',
-        hint: 'Un sac à dos par personne, rangé près de la sortie.',
+        hint: 'Un sac à dos facile à emporter, rangé près de la sortie.',
         source: 'bags',
+      },
+      {
+        id: 'kids',
+        refs: ['belgique'],
+        label: 'Jeux ou livres pour les enfants',
+        hint: 'Si le foyer compte des enfants.',
+      },
+    ],
+  },
+  {
+    id: 'weapons',
+    title: 'Armes (si vous en détenez)',
+    weapons: true,
+    items: [
+      {
+        id: 'weapon_safe',
+        refs: ['csi'],
+        label: 'Coffre-fort ou armoire forte',
+        hint: 'Catégories B et C : la loi impose un coffre-fort, une armoire forte ou un moyen équivalent.',
+        names: ['coffre-fort', 'coffre fort', 'armoire forte'],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: { name: 'Coffre-fort', accessoryType: 'case' },
+        },
+      },
+      {
+        id: 'weapon_lock',
+        refs: [],
+        label: 'Verrou de pontet ou câble de sécurité',
+        names: ['verrou de pontet', 'cable de securite', 'cadenas'],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: { name: 'Verrou de pontet', accessoryType: 'other' },
+        },
+      },
+      {
+        id: 'ammo',
+        refs: [],
+        label: 'Munitions adaptées à vos armes',
+        hint: 'Rangées à part, au sec.',
+        category: 'weapon',
+        recordType: 'ammo',
+        add: { category: 'weapon', recordType: 'ammo' },
+      },
+      {
+        id: 'magazines',
+        refs: [],
+        label: 'Chargeurs de rechange',
+        hint: 'Selon l’arme.',
+        category: 'weapon',
+        recordType: 'accessory',
+        subtypes: ['magazine'],
+        names: ['chargeur de rechange', 'chargeurs'],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: { accessoryType: 'magazine' },
+        },
+      },
+      {
+        id: 'cleaning',
+        refs: [],
+        label: 'Nécessaire de nettoyage et d’entretien',
+        category: 'weapon',
+        recordType: 'accessory',
+        subtypes: ['cleaning'],
+        names: ['nettoyage', 'ecouvillon', 'entretien'],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: { accessoryType: 'cleaning' },
+        },
+      },
+      {
+        id: 'weapon_case',
+        refs: [],
+        label: 'Étui ou mallette de transport',
+        category: 'weapon',
+        recordType: 'accessory',
+        subtypes: ['case'],
+        names: ['etui', 'mallette', 'housse', 'fourreau'],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: { accessoryType: 'case' },
+        },
+      },
+      {
+        id: 'shooting_protection',
+        refs: [],
+        label: 'Protections auditives et lunettes de tir',
+        names: [
+          'protection auditive',
+          'casque anti-bruit',
+          'casque antibruit',
+          'bouchons',
+          'lunettes de tir',
+        ],
+        add: {
+          category: 'weapon',
+          recordType: 'accessory',
+          prefill: {
+            name: 'Protections auditives',
+            accessoryType: 'other',
+          },
+        },
+      },
+      {
+        id: 'weapon_papers',
+        refs: [],
+        label: 'Copies des titres de détention',
+        hint: 'Permis de chasser validé ou licence de tir, autorisations, récépissés : rangés à part des armes.',
+      },
+      {
+        id: 'tourniquet',
+        refs: [],
+        label: 'Garrot tourniquet',
+        hint: 'Utile seulement avec une formation aux gestes de secours.',
+        names: ['garrot', 'tourniquet'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Garrot tourniquet', subtype: 'dressing' },
+        },
       },
     ],
   },
 ];
+
+/** Coche qui affiche le volet armes sans arme enregistrée. */
+export const SHOW_WEAPONS_MARK = 'show_weapons';
 
 export type GearStatus = 'stock' | 'checked' | 'missing';
 
@@ -541,6 +795,18 @@ export interface GearReport {
   results: GearResult[];
   have: number;
   total: number;
+  /** Volet armes inclus. */
+  weapons: boolean;
+  /** Aucune arme enregistrée : le volet armes s'affiche à la demande. */
+  weaponsOptional: boolean;
+}
+
+/**
+ * Ce qu'un export peut citer du stock : rien pour le volet armes (une
+ * feuille imprimée ou un tableur sort du coffre chiffré).
+ */
+function exportDetail(r: GearResult): string | null {
+  return r.status === 'stock' && !r.section.weapons ? r.detail : null;
 }
 
 function plain(text: string): string {
@@ -550,10 +816,32 @@ function plain(text: string): string {
     .toLowerCase();
 }
 
-/** Un article utilisable (lots non périmés) correspond-il à l'élément ? */
+/**
+ * Un article utilisable (lots non périmés) correspond-il à l'élément ? Un
+ * article d'armement ne compte que pour un élément d'armement, reconnu par
+ * son genre (munition ou accessoire), son type ou son nom.
+ */
 export function gearMatches(gear: GearDefinition, item: ItemSummary): boolean {
-  if (item.usableQuantity <= 0 || item.category === 'weapon') {
+  if (item.usableQuantity <= 0) {
     return false;
+  }
+  if ((item.category === 'weapon') !== (gear.category === 'weapon')) {
+    // Un coffre-fort ou un garrot peut être rangé dans une autre catégorie.
+    return (
+      item.category !== 'weapon' &&
+      gear.category === undefined &&
+      matchesName(gear, item)
+    );
+  }
+  if (gear.category === 'weapon') {
+    if (item.attributes.recordType !== gear.recordType) {
+      return false;
+    }
+    return (
+      (gear.subtypes === undefined && gear.names === undefined) ||
+      (item.subtype !== null && (gear.subtypes ?? []).includes(item.subtype)) ||
+      matchesName(gear, item)
+    );
   }
   if (gear.category === item.category) {
     if (gear.subtypes === undefined) {
@@ -563,6 +851,10 @@ export function gearMatches(gear: GearDefinition, item: ItemSummary): boolean {
       return true;
     }
   }
+  return matchesName(gear, item);
+}
+
+function matchesName(gear: GearDefinition, item: ItemSummary): boolean {
   const name = plain(item.name);
   return (gear.names ?? []).some(word => name.includes(word));
 }
@@ -580,11 +872,17 @@ export async function getBaseGear(
     items: readonly ItemSummary[];
     documentCount: number;
     bagNames: readonly string[];
+    /** Nombre d'armes enregistrées : le volet armes s'affiche s'il y en a. */
+    weaponCount: number;
   },
 ): Promise<GearReport> {
   const marks = await loadMarks(db, GEAR_SCOPE);
+  const weapons = input.weaponCount > 0 || marks.has(SHOW_WEAPONS_MARK);
   const results: GearResult[] = [];
   for (const section of GEAR_SECTIONS) {
+    if (section.weapons && !weapons) {
+      continue;
+    }
     for (const definition of section.items) {
       let detail: string | null;
       if (definition.source === 'documents') {
@@ -616,6 +914,8 @@ export async function getBaseGear(
     results,
     have: results.filter(r => r.status !== 'missing').length,
     total: results.length,
+    weapons,
+    weaponsOptional: input.weaponCount === 0,
   };
 }
 
@@ -659,7 +959,7 @@ export function gearCsv(report: GearReport): string {
         r.section.title,
         r.definition.label,
         GEAR_STATUS_LABELS[r.status],
-        r.status === 'stock' ? r.detail : null,
+        exportDetail(r),
         r.definition.hint ?? null,
         gearRefsLabel(r.definition),
       ]
@@ -681,14 +981,17 @@ function escapeHtml(text: string): string {
 /** Page imprimable : cases à cocher et colonne de notes à la main. */
 export function gearHtml(report: GearReport, date: string): string {
   const sections = GEAR_SECTIONS.map(section => {
-    const rows = report.results
-      .filter(r => r.section.id === section.id)
+    const results = report.results.filter(r => r.section.id === section.id);
+    if (results.length === 0) {
+      return '';
+    }
+    const rows = results
       .map(r => {
         const box = r.status === 'missing' ? '☐' : '☑';
-        const sub =
-          r.status === 'stock' && r.detail
-            ? `Dans le stock : ${r.detail}`
-            : r.definition.hint ?? '';
+        const detail = exportDetail(r);
+        const sub = detail
+          ? `Dans le stock : ${detail}`
+          : r.definition.hint ?? '';
         return `<tr><td class="box">${box}</td><td><b>${escapeHtml(
           r.definition.label,
         )}</b>${
@@ -720,10 +1023,10 @@ small{color:#555}
     report.have
   } sur ${
     report.total
-  } · liste indicative, à adapter au foyer.</p>${sections}<footer>Sources : ${Object.values(
-    GEAR_REFS,
-  )
-    .map(r => escapeHtml(r.title))
+  } · liste indicative, à adapter au foyer.</p>${sections}<footer>Sources : ${[
+    ...new Set(report.results.flatMap(r => r.definition.refs)),
+  ]
+    .map(ref => escapeHtml(GEAR_REFS[ref].title))
     .join(
       ' ; ',
     )}. « Conseil courant » : élément cité par aucune de ces listes.</footer></body></html>`;
