@@ -3,6 +3,9 @@ import { BagRepository, InventoryRepository } from '../../src/inventory';
 import {
   gearCsv,
   gearHtml,
+  GEAR_REFS,
+  GEAR_SECTIONS,
+  gearRefsLabel,
   getBaseGear,
   setGearMark,
 } from '../../src/plan/baseGear';
@@ -75,16 +78,26 @@ describe('matériel de base', () => {
 
     const csv = gearCsv(report);
     expect(
-      csv.startsWith('﻿Famille;Matériel;Statut;Dans le stock;Conseil\r\n'),
+      csv.startsWith(
+        '﻿Famille;Matériel;Statut;Dans le stock;Conseil;Source\r\n',
+      ),
     ).toBe(true);
-    expect(csv).toContain('Eau;Filtre à eau;Dans le stock;Paille filtrante;');
-    expect(csv).toContain('Argent liquide;Je l’ai;');
-    expect(csv).toContain('Éclairage et énergie;Piles de rechange;À prévoir;;');
+    expect(csv).toContain(
+      'Eau;Filtre à eau;Dans le stock;Paille filtrante;;Conseil courant, hors listes officielles',
+    );
+    expect(csv).toContain(
+      'Argent liquide;Je l’ai;;Les paiements par carte peuvent être coupés.;Géorisques',
+    );
+    expect(csv).toContain(
+      'Éclairage et énergie;Piles de rechange;À prévoir;;;SGDSN, Géorisques',
+    );
 
     const html = gearHtml(report, '15/10/2026');
     expect(html).toContain('<h2>Outils</h2>');
     expect(html).toContain('Dans le stock : Couteau suisse');
     expect(html).not.toContain('Couteau de chasse');
+    expect(html).toContain('<td class="src">Conseil courant</td>');
+    expect(html).toContain('Sources : Guide « Tous responsables');
   });
 
   it('échappe les noms dans la page imprimable', async () => {
@@ -106,5 +119,30 @@ describe('matériel de base', () => {
     const html = gearHtml(report, '15/10/2026');
     expect(html).toContain('Lampe &lt;b&gt;&quot;X&quot;&lt;/b&gt; &amp; co');
     expect(html).toContain('2 dans le dossier Documents');
+  });
+
+  it('cite une liste officielle pour chaque élément, sauf les conseils courants', () => {
+    const all = GEAR_SECTIONS.flatMap(section => section.items);
+    const ids = all.map(g => g.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const gear of all) {
+      expect(gear.refs.every(ref => ref in GEAR_REFS)).toBe(true);
+    }
+    expect(all.filter(g => g.refs.length === 0).map(g => g.id)).toEqual([
+      'water_filter',
+      'water_tablets',
+      'water_container',
+      'stove',
+      'stove_fuel',
+      'compass',
+      'disposable_gloves',
+      'toilet_paper',
+      'rope',
+      'work_gloves',
+      'keys',
+    ]);
+    expect(gearRefsLabel(all.find(g => g.id === 'radio')!)).toBe(
+      'SGDSN, Géorisques',
+    );
   });
 });

@@ -1,8 +1,9 @@
 /**
  * Matériel de base : l'équipement courant d'un foyer préparé, rangé par
- * famille (d'après le guide « Tous responsables » du SGDSN et le kit 72 h
- * de Géorisques, complétés des outils et consommables usuels). Chaque
- * élément est reconnu dans le stock (maison et sacs) ou coché à la main.
+ * famille. Chaque élément cite les listes officielles qui le recommandent
+ * (SGDSN, Géorisques, Ready.gov) ; ceux qu'aucune ne cite sont marqués
+ * « conseil courant ». Chaque élément est reconnu dans le stock (maison et
+ * sacs) ou coché à la main.
  *
  * Aucune quantité n'est imposée : la liste dit quoi avoir, les check-lists
  * par paliers disent combien de jours tenir.
@@ -29,6 +30,36 @@ export interface GearDefinition {
   source?: 'documents' | 'bags';
   /** Où l'ajouter : catégorie et valeurs préremplies de la fiche. */
   add?: { category: ItemCategory; prefill?: Record<string, string> };
+  /** Listes officielles qui le recommandent ; vide : conseil courant. */
+  refs: readonly GearRef[];
+}
+
+export type GearRef = 'sgdsn' | 'georisques' | 'readygov';
+
+/** Listes officielles consultées (octobre 2026). */
+export const GEAR_REFS: Record<GearRef, { short: string; title: string }> = {
+  sgdsn: {
+    short: 'SGDSN',
+    title:
+      'Guide « Tous responsables : face aux risques, agissons » (SGDSN, 2025)',
+  },
+  georisques: {
+    short: 'Géorisques',
+    title: 'Mon kit d’urgence 72 h (Géorisques, gouvernement français)',
+  },
+  readygov: {
+    short: 'Ready.gov',
+    title: 'Build a Kit, Emergency Supply List (Ready.gov, FEMA, États-Unis)',
+  },
+};
+
+export const UNOFFICIAL_LABEL = 'Conseil courant, hors listes officielles';
+
+/** « SGDSN, Géorisques », ou le libellé du conseil courant. */
+export function gearRefsLabel(gear: GearDefinition): string {
+  return gear.refs.length === 0
+    ? UNOFFICIAL_LABEL
+    : gear.refs.map(r => GEAR_REFS[r].short).join(', ');
 }
 
 export interface GearSection {
@@ -44,14 +75,16 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'water_reserve',
+        refs: ['sgdsn', 'georisques'],
         label: 'Réserve d’eau potable',
-        hint: 'Bouteilles ou bidons ; 2 L par personne et par jour.',
+        hint: '6 L par personne pour 72 h (2 L par jour), en bouteilles.',
         category: 'water',
         excludeSubtypes: ['filter'],
         add: { category: 'water' },
       },
       {
         id: 'water_filter',
+        refs: [],
         label: 'Filtre à eau',
         category: 'water',
         subtypes: ['filter'],
@@ -63,6 +96,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'water_tablets',
+        refs: [],
         label: 'Pastilles de purification',
         names: ['pastille', 'purification', 'micropur', 'aquatabs'],
         add: {
@@ -72,6 +106,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'water_container',
+        refs: [],
         label: 'Jerrican ou bidon vide',
         hint: 'Pour aller chercher de l’eau à un point de distribution.',
         names: ['jerrican', 'bidon vide'],
@@ -84,6 +119,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'food',
+        refs: ['sgdsn', 'georisques'],
         label: 'Vivres non périssables',
         hint: 'De préférence sans cuisson.',
         category: 'food',
@@ -91,6 +127,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'can_opener',
+        refs: ['sgdsn', 'readygov'],
         label: 'Ouvre-boîte manuel',
         names: ['ouvre-boite', 'ouvre boite', 'ouvre-boites'],
         add: {
@@ -100,6 +137,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove',
+        refs: [],
         label: 'Réchaud',
         category: 'energy',
         subtypes: ['cooking'],
@@ -111,6 +149,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove_fuel',
+        refs: [],
         label: 'Combustible pour le réchaud',
         hint: 'Cartouches de gaz, alcool à brûler, tablettes…',
         category: 'power',
@@ -120,6 +159,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'cookware',
+        refs: ['readygov'],
         label: 'Gamelle et couverts',
         names: ['gamelle', 'popote', 'couvert', 'quart'],
         add: {
@@ -135,6 +175,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'light',
+        refs: ['sgdsn', 'georisques'],
         label: 'Lampe de poche ou frontale',
         category: 'energy',
         subtypes: ['lighting'],
@@ -146,6 +187,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'batteries',
+        refs: ['sgdsn', 'georisques'],
         label: 'Piles de rechange',
         category: 'power',
         subtypes: ['battery'],
@@ -157,6 +199,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'powerbank',
+        refs: ['georisques', 'readygov'],
         label: 'Batterie externe et câble de charge',
         category: 'power',
         subtypes: ['powerbank', 'solar'],
@@ -168,6 +211,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'candles',
+        refs: ['georisques'],
         label: 'Bougies',
         category: 'power',
         subtypes: ['candle'],
@@ -179,6 +223,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'lighter',
+        refs: ['georisques'],
         label: 'Briquet ou allumettes',
         names: ['briquet', 'allumette', 'ferro'],
         add: {
@@ -194,6 +239,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'radio',
+        refs: ['sgdsn', 'georisques'],
         label: 'Radio à piles ou à dynamo',
         hint: 'Pour suivre les consignes des autorités.',
         category: 'energy',
@@ -206,6 +252,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'whistle',
+        refs: ['readygov'],
         label: 'Sifflet',
         hint: 'Pour signaler sa présence.',
         names: ['sifflet'],
@@ -216,6 +263,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'paper_map',
+        refs: ['readygov'],
         label: 'Carte routière papier',
         names: ['carte routiere', 'carte ign', 'carte papier', 'atlas'],
         add: {
@@ -225,6 +273,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'compass',
+        refs: [],
         label: 'Boussole',
         names: ['boussole'],
         add: {
@@ -234,7 +283,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'contacts',
-        label: 'Numéros utiles notés sur papier',
+        refs: ['readygov'],
+        label: 'Papier, crayon et numéros utiles',
         hint: 'Famille, voisins, mairie : sans téléphone, plus de répertoire.',
       },
     ],
@@ -245,6 +295,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'firstaid',
+        refs: ['sgdsn', 'georisques'],
         label: 'Trousse de premiers secours',
         category: 'medical',
         subtypes: ['dressing', 'antiseptic'],
@@ -253,6 +304,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'medicine',
+        refs: ['sgdsn', 'georisques'],
         label: 'Médicaments habituels',
         hint: 'Vos traitements, et une copie des ordonnances.',
         category: 'medical',
@@ -260,7 +312,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         add: { category: 'medical', prefill: { subtype: 'medicine' } },
       },
       {
+        id: 'glasses',
+        refs: ['georisques'],
+        label: 'Lunettes de rechange',
+        hint: 'Si vous en portez.',
+        names: ['lunettes'],
+      },
+      {
         id: 'masks',
+        refs: ['readygov'],
         label: 'Masques',
         names: ['masque', 'ffp2'],
         add: {
@@ -270,6 +330,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'disposable_gloves',
+        refs: [],
         label: 'Gants jetables',
         names: ['gants jetables', 'gants nitrile', 'gants latex'],
         add: {
@@ -279,6 +340,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'hygiene',
+        refs: ['readygov'],
         label: 'Savon et gel hydroalcoolique',
         category: 'medical',
         subtypes: ['hygiene'],
@@ -286,7 +348,19 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         add: { category: 'medical', prefill: { subtype: 'hygiene' } },
       },
       {
+        id: 'wipes',
+        refs: ['readygov'],
+        label: 'Lingettes humides',
+        hint: 'Pour se laver sans eau courante.',
+        names: ['lingette'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Lingettes', subtype: 'hygiene' },
+        },
+      },
+      {
         id: 'toilet_paper',
+        refs: [],
         label: 'Papier toilette',
         names: ['papier toilette', 'papier hygienique'],
         add: {
@@ -296,6 +370,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'trash_bags',
+        refs: ['readygov'],
         label: 'Sacs poubelle',
         hint: 'Déchets, toilettes de fortune, protection contre la pluie.',
         names: ['sac poubelle', 'sacs poubelle', 'sac-poubelle'],
@@ -312,6 +387,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'survival_blanket',
+        refs: ['georisques'],
         label: 'Couverture de survie',
         names: ['couverture de survie', 'couverture survie'],
         add: {
@@ -321,6 +397,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'sleeping',
+        refs: ['readygov'],
         label: 'Sac de couchage ou couverture',
         category: 'energy',
         subtypes: ['sleeping'],
@@ -332,6 +409,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'warm_clothes',
+        refs: ['georisques'],
         label: 'Vêtements chauds et de pluie',
         category: 'energy',
         subtypes: ['protection'],
@@ -340,6 +418,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'tarp',
+        refs: ['readygov'],
         label: 'Bâche',
         category: 'energy',
         subtypes: ['shelter'],
@@ -357,6 +436,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'knife',
+        refs: ['sgdsn'],
         label: 'Couteau ou multi-outil',
         category: 'tool',
         subtypes: ['cutting', 'multitool'],
@@ -365,7 +445,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'hand_tools',
-        label: 'Tournevis et pince',
+        refs: ['georisques'],
+        label: 'Outils de base (tournevis, pince…)',
         category: 'tool',
         subtypes: ['clamping', 'mechanical'],
         names: ['tournevis', 'pince'],
@@ -373,6 +454,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'duct_tape',
+        refs: ['readygov'],
         label: 'Ruban adhésif renforcé',
         names: ['adhesif', 'scotch', 'duct', 'chatterton'],
         add: {
@@ -382,6 +464,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'rope',
+        refs: [],
         label: 'Corde ou paracorde',
         names: ['corde', 'paracorde', 'cordelette'],
         add: {
@@ -391,6 +474,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'work_gloves',
+        refs: [],
         label: 'Gants de travail',
         names: ['gants de travail', 'gants de protection', 'gants cuir'],
         add: {
@@ -400,6 +484,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'extinguisher',
+        refs: ['readygov'],
         label: 'Extincteur',
         names: ['extincteur'],
         add: {
@@ -415,18 +500,25 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'documents',
+        refs: ['sgdsn', 'georisques'],
         label: 'Copies des documents essentiels',
         hint: 'Pièces d’identité, carte Vitale, assurance.',
         source: 'documents',
       },
       {
         id: 'cash',
+        refs: ['georisques'],
         label: 'Argent liquide',
         hint: 'Les paiements par carte peuvent être coupés.',
       },
-      { id: 'keys', label: 'Double des clés' },
+      {
+        id: 'keys',
+        refs: [],
+        label: 'Double des clés',
+      },
       {
         id: 'bag',
+        refs: ['georisques'],
         label: 'Sac d’évacuation prêt',
         hint: 'Un sac à dos par personne, rangé près de la sortie.',
         source: 'bags',
@@ -552,7 +644,14 @@ function csvCell(value: string | null): string {
  */
 export function gearCsv(report: GearReport): string {
   const lines = [
-    ['Famille', 'Matériel', 'Statut', 'Dans le stock', 'Conseil'].join(';'),
+    [
+      'Famille',
+      'Matériel',
+      'Statut',
+      'Dans le stock',
+      'Conseil',
+      'Source',
+    ].join(';'),
   ];
   for (const r of report.results) {
     lines.push(
@@ -562,6 +661,7 @@ export function gearCsv(report: GearReport): string {
         GEAR_STATUS_LABELS[r.status],
         r.status === 'stock' ? r.detail : null,
         r.definition.hint ?? null,
+        gearRefsLabel(r.definition),
       ]
         .map(csvCell)
         .join(';'),
@@ -593,12 +693,16 @@ export function gearHtml(report: GearReport, date: string): string {
           r.definition.label,
         )}</b>${
           sub ? `<br><small>${escapeHtml(sub)}</small>` : ''
-        }</td><td class="note"></td></tr>`;
+        }</td><td class="src">${escapeHtml(
+          r.definition.refs.length === 0
+            ? 'Conseil courant'
+            : gearRefsLabel(r.definition),
+        )}</td><td class="note"></td></tr>`;
       })
       .join('');
     return `<h2>${escapeHtml(
       section.title,
-    )}</h2><table><tr><th></th><th>Matériel</th><th>Notes</th></tr>${rows}</table>`;
+    )}</h2><table><tr><th></th><th>Matériel</th><th>Source</th><th>Notes</th></tr>${rows}</table>`;
   }).join('');
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Matériel de base</title><style>
 body{font-family:sans-serif;color:#111;margin:24px;font-size:12pt}
@@ -608,11 +712,19 @@ table{width:100%;border-collapse:collapse;page-break-inside:auto}
 tr{page-break-inside:avoid}
 th{text-align:left;font-size:10pt;color:#555}
 td{border-bottom:1px solid #ddd;padding:5px 4px;vertical-align:top}
-td.box{width:22px;font-size:15pt}td.note{width:35%}
+td.box{width:22px;font-size:15pt}td.note{width:30%}
+td.src{width:18%;font-size:9pt;color:#555}
+footer{margin-top:16px;font-size:9pt;color:#555}
 small{color:#555}
 </style></head><body><h1>Matériel de base</h1><p>${escapeHtml(date)} · ${
     report.have
   } sur ${
     report.total
-  } · liste indicative, à adapter au foyer.</p>${sections}</body></html>`;
+  } · liste indicative, à adapter au foyer.</p>${sections}<footer>Sources : ${Object.values(
+    GEAR_REFS,
+  )
+    .map(r => escapeHtml(r.title))
+    .join(
+      ' ; ',
+    )}. « Conseil courant » : élément cité par aucune de ces listes.</footer></body></html>`;
 }

@@ -16,7 +16,9 @@ import { localToday } from '../../lib/dates';
 import {
   gearCsv,
   gearHtml,
+  GEAR_REFS,
   GEAR_SECTIONS,
+  gearRefsLabel,
   getBaseGear,
   setGearMark,
   type GearResult,
@@ -138,7 +140,9 @@ export function BaseGearScreen() {
       <Text style={text.muted}>
         L’équipement courant d’un foyer préparé, reconnu dans votre stock
         (maison et sacs). Ce que vous avez sans l’avoir saisi se coche d’un
-        appui. Liste indicative : adaptez-la à votre foyer.
+        appui. Chaque élément indique la liste officielle qui le recommande ; «
+        conseil courant » signale ceux qu’aucune ne cite. Liste indicative :
+        adaptez-la à votre foyer.
       </Text>
 
       <Panel>
@@ -215,6 +219,13 @@ export function BaseGearScreen() {
       {missingOnly && data.have === data.total ? (
         <Text style={text.subtle}>Rien à prévoir : tout est là.</Text>
       ) : null}
+      <Panel title="Sources">
+        {Object.values(GEAR_REFS).map(ref => (
+          <Text key={ref.short} style={text.subtle}>
+            {ref.short} : {ref.title}
+          </Text>
+        ))}
+      </Panel>
     </ScrollView>
   );
 }
@@ -250,6 +261,15 @@ function GearRow(props: {
         <View style={styles.grow}>
           <Text style={text.body}>{definition.label}</Text>
           {sub ? <Text style={text.subtle}>{sub}</Text> : null}
+          <Text
+            style={
+              definition.refs.length === 0 ? styles.unofficial : styles.ref
+            }
+          >
+            {definition.refs.length === 0
+              ? gearRefsLabel(definition)
+              : `Source : ${gearRefsLabel(definition)}`}
+          </Text>
         </View>
       </Pressable>
       {canAdd ? (
@@ -302,6 +322,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderActive,
   },
+  ref: { ...text.subtle, fontSize: 12, color: colors.cyanSoft },
+  unofficial: { ...text.subtle, fontSize: 12, fontStyle: 'italic' },
   addText: { color: colors.text, fontSize: 13, fontWeight: '600' },
   pressed: { opacity: 0.82 },
 });
