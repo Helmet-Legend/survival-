@@ -17,6 +17,8 @@ import React, {
 } from 'react';
 import {
   AppState,
+  Image,
+  type ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -351,10 +353,17 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 />
                 {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
                 <View style={styles.brandBox}>
-                  <Brand size={overlay === null ? 24 : 18} />
-                  {overlay === null ? (
-                    <Text style={styles.vaultBadge}>Coffre chiffré</Text>
-                  ) : null}
+                  <Image
+                    source={LOGO}
+                    style={overlay === null ? styles.logo : styles.logoSmall}
+                    accessibilityIgnoresInvertColors
+                  />
+                  <View style={styles.brandText}>
+                    <Brand size={overlay === null ? 20 : 18} />
+                    {overlay === null ? (
+                      <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                    ) : null}
+                  </View>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -512,13 +521,28 @@ function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
   );
 }
 
+/** Tête de loup du logo, détourée en rond. */
+const LOGO_FILE: number | string = require('./assets/fenrir-logo.png');
+// Aperçu web : `require` donne une URL de données.
+const LOGO: ImageSourcePropType =
+  typeof LOGO_FILE === 'string' ? { uri: LOGO_FILE } : LOGO_FILE;
+
 /** Rouge clair lisible sur le fond rouge sombre du bouton SOS. */
 const SOS_TEXT = '#FF8A96';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  brandBox: { flex: 1, alignItems: 'center', gap: 2 },
+  brandBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.s,
+  },
+  brandText: { alignItems: 'center', gap: 2 },
+  logo: { width: 42, height: 42, borderRadius: 21 },
+  logoSmall: { width: 32, height: 32, borderRadius: 16 },
   vaultBadge: { color: colors.success, fontSize: 11, fontWeight: '600' },
   sos: {
     flexDirection: 'row',
