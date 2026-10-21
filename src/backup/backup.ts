@@ -104,15 +104,17 @@ const TABLE_ORDER = [
 ];
 
 /**
- * Tables sauvegardées : tout sauf les guides (réinstallés), l'index FTS et
- * les cartes hors ligne (lourdes, re-téléchargeables).
+ * Tables sauvegardées : tout sauf les guides (réinstallés), l'index FTS,
+ * les cartes hors ligne (lourdes, re-téléchargeables) et le journal de
+ * synchronisation (propre à chaque téléphone).
  */
 async function backedUpTables(db: SqlDatabase): Promise<string[]> {
   const { rows } = await db.execute(
     `SELECT name FROM sqlite_master
       WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
         AND name NOT LIKE 'survival_guides%'
-        AND name NOT LIKE 'map\\_%' ESCAPE '\\'`,
+        AND name NOT LIKE 'map\\_%' ESCAPE '\\'
+        AND name NOT LIKE 'sync\\_%' ESCAPE '\\'`,
   );
   const names = rows.map(r => String(r.name));
   const rank = (name: string) => {

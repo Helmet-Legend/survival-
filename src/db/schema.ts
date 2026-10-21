@@ -669,6 +669,176 @@ const migration15: Migration = {
   ],
 };
 
+/**
+ * Synchronisation entre deux téléphones : journal des lignes modifiées.
+ *
+ * Plutôt qu'un `deleted_at` dans chaque table (qui obligerait à filtrer les
+ * lignes supprimées dans toutes les requêtes, fiches et listes), les
+ * suppressions restent réelles et laissent une « pierre tombale » dans
+ * `sync_rows`. Des triggers notent chaque ajout, modification et
+ * suppression des tables partagées ; le code de l'application ne change pas.
+ *
+ * - `hlc` : horodatage logique hybride attribué à la synchronisation
+ *   (NULL = modifié ici, pas encore horodaté).
+ * - `dirty_at` : heure de la modification locale.
+ * - `is_weapon` : ligne du volet armes (partagée seulement sur option).
+ * - `base` : quantité d'un lot au dernier échange, pour additionner les
+ *   consommations faites des deux côtés.
+ *
+ * Pendant l'application d'un lot reçu, `sync_meta.applying` désactive les
+ * triggers pour ne pas renvoyer à l'autre téléphone ce qu'il vient d'envoyer.
+ *
+ * ATTENTION : une migration qui reconstruit une de ces tables (CREATE
+ * nouvelle, copie, DROP, RENAME) supprime ses triggers ; il faut les recréer
+ * (test « chaque table partagée a ses triggers de synchronisation »).
+ */
+const SYNC_ITEM_IS_WEAPON = (itemId: string) =>
+  `coalesce((SELECT category = 'weapon' FROM inventory_items WHERE id = ${itemId}), 0)`;
+
+const SYNC_SHARED: readonly {
+  table: string;
+  key: (row: string) => string;
+  weapon: (row: string) => string;
+  time: string;
+  when?: (row: string) => string;
+}[] = [
+  {
+    table: 'settings',
+    key: r => `${r}.key`,
+    weapon: () => '0',
+    time: NOW,
+    when: r =>
+      `${r}.key IN ('household_members', 'water_liters_per_person_day',
+        'kcal_per_person_day', 'target_days', 'wh_per_person_day',
+        'energy_devices', 'purchase_plan')`,
+  },
+  {
+    table: 'family_plan',
+    key: r => `CAST(${r}.id AS TEXT)`,
+    weapon: () => '0',
+    time: 'updated_at',
+  },
+  {
+    table: 'preparation_marks',
+    key: r => `${r}.scope || char(31) || ${r}.item`,
+    weapon: () => '0',
+    time: 'checked_at',
+  },
+  { table: 'bags', key: r => `${r}.id`, weapon: () => '0', time: 'updated_at' },
+  {
+    table: 'inventory_items',
+    key: r => `${r}.id`,
+    weapon: r => `(${r}.category = 'weapon')`,
+    time: 'updated_at',
+  },
+  {
+    table: 'inventory_lots',
+    key: r => `${r}.id`,
+    weapon: r => SYNC_ITEM_IS_WEAPON(`${r}.item_id`),
+    time: 'updated_at',
+  },
+  {
+    table: 'weapons',
+    key: r => `${r}.id`,
+    weapon: () => '1',
+    time: 'updated_at',
+  },
+  {
+    table: 'documents',
+    key: r => `${r}.id`,
+    weapon: () => '0',
+    time: 'updated_at',
+  },
+  {
+    table: 'photos',
+    key: r => `${r}.id`,
+    weapon: r =>
+      `(${r}.owner_type = 'weapon' OR (${r}.owner_type = 'item' AND ${SYNC_ITEM_IS_WEAPON(
+        `${r}.owner_id`,
+      )}))`,
+    time: 'created_at',
+  },
+  {
+    table: 'barcode_products',
+    key: r => `${r}.code`,
+    weapon: r => SYNC_ITEM_IS_WEAPON(`${r}.item_id`),
+    time: 'updated_at',
+  },
+  {
+    table: 'stock_movements',
+    key: r => `${r}.id`,
+    weapon: r => SYNC_ITEM_IS_WEAPON(`${r}.item_id`),
+    time: 'created_at',
+  },
+  {
+    table: 'poi_locations',
+    key: r => `${r}.id`,
+    weapon: () => '0',
+    time: 'updated_at',
+  },
+];
+
+const SYNC_NOT_APPLYING =
+  "NOT EXISTS (SELECT 1 FROM sync_meta WHERE key = 'applying')";
+
+const syncTriggers = (t: (typeof SYNC_SHARED)[number]): string[] =>
+  (
+    [
+      ['ai', 'INSERT', 'NEW', 0],
+      ['au', 'UPDATE', 'NEW', 0],
+      ['ad', 'DELETE', 'OLD', 1],
+    ] as const
+  ).map(
+    ([suffix, event, row, deleted]) =>
+      `CREATE TRIGGER trg_sync_${t.table}_${suffix} AFTER ${event} ON ${t.table}
+       FOR EACH ROW${t.when ? ` WHEN ${t.when(row)}` : ''}
+       BEGIN
+         INSERT INTO sync_rows (tbl, key, hlc, dirty_at, deleted, is_weapon)
+         SELECT '${t.table}', ${t.key(row)}, NULL, ${NOW}, ${deleted},
+                ${t.weapon(row)}
+          WHERE ${SYNC_NOT_APPLYING}
+         ON CONFLICT (tbl, key) DO UPDATE
+            SET hlc = NULL, dirty_at = excluded.dirty_at,
+                deleted = excluded.deleted,
+                is_weapon = max(is_weapon, excluded.is_weapon);
+       END`,
+  );
+
+const migration16: Migration = {
+  version: 16,
+  name: 'synchronisation entre téléphones',
+  statements: [
+    `CREATE TABLE sync_meta (
+       key   TEXT PRIMARY KEY NOT NULL,
+       value TEXT NOT NULL
+     ) STRICT`,
+    // Identifiant aléatoire de ce téléphone (départage des horodatages).
+    `INSERT INTO sync_meta (key, value)
+     VALUES ('device_id', lower(hex(randomblob(8))))`,
+    `CREATE TABLE sync_rows (
+       tbl       TEXT NOT NULL,
+       key       TEXT NOT NULL,
+       hlc       TEXT,
+       dirty_at  TEXT,
+       deleted   INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean('deleted')}),
+       is_weapon INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean('is_weapon')}),
+       base      REAL,
+       PRIMARY KEY (tbl, key)
+     ) STRICT, WITHOUT ROWID`,
+    'CREATE INDEX sync_rows_hlc ON sync_rows (hlc)',
+    // Les données déjà présentes partiront à la première synchronisation.
+    ...SYNC_SHARED.map(
+      t =>
+        `INSERT INTO sync_rows (tbl, key, dirty_at, is_weapon)
+         SELECT '${t.table}', ${t.key(t.table)}, ${
+          t.time === NOW ? NOW : `${t.table}.${t.time}`
+        }, ${t.weapon(t.table)}
+           FROM ${t.table}${t.when ? ` WHERE ${t.when(t.table)}` : ''}`,
+    ),
+    ...SYNC_SHARED.flatMap(syncTriggers),
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -685,6 +855,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration13,
   migration14,
   migration15,
+  migration16,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
