@@ -64,8 +64,13 @@ describe('sauvegarde chiffrée', () => {
   it('restaure tout le contenu sur un autre coffre', async () => {
     const source = await filledDb();
     const { text, summary } = await createBackup(source, PASSWORD, options());
-    // Rien de lisible dans le fichier.
-    expect(text).not.toContain('Riz');
+    // Rien de lisible dans le fichier : l'enveloppe ne contient que les
+    // paramètres, le contenu n'est qu'un bloc chiffré en base64 (où trois
+    // lettres comme « Riz » peuvent apparaître par hasard).
+    const { data, ...envelope } = JSON.parse(text) as { data: string };
+    expect(JSON.stringify(envelope)).not.toContain('Riz');
+    expect(data).toMatch(/^[A-Za-z0-9+/]+=*$/);
+    expect(text).not.toContain('Passeport');
     expect(text).not.toContain('19FD84920');
     expect(summary.rows).toBeGreaterThan(5);
 
