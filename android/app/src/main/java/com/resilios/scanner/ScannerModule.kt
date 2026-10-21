@@ -27,6 +27,16 @@ class ScannerModule(private val context: ReactApplicationContext) :
 
   @ReactMethod
   fun scan(series: Boolean, promise: Promise) {
+    start(promise) { it.putExtra(ScanActivity.EXTRA_SERIES, series) }
+  }
+
+  /** QR code d'association (partage du foyer) : une seule lecture. */
+  @ReactMethod
+  fun scanQr(promise: Promise) {
+    start(promise) { it.putExtra(ScanActivity.EXTRA_QR, true) }
+  }
+
+  private fun start(promise: Promise, extras: (Intent) -> Unit) {
     if (pending != null) {
       promise.reject("BUSY", "Une lecture est déjà en cours")
       return
@@ -38,8 +48,8 @@ class ScannerModule(private val context: ReactApplicationContext) :
     }
     pending = promise
     try {
-      val intent =
-          Intent(activity, ScanActivity::class.java).putExtra(ScanActivity.EXTRA_SERIES, series)
+      val intent = Intent(activity, ScanActivity::class.java)
+      extras(intent)
       activity.startActivityForResult(intent, REQUEST_SCAN)
     } catch (e: Exception) {
       pending = null

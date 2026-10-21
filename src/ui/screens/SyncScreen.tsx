@@ -1,10 +1,8 @@
 /**
- * MAQUETTE — Partage du foyer avec un autre téléphone.
- *
- * Écrans seulement : rien n'est encore envoyé ni reçu. Association par QR
- * code, puis synchronisation directe entre les deux téléphones (même Wi-Fi
- * ou partage de connexion de l'un d'eux), sans internet, sans compte, sans
- * serveur.
+ * Partage du foyer avec un autre téléphone : association par QR code, puis
+ * synchronisation directe sur le Wi-Fi local (ou le partage de connexion de
+ * l'un des deux), sans internet, sans compte, sans serveur. Tout ce qui
+ * circule est chiffré de bout en bout.
  */
 import {
   ArrowLeftRight,
@@ -15,7 +13,7 @@ import {
   CircleCheck,
   Crosshair,
   Home,
-  QrCode,
+  QrCode as QrIcon,
   RefreshCw,
   ScanLine,
   ShieldCheck,
@@ -24,7 +22,7 @@ import {
   UserPlus,
   Wifi,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -33,77 +31,344 @@ import {
   Text,
   View,
 } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
 
-import { Button, Panel, ScreenTitle, StatusChip } from '../components/controls';
+import {
+  forgetPeer,
+  hostInvite,
+  joinFromInvite,
+  lastSyncedAt,
+  listPeers,
+  loadAutoSync,
+  saveAutoSync,
+  syncWithPeer,
+  updatePeerOptions,
+  type ExchangeResult,
+  type Hosting,
+  type SyncOptions,
+} from '../../sync';
+import { countPendingChanges } from '../../sync/store';
+import {
+  Button,
+  Field,
+  Notice,
+  Panel,
+  ScreenTitle,
+  StatusChip,
+} from '../components/controls';
+import { QrCode } from '../components/QrCode';
+import { formatSince } from '../format';
 import { useNavigation } from '../navigation';
+import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
+import { useLoader } from '../useLoader';
 
-type Step =
-  | 'intro'
-  | 'share'
-  | 'qr'
-  | 'ownerDone'
-  | 'scan'
-  | 'merge'
-  | 'joinDone'
-  | 'paired';
+type Step = 'intro' | 'share' | 'qr' | 'scan' | 'working' | 'done';
 
 const ALWAYS =
   'Stocks, sacs, documents, plan familial, carte, foyer, kit et plan d’achats';
 
-/** Derniers changements reçus (exemple de maquette). */
-const RECENT = [
-  { who: 'Partenaire', what: 'Eau en bidons : −3 L', when: '08:41' },
-  { who: 'Partenaire', what: 'Riz 1 kg ajouté (DDM 03/2028)', when: '08:40' },
-  { who: 'Vous', what: 'Piles AA : −4', when: 'hier' },
-  { who: 'Partenaire', what: 'Point « École » ajouté', when: 'hier' },
-];
-
 const NETWORK_TIP =
   'Pas de Wi-Fi ? Activez le partage de connexion sur l’un des téléphones et connectez-y l’autre. Aucune donnée mobile n’est utilisée.';
 
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function summary(result: ExchangeResult): string {
+  const r = result.received;
+  const changes = r.written + r.removed;
+  return `Reçu : ${changes} modification${changes > 1 ? 's' : ''} · Envoyé : ${
+    result.sent
+  }`;
+}
+
 export function SyncScreen() {
+  const session = useSession();
+  const { db, network, scanSource, random } = session;
   const navigation = useNavigation();
+  const ctx = { db, random };
+
+  const { data, reload } = useLoader(async () => {
+    const [peer] = await listPeers(db);
+    return {
+      peer: peer ?? null,
+      last: peer ? await lastSyncedAt(db, peer.device) : null,
+      auto: await loadAutoSync(db),
+      pending: await countPendingChanges(db),
+    };
+  });
+
   const [step, setStep] = useState<Step>('intro');
   const [details, setDetails] = useState(false);
-  const [weapons, setWeapons] = useState(false);
-  const [photos, setPhotos] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [synced, setSynced] = useState(false);
-  const [merge, setMerge] = useState(true);
+  const [options, setOptions] = useState<SyncOptions>({
+    weapons: false,
+    photos: false,
+  });
+  const [invite, setInvite] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ExchangeResult | null>(null);
+  const [confirmForget, setConfirmForget] = useState(false);
+  const hosting = useRef<Hosting | null>(null);
+  const autoStarted = useRef(false);
+  const mounted = useRef(true);
 
-  const options = (
+  useEffect(
+    () => () => {
+      mounted.current = false;
+      hosting.current?.cancel();
+    },
+    [],
+  );
+
+  const run = async (work: () => Promise<ExchangeResult>) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await work();
+      if (mounted.current) {
+        setResult(r);
+        setStep('done');
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError(message(e));
+      }
+    } finally {
+      if (mounted.current) {
+        setBusy(false);
+        void reload();
+      }
+    }
+  };
+
+  const syncNow = () => {
+    const peer = data?.peer;
+    if (peer) {
+      void run(() => syncWithPeer(ctx, network, peer));
+    }
+  };
+
+  // Synchronisation dès l'ouverture de l'écran, si elle est activée.
+  useEffect(() => {
+    if (data?.peer && data.auto && network.available && !autoStarted.current) {
+      autoStarted.current = true;
+      syncNow();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une fois, au premier chargement
+  }, [data]);
+
+  const showCode = async () => {
+    setError(null);
+    try {
+      const h = await hostInvite(ctx, network, options);
+      hosting.current = h;
+      setInvite(h.text);
+      setStep('qr');
+      h.done.then(
+        r => {
+          hosting.current = null;
+          if (mounted.current) {
+            setResult(r);
+            setStep('done');
+            void reload();
+          }
+        },
+        () => undefined,
+      );
+    } catch (e) {
+      setError(message(e));
+    }
+  };
+
+  const join = (text: string) =>
+    run(() => joinFromInvite(ctx, network, text.trim()));
+
+  const scan = async () => {
+    setError(null);
+    if (!scanSource.scanQr) {
+      return;
+    }
+    try {
+      const text = await scanSource.scanQr();
+      if (text) {
+        setStep('working');
+        await join(text);
+      }
+    } catch (e) {
+      setError(message(e));
+    }
+  };
+
+  const title = (
+    <ScreenTitle
+      title="Partage du foyer"
+      onBack={navigation.close}
+      backLabel={navigation.backLabel}
+    />
+  );
+
+  if (data === null) {
+    return <View style={styles.page}>{title}</View>;
+  }
+
+  const unavailable = !network.available ? (
+    <Notice
+      tone="error"
+      message="Partage indisponible sur cet appareil : il faut l’application Android sur les deux téléphones."
+    />
+  ) : null;
+  const errorNotice = error ? <Notice tone="error" message={error} /> : null;
+
+  const optionRows = (
+    value: SyncOptions,
+    onChange: (next: SyncOptions) => void,
+  ) => (
     <>
       <OptionRow
         icon={Crosshair}
         color={colors.weapons}
         label="Armement et munitions"
         hint="Transférés chiffrés. Jamais montrés dans les notifications."
-        value={weapons}
-        onChange={setWeapons}
+        value={value.weapons}
+        onChange={v => onChange({ ...value, weapons: v })}
       />
       <OptionRow
         icon={Camera}
         color={colors.cyan}
         label="Photos"
         hint="Articles et documents. Plus long à transférer."
-        value={photos}
-        onChange={setPhotos}
+        value={value.photos}
+        onChange={v => onChange({ ...value, photos: v })}
       />
     </>
   );
 
+  // --- Résultat d'un échange -------------------------------------------------
+  if (step === 'done' && result) {
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        {title}
+        <View style={styles.done}>
+          <CircleCheck color={colors.success} size={72} strokeWidth={1.6} />
+          <Text style={styles.doneTitle}>
+            {result.paired ? 'Téléphones associés' : 'Synchronisé'}
+          </Text>
+          <Text style={[text.body, styles.center]}>{summary(result)}</Text>
+          <Text style={[text.subtle, styles.center]}>
+            Ensuite, ouvrez le partage du foyer sur les deux téléphones pour
+            vous mettre à jour.
+          </Text>
+        </View>
+        <Button
+          variant="primary"
+          label="Terminé"
+          onPress={() => {
+            setResult(null);
+            setStep('intro');
+          }}
+        />
+      </ScrollView>
+    );
+  }
+
+  // --- Téléphone déjà associé -------------------------------------------------
+  if (data.peer) {
+    const peer = data.peer;
+    return (
+      <ScrollView contentContainerStyle={styles.page}>
+        {title}
+        {unavailable}
+        <Panel>
+          <View style={styles.row}>
+            <Smartphone color={colors.success} size={24} />
+            <View style={styles.grow}>
+              <Text style={styles.headline}>Téléphone associé</Text>
+              <Text style={text.subtle}>
+                {data.last
+                  ? `Synchronisé ${formatSince(data.last)}`
+                  : 'Pas encore synchronisé'}
+              </Text>
+            </View>
+            <StatusChip
+              tone={data.pending > 0 ? 'warn' : 'ok'}
+              label={data.pending > 0 ? 'À synchroniser' : 'À jour'}
+            />
+          </View>
+          {data.pending > 0 ? (
+            <Text style={text.subtle}>
+              {data.pending} modification{data.pending > 1 ? 's' : ''} à
+              envoyer.
+            </Text>
+          ) : null}
+          <Button
+            variant="primary"
+            icon={RefreshCw}
+            label={busy ? 'Recherche de l’autre téléphone…' : 'Synchroniser'}
+            disabled={busy || !network.available}
+            onPress={syncNow}
+          />
+          <Text style={text.subtle}>
+            Ouvrez le partage du foyer sur l’autre téléphone, sur le même Wi-Fi.{' '}
+            {NETWORK_TIP}
+          </Text>
+        </Panel>
+        {errorNotice}
+
+        <Panel title="Partagé en plus des stocks">
+          {optionRows(peer.options, next => {
+            void updatePeerOptions(db, peer.device, next).then(reload);
+          })}
+          <Text style={text.subtle}>
+            L’autre téléphone doit aussi l’activer. Désactiver une option arrête
+            l’envoi de ces fiches.
+          </Text>
+        </Panel>
+
+        <Panel>
+          <OptionRow
+            icon={Wifi}
+            color={colors.success}
+            label="Synchroniser à l’ouverture"
+            hint="Dès que cet écran s’ouvre, si l’autre téléphone est à portée."
+            value={data.auto}
+            onChange={v => {
+              void saveAutoSync(db, v).then(reload);
+            }}
+          />
+        </Panel>
+
+        <Button
+          variant="danger"
+          icon={Unlink}
+          label={
+            confirmForget
+              ? 'Confirmer : dissocier ce téléphone'
+              : 'Dissocier ce téléphone'
+          }
+          onPress={() => {
+            if (!confirmForget) {
+              setConfirmForget(true);
+              return;
+            }
+            setConfirmForget(false);
+            void forgetPeer(db, peer.device).then(reload);
+          }}
+        />
+        <Text style={text.subtle}>
+          Après dissociation, chaque téléphone garde sa copie du stock et plus
+          rien n’est échangé.
+        </Text>
+      </ScrollView>
+    );
+  }
+
+  // --- Association -------------------------------------------------------------
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <ScreenTitle
-        title="Partage du foyer"
-        onBack={navigation.close}
-        backLabel={navigation.backLabel}
-      />
-      <Text style={styles.mock}>
-        Maquette : rien n’est encore envoyé ni reçu.
-      </Text>
+      {title}
+      {unavailable}
 
       {step === 'intro' ? (
         <>
@@ -116,13 +381,13 @@ export function SyncScreen() {
               ajouter, consommer et modifier.
             </Text>
           </View>
-
           <Text style={text.label}>Sur ce téléphone…</Text>
           <BigChoice
             icon={Home}
             color={colors.primary}
             title="J’ai déjà le stock ici"
             hint="Ce téléphone affichera un code à scanner."
+            disabled={!network.available}
             onPress={() => setStep('share')}
           />
           <BigChoice
@@ -130,9 +395,9 @@ export function SyncScreen() {
             color={colors.cyan}
             title="Je rejoins un foyer"
             hint="Scannez le code affiché par l’autre téléphone."
+            disabled={!network.available}
             onPress={() => setStep('scan')}
           />
-
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: details }}
@@ -158,7 +423,7 @@ export function SyncScreen() {
                 <ShieldCheck color={colors.textMuted} size={18} />
                 <Text style={[text.subtle, styles.grow]}>
                   Jamais : codes PIN, code de contrainte, réglages du téléphone.
-                  Ouvert avec le code de contrainte, Fenrir ne synchronise rien.
+                  Tout ce qui circule est chiffré.
                 </Text>
               </View>
             </Panel>
@@ -172,27 +437,30 @@ export function SyncScreen() {
           <Panel>
             <Line on label={ALWAYS} />
             <View style={styles.divider} />
-            {options}
+            {optionRows(options, setOptions)}
             <Text style={text.subtle}>Modifiable plus tard à tout moment.</Text>
           </Panel>
+          {errorNotice}
           <Button
             variant="primary"
-            icon={QrCode}
+            icon={QrIcon}
             label="Afficher le code"
-            onPress={() => setStep('qr')}
+            onPress={() => {
+              void showCode();
+            }}
           />
           <Button label="Annuler" onPress={() => setStep('intro')} />
         </>
       ) : null}
 
-      {step === 'qr' ? (
+      {step === 'qr' && invite ? (
         <>
           <Panel>
             <Text style={[styles.headline, styles.center]}>
               Scannez ce code avec l’autre téléphone
             </Text>
             <View style={styles.qrBox}>
-              <MockQr size={240} />
+              <QrCode text={invite} size={260} />
             </View>
             <Text style={[text.body, styles.center]}>
               Sur l’autre téléphone : Réglages › Partage du foyer › « Je rejoins
@@ -203,198 +471,66 @@ export function SyncScreen() {
             </Text>
           </Panel>
           <Text style={text.subtle}>
-            {[
-              'Partagé : stocks',
-              weapons ? 'armement' : null,
-              photos ? 'photos' : null,
-            ]
-              .filter(Boolean)
-              .join(', ')}
-            . Code valable 5 minutes. {NETWORK_TIP}
+            Code valable 5 minutes, une seule fois. Les deux téléphones doivent
+            être sur le même Wi-Fi. {NETWORK_TIP}
           </Text>
           <Button
-            variant="primary"
-            icon={Check}
-            label="Maquette : simuler le scan"
-            onPress={() => setStep('ownerDone')}
-          />
-          <Button label="Annuler" onPress={() => setStep('intro')} />
-        </>
-      ) : null}
-
-      {step === 'scan' ? (
-        <>
-          <View style={styles.camera}>
-            <View style={styles.frame}>
-              <ScanLine color={colors.cyan} size={64} strokeWidth={1.2} />
-            </View>
-            <Text style={styles.cameraText}>
-              Visez le code affiché sur l’autre téléphone
-            </Text>
-          </View>
-          <Text style={text.subtle}>{NETWORK_TIP}</Text>
-          <Button
-            variant="primary"
-            icon={Check}
-            label="Maquette : simuler le scan"
-            onPress={() => setStep('merge')}
-          />
-          <Button label="Annuler" onPress={() => setStep('intro')} />
-        </>
-      ) : null}
-
-      {step === 'merge' ? (
-        <>
-          <Text style={styles.headline}>
-            Ce téléphone contient déjà 23 articles
-          </Text>
-          <Text style={text.subtle}>
-            Cette question n’apparaît que si ce téléphone a déjà un stock.
-          </Text>
-          <Choice
-            selected={merge}
-            label="Les réunir"
-            hint="Recommandé. Rien n’est perdu : les articles des deux téléphones sont réunis."
-            onPress={() => setMerge(true)}
-          />
-          <Choice
-            selected={!merge}
-            label="Les effacer"
-            hint="Ce téléphone ne servait qu’à essayer Fenrir. Il ne garde que le stock partagé."
-            onPress={() => setMerge(false)}
-          />
-          <Button
-            variant="primary"
-            icon={Check}
-            label="Continuer"
-            onPress={() => setStep('joinDone')}
-          />
-        </>
-      ) : null}
-
-      {step === 'ownerDone' || step === 'joinDone' ? (
-        <>
-          <View style={styles.done}>
-            <CircleCheck color={colors.success} size={72} strokeWidth={1.6} />
-            <Text style={styles.doneTitle}>Téléphones associés</Text>
-            <Text style={[text.body, styles.center]}>
-              {step === 'joinDone'
-                ? 'Le stock partagé est arrivé : 148 articles, 3 sacs, plan familial.'
-                : 'Le stock a été envoyé à l’autre téléphone.'}
-            </Text>
-            <Text style={[text.subtle, styles.center]}>
-              Ensuite, tout se met à jour dès que les deux téléphones ont Fenrir
-              ouvert à proximité.
-            </Text>
-          </View>
-          <Button
-            variant="primary"
-            label="Terminé"
-            onPress={() => setStep('paired')}
-          />
-        </>
-      ) : null}
-
-      {step === 'paired' ? (
-        <>
-          <Panel>
-            <View style={styles.row}>
-              <Smartphone color={colors.success} size={24} />
-              <View style={styles.grow}>
-                <Text style={styles.headline}>Téléphone partenaire</Text>
-                <Text style={text.subtle}>
-                  {synced
-                    ? 'Synchronisé à l’instant'
-                    : 'Dernière synchronisation : aujourd’hui 08:42'}
-                </Text>
-              </View>
-              <StatusChip
-                tone={synced ? 'ok' : 'info'}
-                label={synced ? 'À jour' : 'Associé'}
-              />
-            </View>
-            <Button
-              variant="primary"
-              icon={RefreshCw}
-              label={
-                syncing ? 'Recherche du téléphone…' : 'Synchroniser maintenant'
-              }
-              disabled={syncing}
-              onPress={() => {
-                setSyncing(true);
-                setTimeout(() => {
-                  setSyncing(false);
-                  setSynced(true);
-                }, 900);
-              }}
-            />
-            {synced ? (
-              <Text style={styles.result}>
-                Reçu : 4 changements · Envoyé : 1
-              </Text>
-            ) : (
-              <Text style={text.subtle}>
-                Fenrir ouvert sur les deux téléphones, sur le même Wi-Fi.{' '}
-                {NETWORK_TIP}
-              </Text>
-            )}
-          </Panel>
-
-          <Panel title="Derniers changements">
-            {RECENT.map(r => (
-              <View key={r.what} style={styles.change}>
-                <Text
-                  style={[
-                    styles.who,
-                    {
-                      color: r.who === 'Vous' ? colors.primary : colors.cyan,
-                      borderColor: tint(
-                        r.who === 'Vous' ? colors.primary : colors.cyan,
-                        '66',
-                      ),
-                    },
-                  ]}
-                >
-                  {r.who}
-                </Text>
-                <Text style={[text.body, styles.grow]}>{r.what}</Text>
-                <Text style={text.subtle}>{r.when}</Text>
-              </View>
-            ))}
-          </Panel>
-
-          <Panel title="Partagé en plus des stocks">
-            {options}
-            <Text style={text.subtle}>
-              Désactiver une option retire ces fiches de l’autre téléphone à la
-              synchronisation suivante.
-            </Text>
-          </Panel>
-
-          <Panel>
-            <OptionRow
-              icon={Wifi}
-              color={colors.success}
-              label="Synchroniser à l’ouverture"
-              hint="Dès que l’autre téléphone est à portée."
-              value
-              onChange={() => undefined}
-            />
-          </Panel>
-
-          <Button
-            variant="danger"
-            icon={Unlink}
-            label="Dissocier ce téléphone"
+            label="Annuler"
             onPress={() => {
-              setSynced(false);
+              hosting.current?.cancel();
+              hosting.current = null;
+              setInvite(null);
               setStep('intro');
             }}
           />
+        </>
+      ) : null}
+
+      {step === 'scan' || step === 'working' ? (
+        <>
+          {scanSource.scanQr ? (
+            <Button
+              variant="primary"
+              icon={ScanLine}
+              label={
+                busy ? 'Connexion à l’autre téléphone…' : 'Scanner le code'
+              }
+              disabled={busy}
+              onPress={() => {
+                void scan();
+              }}
+            />
+          ) : null}
+          <Field
+            label="Ou collez le code"
+            value={code}
+            onChangeText={setCode}
+            placeholder="FENRIR1.…"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Button
+            icon={Check}
+            label="Rejoindre"
+            disabled={busy || code.trim() === ''}
+            onPress={() => {
+              void join(code);
+            }}
+          />
+          {errorNotice}
+          <Text style={text.subtle}>{NETWORK_TIP}</Text>
           <Text style={text.subtle}>
-            Après dissociation, chaque téléphone garde sa copie du stock et plus
-            rien n’est échangé.
+            Le stock déjà présent sur ce téléphone est réuni avec celui du foyer
+            : rien n’est perdu.
           </Text>
+          <Button
+            label="Annuler"
+            disabled={busy}
+            onPress={() => {
+              setError(null);
+              setStep('intro');
+            }}
+          />
         </>
       ) : null}
     </ScrollView>
@@ -406,6 +542,7 @@ function BigChoice(props: {
   color: string;
   title: string;
   hint: string;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   const Icon = props.icon;
@@ -413,11 +550,14 @@ function BigChoice(props: {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${props.title}. ${props.hint}`}
+      accessibilityState={{ disabled: props.disabled === true }}
+      disabled={props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => [
         styles.big,
         { borderColor: tint(props.color, '88') },
         pressed && styles.pressed,
+        props.disabled && styles.disabled,
       ]}
     >
       <View
@@ -475,90 +615,18 @@ function Line(props: { on: boolean; label: string }) {
   );
 }
 
-function Choice(props: {
-  selected: boolean;
-  label: string;
-  hint: string;
-  onPress: () => void;
-}) {
-  return (
-    <Panel
-      onPress={props.onPress}
-      accessibilityLabel={props.label}
-      accent={props.selected ? colors.primary : undefined}
-    >
-      <View style={styles.row}>
-        <View style={[styles.radio, props.selected && styles.radioOn]} />
-        <View style={styles.grow}>
-          <Text style={text.body}>{props.label}</Text>
-          <Text style={text.subtle}>{props.hint}</Text>
-        </View>
-      </View>
-    </Panel>
-  );
-}
-
-/** Faux QR code (maquette) : motifs de repérage et modules pseudo-aléatoires. */
-function MockQr(props: { size: number }) {
-  const n = 29;
-  const cell = props.size / (n + 2);
-  let seed = 7;
-  const rand = () => {
-    seed = (seed * 16807) % 2147483647;
-    return seed / 2147483647;
-  };
-  const finder = (x: number, y: number) =>
-    x < 8 && y < 8
-      ? [x, y]
-      : x >= n - 8 && y < 8
-      ? [x - (n - 7), y]
-      : x < 8 && y >= n - 8
-      ? [x, y - (n - 7)]
-      : null;
-  let d = '';
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const f = finder(x, y);
-      let on: boolean;
-      if (f) {
-        const [fx, fy] = f;
-        const ring = Math.max(Math.abs(fx - 3), Math.abs(fy - 3));
-        on = fx < 7 && fy < 7 && ring !== 2;
-      } else {
-        on = rand() > 0.52;
-      }
-      if (on) {
-        const px = (x + 1) * cell;
-        const py = (y + 1) * cell;
-        d += `M${px} ${py}h${cell}v${cell}h${-cell}z`;
-      }
-    }
-  }
-  return (
-    <Svg width={props.size} height={props.size}>
-      <Rect width={props.size} height={props.size} fill="#FFFFFF" rx={8} />
-      <Path d={d} fill="#071018" />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,
     gap: space.m,
   },
-  mock: {
-    color: colors.warning,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   grow: { flex: 1, minWidth: 0 },
   center: { textAlign: 'center' },
   headline: { color: colors.text, fontSize: 18, fontWeight: '700' },
   pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.45 },
   big: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,57 +658,16 @@ const styles = StyleSheet.create({
     gap: space.m,
     paddingVertical: space.xs,
   },
-  qrBox: { alignItems: 'center', paddingVertical: space.s },
+  qrBox: {
+    alignItems: 'center',
+    paddingVertical: space.s,
+  },
   waiting: { color: colors.cyan, fontSize: 15, fontWeight: '600' },
-  camera: {
-    height: 360,
-    borderRadius: radius.card,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.l,
-  },
-  frame: {
-    width: 220,
-    height: 220,
-    borderWidth: 3,
-    borderColor: colors.cyan,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cameraText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   done: {
     alignItems: 'center',
     gap: space.m,
     paddingVertical: space.xl,
   },
   doneTitle: { color: colors.text, fontSize: 24, fontWeight: '800' },
-  result: { color: colors.success, fontSize: 15, fontWeight: '700' },
-  change: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.s,
-    paddingVertical: space.xs,
-  },
-  who: {
-    fontSize: 11,
-    fontWeight: '800',
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.s,
-    paddingVertical: 2,
-  },
   off: { color: colors.textSubtle, width: 18, textAlign: 'center' },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.textMuted,
-  },
-  radioOn: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
 });

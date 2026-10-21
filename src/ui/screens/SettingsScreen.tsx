@@ -6,6 +6,7 @@ import {
   Bell,
   Lock,
   Moon,
+  Smartphone,
   ShieldCheck,
   Users,
   TriangleAlert,
@@ -98,6 +99,13 @@ export function SettingsScreen(props: { onLock: () => void }) {
         label="Alertes"
         accessibilityLabel="Ouvrir les alertes : vigilances, rappels, ruptures"
         onPress={() => navigation.open('alerts')}
+      />
+      <Button
+        icon={Smartphone}
+        chevron
+        label="Partage du foyer"
+        accessibilityLabel="Ouvrir le partage du foyer avec un autre téléphone"
+        onPress={() => navigation.open('sync')}
       />
 
       {reminders.available ? (

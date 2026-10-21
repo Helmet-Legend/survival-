@@ -21,6 +21,7 @@ import type { AlertFetch } from '../alerts/types';
 import type { ProductFetch } from '../scanner/products';
 import type { ScanSource } from '../scanner/scanSource';
 import type { VaultDatabase } from '../vault';
+import type { LocalNetwork } from '../device/net';
 
 /** Coffre déverrouillé, accessible aux écrans de l'application. */
 export interface Session {
@@ -57,6 +58,10 @@ export interface Session {
   productFetch: ProductFetch;
   /** Téléchargement des alertes (désactivées par défaut). */
   alertFetch: AlertFetch;
+  /** Réseau local pour le partage du foyer (indisponible hors Android). */
+  network: LocalNetwork;
+  /** Générateur aléatoire du système (clés de partage). */
+  random: RandomSource;
 }
 
 export interface BackupCrypto {

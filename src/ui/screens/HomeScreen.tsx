@@ -14,6 +14,7 @@ import {
   ListChecks,
   ScanBarcode,
   ShoppingCart,
+  Smartphone,
   Target,
   Users,
 } from 'lucide-react-native';
@@ -38,6 +39,7 @@ import {
   formatDate,
   formatEuros,
   formatNumber,
+  formatSince,
 } from '../format';
 import { FoodIcon, WaterIcon } from '../icons';
 import { useNavigation, type Navigation } from '../navigation';
@@ -50,6 +52,8 @@ import {
 } from '../../plan/purchasePlan';
 import { getReadiness, type ReadinessReport } from '../../plan/readiness';
 import { useSession } from '../session';
+import { lastSyncedAt, listPeers } from '../../sync/pairing';
+import { countPendingChanges } from '../../sync/store';
 import { runReadinessAction } from './ReadinessScreen';
 import {
   colors,
@@ -92,6 +96,14 @@ export function HomeScreen() {
       loadPurchasePlan(db),
     ]);
     const energy = computeEnergy(items, report.household.members, whPerPerson);
+    // Partage du foyer : état de la synchronisation, si un téléphone est associé.
+    const [peer] = await listPeers(db);
+    const share = peer
+      ? {
+          last: await lastSyncedAt(db, peer.device),
+          pending: await countPendingChanges(db),
+        }
+      : null;
     const readiness = await getReadiness(db, {
       items,
       documentCount: docs.length,
@@ -107,6 +119,7 @@ export function HomeScreen() {
       energy,
       readiness,
       plan,
+      share,
     };
   });
 
@@ -278,6 +291,23 @@ export function HomeScreen() {
             : 'personne'}{' '}
           et par jour, péremptions comprises.
         </Text>
+        {data.share ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Partage du foyer : ${shareLabel(
+              data.share,
+            )}. Ouvrir le partage`}
+            onPress={() => navigation.open('sync')}
+            hitSlop={8}
+            style={({ pressed }) => [styles.share, pressed && styles.pressed]}
+          >
+            <Smartphone color={colors.textMuted} size={14} />
+            <Text style={[text.subtle, styles.calc, styles.grow]}>
+              Partage : {shareLabel(data.share)}
+            </Text>
+            {data.share.pending > 0 ? <View style={styles.shareDot} /> : null}
+          </Pressable>
+        ) : null}
       </View>
 
       {/* À faire en priorité : gravité en couleur, une action par ligne. */}
@@ -629,6 +659,13 @@ const styles = StyleSheet.create({
   statUnit: { color: colors.textMuted, fontSize: 12 },
   statSub: { fontSize: 14, fontWeight: '700' },
   calc: { fontSize: 12 },
+  share: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  shareDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
   panel: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -703,3 +740,15 @@ const styles = StyleSheet.create({
   },
   link: { color: colors.cyan, fontSize: 14, fontWeight: '600' },
 });
+
+/** « synchronisé il y a 2 h · 3 modifications à envoyer ». */
+function shareLabel(share: { last: string | null; pending: number }): string {
+  const when = share.last
+    ? `synchronisé ${formatSince(share.last)}`
+    : 'pas encore synchronisé';
+  return share.pending > 0
+    ? `${when} · ${share.pending} modification${
+        share.pending > 1 ? 's' : ''
+      } à envoyer`
+    : when;
+}

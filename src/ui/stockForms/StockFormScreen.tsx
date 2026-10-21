@@ -972,8 +972,7 @@ function FoodEnergyHelp(props: {
   }
   if (perUnit !== null && quantity > 0) {
     const total = perUnit * quantity;
-    const daily =
-      household !== null ? dailyKcalNeed(household) : 0;
+    const daily = household !== null ? dailyKcalNeed(household) : 0;
     return (
       <View style={[styles.help, { borderColor: tint(color, '55') }]}>
         <Text style={text.body}>

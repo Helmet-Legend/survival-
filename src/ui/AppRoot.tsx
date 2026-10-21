@@ -57,6 +57,8 @@ import { defaultAlertFetch, type AlertFetch } from '../alerts/types';
 import { defaultProductFetch } from '../scanner/fetch';
 import type { ProductFetch } from '../scanner/products';
 import { nativeScanSource, type ScanSource } from '../scanner/scanSource';
+import { nativeNetwork, type LocalNetwork } from '../device/net';
+import { systemRandom } from '../crypto/native/random';
 import type { Updater } from '../update/updater';
 import {
   createVault,
@@ -144,6 +146,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   productFetch?: ProductFetch;
   /** Téléchargement des alertes ; `fetch` par défaut. */
   alertFetch?: AlertFetch;
+  /** Réseau local (partage du foyer) ; le module natif Android par défaut. */
+  network?: LocalNetwork;
 }) {
   const { manager, content, updater } = props;
   const [photoSource] = useState(
@@ -166,6 +170,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [alertFetch] = useState<AlertFetch>(
     () => props.alertFetch ?? defaultAlertFetch,
   );
+  const [network] = useState(() => props.network ?? nativeNetwork());
   const backupCrypto = props.backupCrypto ?? null;
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -220,6 +225,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       scanSource,
       productFetch,
       alertFetch,
+      network,
+      random: systemRandom,
     };
     sessionRef.current = session;
     loadRedLight(db)
