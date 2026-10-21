@@ -1,5 +1,5 @@
 /**
- * Mon foyer : toutes les hypothèses du calcul au même endroit (personnes,
+ * Mon foyer : toutes les hypothèses du calcul au même endroit (composition,
  * objectif, eau, calories, énergie par personne et par jour). L'accueil, le
  * simulateur, les check-lists et le plan d'achats s'en servent.
  */
@@ -8,6 +8,14 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
+  BABY_NEEDS,
+  CHILD_NEEDS,
+  NEEDS_SOURCE,
+} from '../../resilience/householdProfiles';
+import {
+  adultsOf,
+  dailyKcalNeed,
+  dailyWaterNeed,
   loadHousehold,
   loadTargetDays,
   saveHousehold,
@@ -67,13 +75,26 @@ export function HouseholdScreen() {
   }
   const { household, targetDays, whPerPerson } = data;
 
-  const changeMembers = async (delta: number) => {
+  const adults = adultsOf(household);
+  const children = household.children ?? 0;
+  const babies = household.babies ?? 0;
+  const changeComposition = async (next: {
+    adults?: number;
+    children?: number;
+    babies?: number;
+  }) => {
+    const a = next.adults ?? adults;
+    const c = next.children ?? children;
+    const b = next.babies ?? babies;
     await saveHousehold(db, {
       ...household,
-      members: household.members + delta,
+      members: a + c + b,
+      children: c,
+      babies: b,
     });
     await reload();
   };
+  const full = household.members >= MAX_MEMBERS;
   const changeWater = async (liters: number) => {
     await saveHousehold(db, { ...household, waterLitersPerPersonDay: liters });
     await reload();
@@ -99,22 +120,39 @@ export function HouseholdScreen() {
         check-lists et le plan d’achats les utilisent.
       </Text>
       <Panel title="Foyer" right={<Users color={colors.cyan} size={20} />}>
-        <View style={styles.settingRow}>
-          <Text style={text.body}>Personnes</Text>
-          <Stepper
-            value={`${household.members} pers.`}
-            onDecrease={() => {
-              void changeMembers(-1);
-            }}
-            onIncrease={() => {
-              void changeMembers(1);
-            }}
-            canDecrease={household.members > 1}
-            canIncrease={household.members < MAX_MEMBERS}
-            decreaseLabel="Retirer une personne"
-            increaseLabel="Ajouter une personne"
-          />
-        </View>
+        <MemberRow
+          label="Adultes"
+          hint="14 ans et plus"
+          value={adults}
+          min={1}
+          full={full}
+          noun="un adulte"
+          onChange={n => changeComposition({ adults: n })}
+        />
+        <MemberRow
+          label="Enfants"
+          hint="3 à 13 ans"
+          value={children}
+          min={0}
+          full={full}
+          noun="un enfant"
+          onChange={n => changeComposition({ children: n })}
+        />
+        <MemberRow
+          label="Bébés"
+          hint="Moins de 3 ans"
+          value={babies}
+          min={0}
+          full={full}
+          noun="un bébé"
+          onChange={n => changeComposition({ babies: n })}
+        />
+        <Text style={text.subtle}>
+          Enfant : {formatNumber(CHILD_NEEDS.waterLiters)} L d’eau et{' '}
+          {formatNumber(CHILD_NEEDS.kcal, 0)} kcal par jour. Bébé :{' '}
+          {formatNumber(BABY_NEEDS.waterLiters)} L et{' '}
+          {formatNumber(BABY_NEEDS.kcal, 0)} kcal. {NEEDS_SOURCE}
+        </Text>
         <View style={styles.settingRow}>
           <Text style={text.body}>Objectif</Text>
           <Stepper
@@ -133,7 +171,7 @@ export function HouseholdScreen() {
         </View>
         <View style={styles.settingRow}>
           <Text style={[text.body, styles.grow]}>
-            Eau par personne et par jour
+            Eau par adulte et par jour
           </Text>
           <View style={styles.chips}>
             {[2, 3].map(liters => (
@@ -154,7 +192,7 @@ export function HouseholdScreen() {
         </Text>
         <View style={styles.settingRow}>
           <Text style={[text.body, styles.grow]}>
-            Calories par personne et par jour
+            Calories par adulte et par jour
           </Text>
         </View>
         <View style={styles.chips}>
@@ -171,7 +209,6 @@ export function HouseholdScreen() {
         </View>
         <Text style={text.subtle}>
           2 000 kcal : adulte au repos. Effort physique : 2 500 à 3 500 kcal.
-          Enfant : 1 000 à 2 000 kcal selon l’âge.
         </Text>
         <View style={styles.settingRow}>
           <Text style={[text.body, styles.grow]}>
@@ -195,12 +232,44 @@ export function HouseholdScreen() {
           compter les jours couverts par vos batteries.
         </Text>
         <Text style={text.muted}>
-          Besoins par personne :{' '}
-          {formatNumber(household.waterLitersPerPersonDay)} L d’eau et{' '}
-          {formatNumber(household.kcalPerPersonDay, 0)} kcal par jour.
+          Besoins du foyer ({household.members} pers.) :{' '}
+          {formatNumber(dailyWaterNeed(household))} L d’eau et{' '}
+          {formatNumber(dailyKcalNeed(household), 0)} kcal par jour.
         </Text>
       </Panel>
     </ScrollView>
+  );
+}
+
+function MemberRow(props: {
+  label: string;
+  hint: string;
+  value: number;
+  min: number;
+  full: boolean;
+  noun: string;
+  onChange: (value: number) => Promise<void>;
+}) {
+  return (
+    <View style={styles.settingRow}>
+      <View style={styles.grow}>
+        <Text style={text.body}>{props.label}</Text>
+        <Text style={text.subtle}>{props.hint}</Text>
+      </View>
+      <Stepper
+        value={String(props.value)}
+        onDecrease={() => {
+          void props.onChange(props.value - 1);
+        }}
+        onIncrease={() => {
+          void props.onChange(props.value + 1);
+        }}
+        canDecrease={props.value > props.min}
+        canIncrease={!props.full}
+        decreaseLabel={`Retirer ${props.noun}`}
+        increaseLabel={`Ajouter ${props.noun}`}
+      />
+    </View>
   );
 }
 

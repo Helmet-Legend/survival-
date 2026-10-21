@@ -41,6 +41,7 @@ import { parseDecimal, formatNumber } from '../format';
 import { QuantityIcon, VolumeIcon } from '../icons';
 import { caloriesPerUnit, type ItemAttributes } from '../../inventory';
 import {
+  dailyKcalNeed,
   loadHousehold,
   type HouseholdSettings,
 } from '../../resilience/resilienceCalculator';
@@ -972,7 +973,7 @@ function FoodEnergyHelp(props: {
   if (perUnit !== null && quantity > 0) {
     const total = perUnit * quantity;
     const daily =
-      household !== null ? household.kcalPerPersonDay * household.members : 0;
+      household !== null ? dailyKcalNeed(household) : 0;
     return (
       <View style={[styles.help, { borderColor: tint(color, '55') }]}>
         <Text style={text.body}>

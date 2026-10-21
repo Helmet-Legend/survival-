@@ -15,6 +15,7 @@ import type { SqlDatabase } from '../db/types';
 import type { BagSummary, ItemCategory, ItemSummary } from '../inventory';
 import { computeRestockPlan, loadMinStockItems } from '../resilience/restock';
 import {
+  dailyKcalNeed,
   loadConsumableLots,
   loadHousehold,
   loadTargetDays,
@@ -283,7 +284,7 @@ export async function collectNeeds(
     ...base,
     targetDays: Math.max(OFFICIAL_TIER, targetDays),
   });
-  const dailyKcal = household.members * household.kcalPerPersonDay;
+  const dailyKcal = dailyKcalNeed(household);
   const needs: Need[] = [];
 
   if (official.water.missing > 0) {

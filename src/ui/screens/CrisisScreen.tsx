@@ -27,6 +27,7 @@ import {
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
 import { syncReminders } from '../../resilience/reminders';
 import {
+  adultsOf,
   loadConsumableLots,
   loadHousehold,
 } from '../../resilience/resilienceCalculator';
@@ -269,8 +270,12 @@ export function CrisisScreen() {
                 ? '1 personne'
                 : plural(data.household.members, 'personne')}{' '}
               · {formatNumber(data.household.waterLitersPerPersonDay)} L d’eau
-              et {formatNumber(data.household.kcalPerPersonDay, 0)} kcal par
-              personne et par jour
+              et {formatNumber(data.household.kcalPerPersonDay, 0)} kcal par{' '}
+              {!scenario.usesBag &&
+              data.household.members > adultsOf(data.household)
+                ? 'adulte'
+                : 'personne'}{' '}
+              et par jour
               {scenario.noPower
                 ? ` · ${formatNumber(
                     data.whPerPersonDay,

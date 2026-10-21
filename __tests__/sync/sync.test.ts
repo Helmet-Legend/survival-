@@ -464,3 +464,19 @@ describe('synchronisation entre deux téléphones', () => {
     expect(first).toBeLessThan(15000);
   }, 60000);
 });
+
+describe('composition du foyer partagée', () => {
+  it('envoie le nombre d’enfants et de bébés', async () => {
+    const [a, b] = [await phone('a'), await phone('b')];
+    await saveHousehold(a.db, {
+      members: 4,
+      waterLitersPerPersonDay: 3,
+      kcalPerPersonDay: 2000,
+      children: 2,
+      babies: 1,
+    });
+    await exchange(a.db, b.db);
+    const h = await loadHousehold(b.db);
+    expect([h.members, h.children, h.babies]).toEqual([4, 2, 1]);
+  });
+});

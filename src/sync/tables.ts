@@ -39,6 +39,8 @@ export function sharedTable(name: string): SharedTable | undefined {
 /** Réglages partagés : le foyer et ses hypothèses, pas ceux de l'appareil. */
 export const SHARED_SETTINGS: readonly string[] = [
   'household_members',
+  'household_children',
+  'household_babies',
   'water_liters_per_person_day',
   'kcal_per_person_day',
   'target_days',
