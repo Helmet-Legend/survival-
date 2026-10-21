@@ -1,0 +1,32 @@
+name: Sonde EFSA (temporaire)
+on:
+  push:
+    branches: [ccr-68193128-o7em9g]
+    paths: ['.github/workflows/sonde-efsa.yml']
+jobs:
+  sonde:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get install -y poppler-utils >/dev/null
+      - name: Énergie EFSA 2013
+        run: |
+          for u in \
+            "https://efsa.onlinelibrary.wiley.com/doi/pdf/10.2903/j.efsa.2013.3005" \
+            "https://www.efsa.europa.eu/sites/default/files/consultation/120720.pdf" \
+            "https://www.sennutricion.org/media/Docs_Consenso/Scientific_Opinion_on_Dietary_Reference_Values_for_energy-EFSA_2013.pdf"; do
+            curl -sSL -A "Mozilla/5.0" -o e.pdf "$u" && file e.pdf | grep -q PDF && echo "OK $u" && break
+          done
+          pdftotext -layout e.pdf e.txt
+          grep -n -i -E "^ *Table|Average Requirements? for energy|PAL" e.txt | head -80
+          echo "=== Tableaux enfants ==="
+          awk '/Table 1[0-9]|Table [5-9]/{p=1} p{print} /Table 1[4-9]/{if(++n>3)exit}' e.txt | grep -E "^\s*([0-9]{1,2}|Age|Table|.*years|.*kcal|.*MJ)" | head -200
+      - name: Eau EFSA 2010
+        run: |
+          curl -sSL -A "Mozilla/5.0" -o w.pdf "https://www.sennutricion.org/media/Docs_Consenso/Scientific_Opinion_Dietary_Reference_Values_for_water-EFSA_2010.pdf" || true
+          file w.pdf
+          pdftotext -layout w.pdf w.txt && grep -n -i -E "adequate intake|AI[s]? of|mL/day|years" w.txt | head -60
+      - name: Tableaux récapitulatifs EFSA
+        run: |
+          curl -sSL -A "Mozilla/5.0" -o s.pdf "https://www.efsa.europa.eu/sites/default/files/assets/DRV_Summary_tables_jan_17.pdf" || true
+          file s.pdf
+          pdftotext -layout s.pdf s.txt && grep -n -i -E "energy|water|1 year|2 year|3 year|kcal|MJ" s.txt | head -80
