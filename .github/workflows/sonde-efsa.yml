@@ -8,20 +8,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: sudo apt-get install -y poppler-utils >/dev/null
-      - name: Énergie EFSA 2013 (tableau 8 et annexes en kcal)
+      - name: Tableaux récapitulatifs EFSA (version finale)
+        continue-on-error: true
         run: |
-          curl -sSL -A "Mozilla/5.0" -o e.pdf "https://efsa.onlinelibrary.wiley.com/doi/pdf/10.2903/j.efsa.2013.3005"
-          file e.pdf | grep -q PDF || curl -sSL -A "Mozilla/5.0" -o e.pdf "https://www.efsa.europa.eu/sites/default/files/consultation/120720.pdf"
-          file e.pdf
+          for u in \
+            "https://www.efsa.europa.eu/sites/default/files/assets/DRV_Summary_tables_jan_17.pdf" \
+            "https://www.efsa.europa.eu/sites/default/files/2017_09_DRVs_summary_report.pdf"; do
+            curl -sSL -A "Mozilla/5.0" -o s.pdf "$u"; file s.pdf
+            if file s.pdf | grep -q PDF; then
+              echo "##### $u"
+              pdftotext -layout s.pdf s.txt
+              grep -n -i -E "energy|water" s.txt | head -30
+              awk 'tolower($0) ~ /energy/ {p=1} p{print; if(++n>120) exit}' s.txt
+              echo "----- eau"
+              awk 'tolower($0) ~ /water/ {p=1} p{print; if(++m>60) exit}' s.txt
+            fi
+          done
+      - name: Énergie EFSA 2013, annexe 13 (kcal/j)
+        continue-on-error: true
+        run: |
+          curl -sSL -A "Mozilla/5.0" -o e.pdf "https://www.efsa.europa.eu/sites/default/files/consultation/120720.pdf"
           pdftotext -layout e.pdf e.txt
-          grep -n "Table 8\|Table 9\|Appendix 12\|kcal/d" e.txt | head -40
-          echo "===== Tableau 8 ====="
-          awk '/^ *Table 8:/{p=1} p{print; if(++n>70) exit}' e.txt
-          echo "===== Annexes kcal enfants ====="
-          awk '/Appendix 12[BC]|APPENDIX 12[BC]/{p=1} p{print; if(++n>160) exit}' e.txt
-      - name: Eau EFSA 2010
-        run: |
-          curl -sSL -A "Mozilla/5.0" -o w.pdf "https://efsa.onlinelibrary.wiley.com/doi/pdf/10.2903/j.efsa.2010.1459" || true
-          file w.pdf
-          pdftotext -layout w.pdf w.txt || exit 0
-          grep -n -i -E "adequate intake|mL/day|L/day" w.txt | head -60
+          n=$(grep -n "Appendix 13" e.txt | tail -1 | cut -d: -f1)
+          sed -n "$((n)),$((n+90))p" e.txt
