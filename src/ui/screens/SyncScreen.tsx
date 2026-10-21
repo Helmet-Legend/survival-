@@ -3,37 +3,54 @@
  *
  * Écrans seulement : rien n'est encore envoyé ni reçu. Association par QR
  * code, puis synchronisation directe entre les deux téléphones (même Wi-Fi
- * ou point d'accès de l'un d'eux), sans internet, sans compte, sans serveur.
+ * ou partage de connexion de l'un d'eux), sans internet, sans compte, sans
+ * serveur.
  */
 import {
   ArrowLeftRight,
   Camera,
   Check,
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
   Crosshair,
+  Home,
   QrCode,
   RefreshCw,
   ScanLine,
   ShieldCheck,
   Smartphone,
   Unlink,
+  UserPlus,
   Wifi,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 
 import { Button, Panel, ScreenTitle, StatusChip } from '../components/controls';
 import { useNavigation } from '../navigation';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 
-type Step = 'intro' | 'qr' | 'join' | 'paired';
+type Step =
+  | 'intro'
+  | 'share'
+  | 'qr'
+  | 'ownerDone'
+  | 'scan'
+  | 'merge'
+  | 'joinDone'
+  | 'paired';
 
-const SHARED = [
-  'Stocks : eau, vivres, santé, outils, équipement, énergie',
-  'Sacs d’évacuation et documents',
-  'Plan familial, points de regroupement, carte',
-  'Mon foyer, kit et matériel, plan d’achats',
-];
+const ALWAYS =
+  'Stocks, sacs, documents, plan familial, carte, foyer, kit et plan d’achats';
 
 /** Derniers changements reçus (exemple de maquette). */
 const RECENT = [
@@ -43,9 +60,13 @@ const RECENT = [
   { who: 'Partenaire', what: 'Point « École » ajouté', when: 'hier' },
 ];
 
+const NETWORK_TIP =
+  'Pas de Wi-Fi ? Activez le partage de connexion sur l’un des téléphones et connectez-y l’autre. Aucune donnée mobile n’est utilisée.';
+
 export function SyncScreen() {
   const navigation = useNavigation();
   const [step, setStep] = useState<Step>('intro');
+  const [details, setDetails] = useState(false);
   const [weapons, setWeapons] = useState(false);
   const [photos, setPhotos] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -53,12 +74,12 @@ export function SyncScreen() {
   const [merge, setMerge] = useState(true);
 
   const options = (
-    <Panel title="Partage en option">
+    <>
       <OptionRow
         icon={Crosshair}
         color={colors.weapons}
         label="Armement et munitions"
-        hint="Fiches des armes et munitions, transférées chiffrées. Jamais montrées dans les notifications."
+        hint="Transférés chiffrés. Jamais montrés dans les notifications."
         value={weapons}
         onChange={setWeapons}
       />
@@ -66,15 +87,11 @@ export function SyncScreen() {
         icon={Camera}
         color={colors.cyan}
         label="Photos"
-        hint="Photos des articles et des documents. Plus long à transférer."
+        hint="Articles et documents. Plus long à transférer."
         value={photos}
         onChange={setPhotos}
       />
-      <Text style={text.subtle}>
-        Désactiver une option plus tard retire ces fiches de l’autre téléphone à
-        la synchronisation suivante.
-      </Text>
-    </Panel>
+    </>
   );
 
   return (
@@ -90,130 +107,191 @@ export function SyncScreen() {
 
       {step === 'intro' ? (
         <>
-          <Panel>
-            <View style={styles.row}>
-              <Smartphone color={colors.cyan} size={22} />
-              <ArrowLeftRight color={colors.textMuted} size={18} />
-              <Smartphone color={colors.primary} size={22} />
-              <Text style={[styles.headline, styles.grow]}>
-                Un stock, deux téléphones
-              </Text>
-            </View>
-            <Text style={text.body}>
-              Les deux téléphones se parlent directement, chiffré, sur le même
-              Wi-Fi ou par le point d’accès de l’un d’eux. Sans internet, sans
-              compte, sans serveur. Chacun peut ajouter, consommer et modifier.
+          <View style={styles.row}>
+            <Smartphone color={colors.primary} size={22} />
+            <ArrowLeftRight color={colors.textMuted} size={18} />
+            <Smartphone color={colors.cyan} size={22} />
+            <Text style={[text.body, styles.grow]}>
+              Un stock, deux téléphones. Sans internet ni compte : chacun peut
+              ajouter, consommer et modifier.
             </Text>
-          </Panel>
+          </View>
 
-          <Panel title="Toujours partagé">
-            {SHARED.map(s => (
-              <View key={s} style={styles.row}>
-                <Check color={colors.success} size={18} strokeWidth={2.4} />
-                <Text style={[text.body, styles.grow]}>{s}</Text>
+          <Text style={text.label}>Sur ce téléphone…</Text>
+          <BigChoice
+            icon={Home}
+            color={colors.primary}
+            title="J’ai déjà le stock ici"
+            hint="Ce téléphone affichera un code à scanner."
+            onPress={() => setStep('share')}
+          />
+          <BigChoice
+            icon={UserPlus}
+            color={colors.cyan}
+            title="Je rejoins un foyer"
+            hint="Scannez le code affiché par l’autre téléphone."
+            onPress={() => setStep('scan')}
+          />
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: details }}
+            accessibilityLabel="Ce qui est partagé"
+            onPress={() => setDetails(!details)}
+            style={styles.disclosure}
+          >
+            <Text style={[styles.link, styles.grow]}>Ce qui est partagé</Text>
+            {details ? (
+              <ChevronUp color={colors.cyan} size={20} />
+            ) : (
+              <ChevronDown color={colors.cyan} size={20} />
+            )}
+          </Pressable>
+          {details ? (
+            <Panel>
+              <Line on label={ALWAYS} />
+              <Line
+                on={false}
+                label="Armement, munitions et photos : au choix, au moment de partager"
+              />
+              <View style={styles.row}>
+                <ShieldCheck color={colors.textMuted} size={18} />
+                <Text style={[text.subtle, styles.grow]}>
+                  Jamais : codes PIN, code de contrainte, réglages du téléphone.
+                  Ouvert avec le code de contrainte, Fenrir ne synchronise rien.
+                </Text>
               </View>
-            ))}
+            </Panel>
+          ) : null}
+        </>
+      ) : null}
+
+      {step === 'share' ? (
+        <>
+          <Text style={styles.headline}>Que partager ?</Text>
+          <Panel>
+            <Line on label={ALWAYS} />
+            <View style={styles.divider} />
+            {options}
+            <Text style={text.subtle}>Modifiable plus tard à tout moment.</Text>
           </Panel>
-
-          {options}
-
-          <Panel title="Jamais partagé">
-            <View style={styles.row}>
-              <ShieldCheck color={colors.textMuted} size={18} />
-              <Text style={[text.subtle, styles.grow]}>
-                Codes PIN, code de contrainte et réglages de chaque téléphone.
-                Ouvert avec le code de contrainte, Fenrir ne synchronise rien.
-              </Text>
-            </View>
-          </Panel>
-
           <Button
             variant="primary"
             icon={QrCode}
-            label="Afficher mon code d’association"
+            label="Afficher le code"
             onPress={() => setStep('qr')}
           />
-          <Button
-            icon={ScanLine}
-            label="Scanner le code de l’autre téléphone"
-            onPress={() => setStep('join')}
-          />
+          <Button label="Annuler" onPress={() => setStep('intro')} />
         </>
       ) : null}
 
       {step === 'qr' ? (
         <>
           <Panel>
-            <Text style={styles.headline}>
-              Montrez ce code à l’autre téléphone
+            <Text style={[styles.headline, styles.center]}>
+              Scannez ce code avec l’autre téléphone
             </Text>
             <View style={styles.qrBox}>
-              <MockQr size={232} />
+              <MockQr size={240} />
             </View>
-            <Text style={text.body}>
-              Sur l’autre téléphone : Réglages › Partage du foyer › « Scanner le
-              code de l’autre téléphone ».
+            <Text style={[text.body, styles.center]}>
+              Sur l’autre téléphone : Réglages › Partage du foyer › « Je rejoins
+              un foyer ».
             </Text>
-            <View style={styles.verify}>
-              <Text style={text.subtle}>Code de vérification</Text>
-              <Text style={styles.verifyCode}>4827 · 1935</Text>
-              <Text style={text.subtle}>
-                Il doit s’afficher à l’identique sur les deux écrans.
-              </Text>
-            </View>
+            <Text style={[styles.waiting, styles.center]}>
+              En attente de l’autre téléphone…
+            </Text>
           </Panel>
-          <Panel title="Partagé avec ce code">
-            <Summary weapons={weapons} photos={photos} />
-            <Text style={text.subtle}>Code valable 5 minutes.</Text>
-          </Panel>
+          <Text style={text.subtle}>
+            {[
+              'Partagé : stocks',
+              weapons ? 'armement' : null,
+              photos ? 'photos' : null,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+            . Code valable 5 minutes. {NETWORK_TIP}
+          </Text>
           <Button
             variant="primary"
             icon={Check}
-            label="Maquette : simuler l’association"
-            onPress={() => setStep('paired')}
+            label="Maquette : simuler le scan"
+            onPress={() => setStep('ownerDone')}
           />
           <Button label="Annuler" onPress={() => setStep('intro')} />
         </>
       ) : null}
 
-      {step === 'join' ? (
+      {step === 'scan' ? (
         <>
-          <Panel accent={colors.borderActive}>
-            <View style={styles.row}>
-              <Wifi color={colors.cyan} size={22} />
-              <Text style={[styles.headline, styles.grow]}>
-                Associer ce téléphone ?
-              </Text>
+          <View style={styles.camera}>
+            <View style={styles.frame}>
+              <ScanLine color={colors.cyan} size={64} strokeWidth={1.2} />
             </View>
-            <Text style={text.body}>
-              Code lu. Vérifiez que l’autre écran affiche bien :
+            <Text style={styles.cameraText}>
+              Visez le code affiché sur l’autre téléphone
             </Text>
-            <Text style={styles.verifyCode}>4827 · 1935</Text>
-          </Panel>
-          <Panel title="L’autre téléphone partage">
-            <Summary weapons={weapons} photos={photos} />
-          </Panel>
-          <Panel title="Le stock déjà présent ici">
-            <Choice
-              selected={merge}
-              label="Fusionner avec le stock partagé"
-              hint="Rien n’est perdu : les articles des deux téléphones sont réunis."
-              onPress={() => setMerge(true)}
-            />
-            <Choice
-              selected={!merge}
-              label="Remplacer par le stock partagé"
-              hint="Ce téléphone était vide ou ne servait qu’à essayer Fenrir."
-              onPress={() => setMerge(false)}
-            />
-          </Panel>
+          </View>
+          <Text style={text.subtle}>{NETWORK_TIP}</Text>
           <Button
             variant="primary"
             icon={Check}
-            label="Associer"
-            onPress={() => setStep('paired')}
+            label="Maquette : simuler le scan"
+            onPress={() => setStep('merge')}
           />
           <Button label="Annuler" onPress={() => setStep('intro')} />
+        </>
+      ) : null}
+
+      {step === 'merge' ? (
+        <>
+          <Text style={styles.headline}>
+            Ce téléphone contient déjà 23 articles
+          </Text>
+          <Text style={text.subtle}>
+            Cette question n’apparaît que si ce téléphone a déjà un stock.
+          </Text>
+          <Choice
+            selected={merge}
+            label="Les réunir"
+            hint="Recommandé. Rien n’est perdu : les articles des deux téléphones sont réunis."
+            onPress={() => setMerge(true)}
+          />
+          <Choice
+            selected={!merge}
+            label="Les effacer"
+            hint="Ce téléphone ne servait qu’à essayer Fenrir. Il ne garde que le stock partagé."
+            onPress={() => setMerge(false)}
+          />
+          <Button
+            variant="primary"
+            icon={Check}
+            label="Continuer"
+            onPress={() => setStep('joinDone')}
+          />
+        </>
+      ) : null}
+
+      {step === 'ownerDone' || step === 'joinDone' ? (
+        <>
+          <View style={styles.done}>
+            <CircleCheck color={colors.success} size={72} strokeWidth={1.6} />
+            <Text style={styles.doneTitle}>Téléphones associés</Text>
+            <Text style={[text.body, styles.center]}>
+              {step === 'joinDone'
+                ? 'Le stock partagé est arrivé : 148 articles, 3 sacs, plan familial.'
+                : 'Le stock a été envoyé à l’autre téléphone.'}
+            </Text>
+            <Text style={[text.subtle, styles.center]}>
+              Ensuite, tout se met à jour dès que les deux téléphones ont Fenrir
+              ouvert à proximité.
+            </Text>
+          </View>
+          <Button
+            variant="primary"
+            label="Terminé"
+            onPress={() => setStep('paired')}
+          />
         </>
       ) : null}
 
@@ -256,8 +334,8 @@ export function SyncScreen() {
               </Text>
             ) : (
               <Text style={text.subtle}>
-                Les deux téléphones doivent avoir Fenrir ouvert, sur le même
-                Wi-Fi ou par le point d’accès de l’un d’eux.
+                Fenrir ouvert sur les deux téléphones, sur le même Wi-Fi.{' '}
+                {NETWORK_TIP}
               </Text>
             )}
           </Panel>
@@ -285,14 +363,20 @@ export function SyncScreen() {
             ))}
           </Panel>
 
-          {options}
+          <Panel title="Partagé en plus des stocks">
+            {options}
+            <Text style={text.subtle}>
+              Désactiver une option retire ces fiches de l’autre téléphone à la
+              synchronisation suivante.
+            </Text>
+          </Panel>
 
-          <Panel title="Automatique">
+          <Panel>
             <OptionRow
               icon={Wifi}
               color={colors.success}
-              label="À l’ouverture de Fenrir"
-              hint="Synchronise dès que l’autre téléphone est à portée."
+              label="Synchroniser à l’ouverture"
+              hint="Dès que l’autre téléphone est à portée."
               value
               onChange={() => undefined}
             />
@@ -314,6 +398,38 @@ export function SyncScreen() {
         </>
       ) : null}
     </ScrollView>
+  );
+}
+
+function BigChoice(props: {
+  icon: typeof Camera;
+  color: string;
+  title: string;
+  hint: string;
+  onPress: () => void;
+}) {
+  const Icon = props.icon;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${props.title}. ${props.hint}`}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        styles.big,
+        { borderColor: tint(props.color, '88') },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View
+        style={[styles.bigIcon, { backgroundColor: tint(props.color, '22') }]}
+      >
+        <Icon color={props.color} size={28} strokeWidth={2} />
+      </View>
+      <View style={styles.grow}>
+        <Text style={styles.bigTitle}>{props.title}</Text>
+        <Text style={text.subtle}>{props.hint}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -344,26 +460,18 @@ function OptionRow(props: {
   );
 }
 
-function Summary(props: { weapons: boolean; photos: boolean }) {
-  const line = (on: boolean, label: string) => (
+function Line(props: { on: boolean; label: string }) {
+  return (
     <View style={styles.row}>
-      {on ? (
+      {props.on ? (
         <Check color={colors.success} size={18} strokeWidth={2.4} />
       ) : (
-        <Text style={styles.off}>—</Text>
+        <Text style={styles.off}>±</Text>
       )}
-      <Text style={[on ? text.body : text.subtle, styles.grow]}>
-        {label}
-        {on ? '' : ' : non partagé'}
+      <Text style={[props.on ? text.body : text.subtle, styles.grow]}>
+        {props.label}
       </Text>
     </View>
-  );
-  return (
-    <>
-      {line(true, 'Stocks, sacs, plan familial, carte, foyer')}
-      {line(props.weapons, 'Armement et munitions')}
-      {line(props.photos, 'Photos')}
-    </>
   );
 }
 
@@ -448,7 +556,34 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   grow: { flex: 1, minWidth: 0 },
-  headline: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  center: { textAlign: 'center' },
+  headline: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  pressed: { opacity: 0.85 },
+  big: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    padding: space.m,
+    minHeight: 92,
+    borderWidth: 1.5,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+  },
+  bigIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  disclosure: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: space.s,
+  },
+  link: { color: colors.cyan, fontSize: 15, fontWeight: '600' },
+  divider: { height: 1, backgroundColor: colors.border },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -456,20 +591,31 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
   },
   qrBox: { alignItems: 'center', paddingVertical: space.s },
-  verify: {
-    alignItems: 'center',
-    gap: 2,
-    padding: space.m,
+  waiting: { color: colors.cyan, fontSize: 15, fontWeight: '600' },
+  camera: {
+    height: 360,
     borderRadius: radius.card,
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.l,
   },
-  verifyCode: {
-    color: colors.primary,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: 2,
-    textAlign: 'center',
+  frame: {
+    width: 220,
+    height: 220,
+    borderWidth: 3,
+    borderColor: colors.cyan,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  cameraText: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  done: {
+    alignItems: 'center',
+    gap: space.m,
+    paddingVertical: space.xl,
+  },
+  doneTitle: { color: colors.text, fontSize: 24, fontWeight: '800' },
   result: { color: colors.success, fontSize: 15, fontWeight: '700' },
   change: {
     flexDirection: 'row',
