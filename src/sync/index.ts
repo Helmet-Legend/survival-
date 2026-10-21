@@ -5,3 +5,5 @@ export * from './tables';
 export * from './encoding';
 export * from './pairing';
 export * from './secure';
+export * from './channel';
+export * from './exchange';
