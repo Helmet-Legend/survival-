@@ -105,6 +105,7 @@ import { PlanScreen } from './screens/PlanScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { StockScreen } from './screens/StockScreen';
+import { SyncScreen } from './screens/SyncScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
 import { colors, fonts, radius, sizes, space, text } from './theme';
@@ -410,6 +411,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <FamilyPlanScreen />
               ) : overlay === 'alerts' ? (
                 <AlertsScreen />
+              ) : overlay === 'sync' ? (
+                <SyncScreen />
               ) : overlay === 'preparation' ? (
                 <KitScreen />
               ) : overlay === 'calculators' ? (
