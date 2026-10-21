@@ -1,7 +1,11 @@
 import { prepareDatabase } from '../../src/db/connection';
 import {
   addDays,
+  adultsOf,
+  assertHousehold,
   computeResilience,
+  dailyKcalNeed,
+  dailyWaterNeed,
   daysBetween,
   EXPIRY_ALERTS_SQL,
   expiryBucket,
@@ -249,17 +253,42 @@ describe('accès à la base', () => {
 
   it('lit et enregistre les réglages du foyer', async () => {
     const db = await seededDb();
-    expect(await loadHousehold(db)).toEqual(ONE);
+    expect(await loadHousehold(db)).toEqual({ ...ONE, children: 0, babies: 0 });
     await saveHousehold(db, {
       members: 4,
       waterLitersPerPersonDay: 4,
       kcalPerPersonDay: 2200,
+      children: 2,
+      babies: 1,
     });
     expect(await loadHousehold(db)).toEqual({
       members: 4,
       waterLitersPerPersonDay: 4,
       kcalPerPersonDay: 2200,
+      children: 2,
+      babies: 1,
     });
+  });
+
+  it('additionne les besoins des adultes, enfants et bébés', () => {
+    const family = {
+      members: 4,
+      waterLitersPerPersonDay: 3,
+      kcalPerPersonDay: 2000,
+      children: 1,
+      babies: 1,
+    };
+    expect(adultsOf(family)).toBe(2);
+    // 2 × 3 L + 1,8 L + 1,2 L ; 2 × 2 000 + 1 800 + 900 kcal.
+    expect(dailyWaterNeed(family)).toBeCloseTo(9);
+    expect(dailyKcalNeed(family)).toBe(6700);
+    // Canicule : eau des enfants et bébés × 1,5 aussi.
+    expect(dailyWaterNeed({ ...family, waterFactor: 1.5 })).toBeCloseTo(10.5);
+    // Sans enfant ni bébé : comme avant.
+    expect(dailyWaterNeed({ ...family, children: 0, babies: 0 })).toBe(12);
+    expect(() =>
+      assertHousehold({ ...family, children: 3, babies: 2 }),
+    ).toThrow(/Composition du foyer invalide/);
   });
 
   it('refuse des réglages corrompus en base', async () => {
