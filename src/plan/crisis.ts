@@ -12,6 +12,8 @@
  */
 import { addDays, daysBetween } from '../lib/dates';
 import {
+  dailyKcalNeed,
+  dailyWaterNeed,
   lotCalories,
   lotWaterLiters,
   type HouseholdSettings,
@@ -383,9 +385,12 @@ function outcome(daily: ResourceDay[], dailyNeed: number): ResourceOutcome {
 
 export function simulateCrisis(input: CrisisInput): CrisisResult {
   const { scenario, days, asOf } = input;
-  const members = scenario.usesBag ? 1 : input.household.members;
-  const waterNeed = members * input.household.waterLitersPerPersonDay;
-  const foodNeed = members * input.household.kcalPerPersonDay;
+  // Sac d'évacuation : une personne, celle qui le porte.
+  const household = scenario.usesBag
+    ? { ...input.household, members: 1, children: 0, babies: 0 }
+    : input.household;
+  const waterNeed = dailyWaterNeed(household);
+  const foodNeed = dailyKcalNeed(household);
   const water = runResource(
     portionsOf(input.lots, lotWaterLiters, asOf, scenario.noPower),
     waterNeed,
@@ -396,6 +401,7 @@ export function simulateCrisis(input: CrisisInput): CrisisResult {
     foodNeed,
     days,
   );
+  const members = household.members;
   const energyNeed = members * input.whPerPersonDay;
   const energy =
     scenario.noPower && input.usableWh !== null

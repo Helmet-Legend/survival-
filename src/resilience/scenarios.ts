@@ -28,12 +28,13 @@ export const SCENARIOS: readonly Scenario[] = [
     apply: h => ({
       ...h,
       waterLitersPerPersonDay: h.waterLitersPerPersonDay * 1.5,
+      waterFactor: (h.waterFactor ?? 1) * 1.5,
     }),
   },
   {
     id: 'effort',
     label: 'Effort physique',
-    hint: 'Eau +50 % et 2 500 kcal par personne (bas de la fourchette).',
+    hint: 'Adultes : eau +50 % et 2 500 kcal (bas de la fourchette).',
     apply: h => ({
       ...h,
       waterLitersPerPersonDay: h.waterLitersPerPersonDay * 1.5,

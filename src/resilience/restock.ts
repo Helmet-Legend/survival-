@@ -11,6 +11,8 @@ import type { ItemUnit } from '../inventory/types';
 import { localToday } from '../lib/dates';
 import {
   coveredDaysWithin,
+  dailyKcalNeed,
+  dailyWaterNeed,
   loadConsumableLots,
   loadHousehold,
   loadTargetDays,
@@ -89,14 +91,14 @@ export function computeRestockPlan(input: {
   const water = coverage(
     lots,
     lotWaterLiters,
-    household.members * household.waterLitersPerPersonDay,
+    dailyWaterNeed(household),
     targetDays,
     asOf,
   );
   const food = coverage(
     lots,
     lotCalories,
-    household.members * household.kcalPerPersonDay,
+    dailyKcalNeed(household),
     targetDays,
     asOf,
   );

@@ -22,6 +22,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { addDays, localToday } from '../../lib/dates';
 import {
+  adultsOf,
   countIncompleteFood,
   getExpiryAlerts,
   getResilienceReport,
@@ -271,8 +272,11 @@ export function HomeScreen() {
         </View>
         <Text style={[text.subtle, styles.calc]}>
           % de l’objectif · {formatNumber(household.waterLitersPerPersonDay)} L
-          et {formatNumber(household.kcalPerPersonDay, 0)} kcal par personne et
-          par jour, péremptions comprises.
+          et {formatNumber(household.kcalPerPersonDay, 0)} kcal par{' '}
+          {members > adultsOf(household)
+            ? 'adulte (enfants et bébés : valeurs de référence)'
+            : 'personne'}{' '}
+          et par jour, péremptions comprises.
         </Text>
       </View>
 

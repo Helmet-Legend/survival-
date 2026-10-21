@@ -24,12 +24,21 @@ import { addDays, assertIsoDate, daysBetween, localToday } from '../lib/dates';
 
 import { parseAttributes, type ItemAttributes } from '../inventory/attributes';
 import { caloriesPerUnit } from '../inventory/nutrition';
+import { BABY_NEEDS, CHILD_NEEDS } from './householdProfiles';
 export type { ItemCategory, ItemUnit };
 
 export interface HouseholdSettings {
+  /** Nombre total de personnes, enfants et bébés compris. */
   members: number;
+  /** Besoins d'un adulte (réglables) ; enfants et bébés : valeurs de référence. */
   waterLitersPerPersonDay: number;
   kcalPerPersonDay: number;
+  /** Dont enfants (3 à 13 ans). */
+  children?: number;
+  /** Dont bébés (moins de 3 ans). */
+  babies?: number;
+  /** Multiplicateur d'eau des enfants et bébés (scénario canicule). */
+  waterFactor?: number;
 }
 
 export interface StockLot {
@@ -120,9 +129,46 @@ export function assertHousehold(household: HouseholdSettings): void {
   if (!Number.isInteger(members) || members < 1) {
     throw new ResilienceError('Le foyer doit compter au moins une personne');
   }
+  const { children = 0, babies = 0 } = household;
+  if (
+    !Number.isInteger(children) ||
+    !Number.isInteger(babies) ||
+    children < 0 ||
+    babies < 0 ||
+    children + babies > members
+  ) {
+    throw new ResilienceError('Composition du foyer invalide');
+  }
   if (!(waterLitersPerPersonDay > 0) || !(kcalPerPersonDay > 0)) {
     throw new ResilienceError('Les besoins quotidiens doivent être positifs');
   }
+}
+
+/** Adultes du foyer (14 ans et plus). */
+export function adultsOf(household: HouseholdSettings): number {
+  return (
+    household.members - (household.children ?? 0) - (household.babies ?? 0)
+  );
+}
+
+/** Eau du foyer par jour (L) : adultes au réglage, enfants et bébés à la référence. */
+export function dailyWaterNeed(household: HouseholdSettings): number {
+  const factor = household.waterFactor ?? 1;
+  return (
+    adultsOf(household) * household.waterLitersPerPersonDay +
+    ((household.children ?? 0) * CHILD_NEEDS.waterLiters +
+      (household.babies ?? 0) * BABY_NEEDS.waterLiters) *
+      factor
+  );
+}
+
+/** Énergie du foyer par jour (kcal). */
+export function dailyKcalNeed(household: HouseholdSettings): number {
+  return (
+    adultsOf(household) * household.kcalPerPersonDay +
+    (household.children ?? 0) * CHILD_NEEDS.kcal +
+    (household.babies ?? 0) * BABY_NEEDS.kcal
+  );
 }
 
 /** Litres d'eau d'un lot, ou 0 si ce n'est pas de l'eau. */
@@ -271,13 +317,13 @@ export function computeResilience(
   const water = computeResource(
     lots,
     lotWaterLiters,
-    household.members * household.waterLitersPerPersonDay,
+    dailyWaterNeed(household),
     asOf,
   );
   const food = computeResource(
     lots,
     lotCalories,
-    household.members * household.kcalPerPersonDay,
+    dailyKcalNeed(household),
     asOf,
   );
   const limitingFactor = water.days <= food.days ? 'water' : 'food';
@@ -313,6 +359,8 @@ const SETTING_KEYS = {
   members: 'household_members',
   waterLitersPerPersonDay: 'water_liters_per_person_day',
   kcalPerPersonDay: 'kcal_per_person_day',
+  children: 'household_children',
+  babies: 'household_babies',
 } as const;
 
 export const TARGET_DAYS_DEFAULT = 14;
@@ -349,7 +397,7 @@ export async function loadHousehold(
   db: SqlDatabase,
 ): Promise<HouseholdSettings> {
   const { rows } = await db.execute(
-    'SELECT key, value FROM settings WHERE key IN (?, ?, ?)',
+    'SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?, ?)',
     Object.values(SETTING_KEYS),
   );
   const values = new Map(rows.map(r => [String(r.key), Number(r.value)]));
@@ -358,6 +406,8 @@ export async function loadHousehold(
     waterLitersPerPersonDay:
       values.get(SETTING_KEYS.waterLitersPerPersonDay) ?? NaN,
     kcalPerPersonDay: values.get(SETTING_KEYS.kcalPerPersonDay) ?? NaN,
+    children: values.get(SETTING_KEYS.children) ?? 0,
+    babies: values.get(SETTING_KEYS.babies) ?? 0,
   };
   assertHousehold(household);
   return household;
@@ -369,7 +419,8 @@ export async function saveHousehold(
 ): Promise<void> {
   assertHousehold(household);
   await db.execute(
-    `INSERT INTO settings (key, value) VALUES (?, ?), (?, ?), (?, ?)
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)
      ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
     [
       SETTING_KEYS.members,
@@ -378,6 +429,10 @@ export async function saveHousehold(
       String(household.waterLitersPerPersonDay),
       SETTING_KEYS.kcalPerPersonDay,
       String(household.kcalPerPersonDay),
+      SETTING_KEYS.children,
+      String(household.children ?? 0),
+      SETTING_KEYS.babies,
+      String(household.babies ?? 0),
     ],
   );
 }

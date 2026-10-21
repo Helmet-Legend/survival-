@@ -839,6 +839,30 @@ const migration16: Migration = {
   ],
 };
 
+/**
+ * Composition du foyer (adultes, enfants, bébés) : les deux nouveaux
+ * réglages sont partagés entre les téléphones comme le nombre de personnes.
+ */
+const SYNC_SETTINGS_17 = {
+  ...SYNC_SHARED[0],
+  when: (r: string) =>
+    `${r}.key IN ('household_members', 'household_children',
+      'household_babies', 'water_liters_per_person_day',
+      'kcal_per_person_day', 'target_days', 'wh_per_person_day',
+      'energy_devices', 'purchase_plan')`,
+};
+
+const migration17: Migration = {
+  version: 17,
+  name: 'composition du foyer',
+  statements: [
+    'DROP TRIGGER trg_sync_settings_ai',
+    'DROP TRIGGER trg_sync_settings_au',
+    'DROP TRIGGER trg_sync_settings_ad',
+    ...syncTriggers(SYNC_SETTINGS_17),
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -856,6 +880,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration14,
   migration15,
   migration16,
+  migration17,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
