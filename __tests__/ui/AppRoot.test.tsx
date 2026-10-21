@@ -1232,7 +1232,7 @@ describe('écrans', () => {
         'Foyer : 1 personne. Hypothèses du calcul. Modifier dans Mon foyer',
       ),
     );
-    await fireEvent.press(await screen.findByLabelText('Ajouter une personne'));
+    await fireEvent.press(await screen.findByLabelText('Ajouter un adulte'));
     await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
     expect(await screen.findByLabelText('5 jours')).toBeTruthy(); // 30 L / (2 × 3 L)
     expect(screen.getByLabelText(/^Foyer : 2 personnes\./)).toBeTruthy();
@@ -1244,7 +1244,7 @@ describe('écrans', () => {
         'Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie',
       ),
     );
-    await fireEvent.press(await screen.findByLabelText('Retirer une personne'));
+    await fireEvent.press(await screen.findByLabelText('Retirer un adulte'));
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
     expect(await screen.findByLabelText('10 jours')).toBeTruthy();
     expect(screen.getByLabelText(/^Foyer : 1 personne\./)).toBeTruthy();
