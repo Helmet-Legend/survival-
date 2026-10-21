@@ -3,6 +3,9 @@
  * code et téléphones associés. Tout est rangé dans le coffre chiffré
  * (`sync_meta`), jamais dans les sauvegardes.
  */
+import { utf8ToBytes } from '@noble/hashes/utils';
+
+import { utf8ToText } from '../backup/base64';
 import { bytesToHex, hexToBytes, isHex } from '../crypto/bytes';
 import type { RandomSource } from '../crypto/types';
 import { withTransaction } from '../db/transaction';
@@ -34,6 +37,8 @@ export interface Invite {
   secret: Uint8Array;
   options: SyncOptions;
   expires: number;
+  /** Adresses où joindre ce téléphone (« 192.168.1.20:41234 »). */
+  addresses?: string[];
 }
 
 export interface Peer {
@@ -90,8 +95,13 @@ export function encodeInvite(invite: Invite): string {
     toBase64Url(invite.secret),
     flags(invite.options),
     invite.expires.toString(36),
+    ...(invite.addresses && invite.addresses.length > 0
+      ? [toBase64Url(utf8ToBytes(invite.addresses.join(',')))]
+      : []),
   ].join('.');
 }
+
+const ADDRESS = /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/;
 
 /** Lecture d'un QR code scanné ; refuse tout autre contenu. */
 export function decodeInvite(text: string, now: number): Invite {
@@ -101,16 +111,23 @@ export function decodeInvite(text: string, now: number): Invite {
       'INVALID_INVITE',
       'Ce QR code n’est pas un code d’association Fenrir.',
     );
-  if (parts.length !== 6 || parts[0] !== PREFIX) {
+  if ((parts.length !== 6 && parts.length !== 7) || parts[0] !== PREFIX) {
     throw invalid();
   }
-  const [, device, id, secret, opts, expires] = parts;
+  const [, device, id, secret, opts, expires, where] = parts;
   let identity: Uint8Array;
   let key: Uint8Array;
+  let addresses: string[] | undefined;
   try {
     identity = fromBase64Url(id);
     key = fromBase64Url(secret);
+    if (where !== undefined) {
+      addresses = utf8ToText(fromBase64Url(where)).split(',');
+    }
   } catch {
+    throw invalid();
+  }
+  if (addresses && !addresses.every(a => ADDRESS.test(a))) {
     throw invalid();
   }
   const expiry = parseInt(expires, 36);
@@ -135,6 +152,7 @@ export function decodeInvite(text: string, now: number): Invite {
     secret: key,
     options: { weapons: opts.includes('w'), photos: opts.includes('p') },
     expires: expiry,
+    ...(addresses ? { addresses } : {}),
   };
 }
 
@@ -147,6 +165,7 @@ export async function createInvite(
   options: SyncOptions,
   random: RandomSource,
   now: number = Date.now(),
+  addresses: string[] = [],
 ): Promise<{ text: string; invite: Invite }> {
   const identity = await loadIdentity(db, random);
   const invite: Invite = {
@@ -155,6 +174,7 @@ export async function createInvite(
     secret: random.bytes(32),
     options,
     expires: now + INVITE_TTL_MS,
+    addresses,
   };
   await setMeta(
     db,
@@ -317,8 +337,9 @@ export async function forgetPeer(
   db: SqlDatabase,
   device: string,
 ): Promise<void> {
-  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?)', [
+  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?, ?)', [
     `peer:${device}`,
     `peer_clock:${device}`,
+    `peer_options:${device}`,
   ]);
 }

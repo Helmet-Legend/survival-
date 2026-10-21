@@ -8,6 +8,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.resilios.files.FilesPackage
 import com.resilios.location.LocationPackage
+import com.resilios.net.NetPackage
 import com.resilios.photo.PhotoPackage
 import com.resilios.reminders.ReminderPackage
 import com.resilios.scanner.ScannerPackage
@@ -35,6 +36,8 @@ class MainApplication : Application(), ReactApplication {
           add(LocationPackage())
           // Lecture de codes-barres (caméra et décodage dans le téléphone).
           add(ScannerPackage())
+          // Partage du foyer : liaison directe entre téléphones sur le Wi-Fi.
+          add(NetPackage())
         },
     )
   }
