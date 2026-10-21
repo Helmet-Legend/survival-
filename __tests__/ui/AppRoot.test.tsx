@@ -29,7 +29,13 @@ import {
 } from '../../src/inventory';
 import { addDays, localToday } from '../../src/lib/dates';
 import { whileAway, type PhotoSource } from '../../src/photo/photoSource';
+import { randomBytes } from 'crypto';
+
+import { prepareDatabase } from '../../src/db/connection';
+import { hostInvite } from '../../src/sync';
 import { AppRoot } from '../../src/ui/AppRoot';
+import { NodeSqliteDb } from '../db/sqlite';
+import { FakeWifi } from '../sync/fakeNetwork';
 import { createVault, type VaultContent } from '../../src/vault';
 import {
   JsArgon2,
@@ -574,7 +580,7 @@ describe('écrans', () => {
     extra: Partial<
       Pick<
         Parameters<typeof AppRoot>[0],
-        'scanSource' | 'productFetch' | 'files' | 'alertFetch'
+        'scanSource' | 'productFetch' | 'files' | 'alertFetch' | 'network'
       >
     > = {},
   ) {
@@ -586,6 +592,59 @@ describe('écrans', () => {
     await screen.findByText('Autonomie du foyer');
     return ctx;
   }
+
+  it('rejoint un foyer en collant le code et affiche l’état du partage', async () => {
+    const wifi = new FakeWifi();
+    const owner = new NodeSqliteDb();
+    await prepareDatabase(owner);
+    await new InventoryRepository(owner).createItem(
+      {
+        name: 'Conserves de thon',
+        category: 'food',
+        unit: 'unit',
+        caloriesPerUnit: 200,
+      },
+      { quantity: 4 },
+    );
+    const hosting = await hostInvite(
+      { db: owner, random: { bytes: n => new Uint8Array(randomBytes(n)) } },
+      wifi.phone('192.168.1.20'),
+      { weapons: false, photos: false },
+    );
+    await openApp({ network: wifi.phone('192.168.1.21') });
+
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Ouvrir le partage du foyer avec un autre téléphone',
+      ),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Je rejoins un foyer. Scannez le code affiché par l’autre téléphone.',
+      ),
+    );
+    await fireEvent.changeText(
+      await screen.findByLabelText('Ou collez le code'),
+      hosting.text,
+    );
+    await fireEvent.press(screen.getByLabelText('Rejoindre'));
+    expect(await screen.findByText('Téléphones associés')).toBeTruthy();
+    expect((await hosting.done).paired).toBe(true);
+    // Le stock de l'autre téléphone est arrivé, le nôtre est parti.
+    expect(
+      (await new InventoryRepository(owner).listItems()).map(i => i.name),
+    ).toEqual(expect.arrayContaining(['Conserves de thon', 'Riz']));
+
+    await fireEvent.press(screen.getByLabelText('Terminé'));
+    expect(await screen.findByText('Téléphone associé')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(
+      await screen.findByLabelText(
+        /^Partage du foyer : synchronisé à l’instant/,
+      ),
+    ).toBeTruthy();
+  });
 
   it('active les alertes et annonce une vigilance orange sur l’accueil', async () => {
     const calls: string[] = [];

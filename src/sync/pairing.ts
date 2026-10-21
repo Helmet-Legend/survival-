@@ -337,9 +337,30 @@ export async function forgetPeer(
   db: SqlDatabase,
   device: string,
 ): Promise<void> {
-  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?, ?)', [
+  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?, ?, ?)', [
     `peer:${device}`,
     `peer_clock:${device}`,
     `peer_options:${device}`,
+    `peer_synced_at:${device}`,
   ]);
+}
+
+/** Date ISO du dernier échange réussi avec ce téléphone. */
+export async function lastSyncedAt(
+  db: SqlDatabase,
+  device: string,
+): Promise<string | null> {
+  return getMeta(db, `peer_synced_at:${device}`);
+}
+
+/** Synchronisation à l'ouverture de Fenrir (activée par défaut). */
+export async function loadAutoSync(db: SqlDatabase): Promise<boolean> {
+  return (await getMeta(db, 'auto_sync')) !== '0';
+}
+
+export async function saveAutoSync(
+  db: SqlDatabase,
+  enabled: boolean,
+): Promise<void> {
+  await setMeta(db, 'auto_sync', enabled ? '1' : '0');
 }

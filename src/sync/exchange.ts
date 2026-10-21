@@ -196,6 +196,11 @@ async function transfer(
     await sendSealed(channel, session, { t: 'ack', written: received.written });
     await receiveSealed(channel, session, 'ack', TRANSFER_MS);
     await saveOptions(db, peer.device, options);
+    await db.execute(
+      `INSERT INTO sync_meta (key, value) VALUES (?, ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+      [`peer_synced_at:${peer.device}`, new Date(now()).toISOString()],
+    );
     return { peer, paired, received, sent: sent.rows.length, options };
   } finally {
     session.close();

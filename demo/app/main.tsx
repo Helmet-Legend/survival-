@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { systemRandom } from '../../src/crypto/native/random';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
 import { seedDecoyInventory } from '../../src/inventory';
+import type { LocalNetwork } from '../../src/device/net';
 import { AppRoot } from '../../src/ui/AppRoot';
 import { colors } from '../../src/ui/theme';
 import { createVault, type VaultContent } from '../../src/vault';
@@ -32,6 +33,18 @@ declare global {
     __RESILIOS_WASM__: string;
   }
 }
+
+/** Réseau local simulé : QR code affichable, aucun autre téléphone. */
+const demoNetwork: LocalNetwork = {
+  available: true,
+  listen: async () => ({ port: 41234, stop: () => undefined }),
+  connect: async () => {
+    throw new Error('Autre téléphone injoignable (aperçu web)');
+  },
+  advertise: async () => () => undefined,
+  discover: async () => () => undefined,
+  addresses: async () => ['192.168.1.20'],
+};
 
 const content: VaultContent = {
   guides: SAMPLE_GUIDES,
@@ -57,7 +70,7 @@ async function start() {
   function App() {
     return (
       <SafeAreaProvider style={styles.root}>
-        <AppRoot manager={manager} content={content} />
+        <AppRoot manager={manager} content={content} network={demoNetwork} />
       </SafeAreaProvider>
     );
   }

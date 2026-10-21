@@ -64,20 +64,26 @@ class ScanActivity : AppCompatActivity() {
   private var tone: ToneGenerator? = null
   @Volatile private var finished = false
 
-  private val reader =
+  /** QR code d'association d'un autre téléphone (partage du foyer). */
+  private val qrOnly by lazy { intent.getBooleanExtra(EXTRA_QR, false) }
+
+  private val reader by lazy {
       MultiFormatReader().apply {
         setHints(
             mapOf(
                 DecodeHintType.POSSIBLE_FORMATS to
-                    listOf(
-                        BarcodeFormat.EAN_13,
-                        BarcodeFormat.EAN_8,
-                        BarcodeFormat.UPC_A,
-                        BarcodeFormat.UPC_E,
-                        // Boîtes de médicaments : code, lot et péremption (GS1).
-                        BarcodeFormat.DATA_MATRIX),
+                    if (qrOnly) listOf(BarcodeFormat.QR_CODE)
+                    else
+                        listOf(
+                            BarcodeFormat.EAN_13,
+                            BarcodeFormat.EAN_8,
+                            BarcodeFormat.UPC_A,
+                            BarcodeFormat.UPC_E,
+                            // Boîtes de médicaments : code, lot et péremption (GS1).
+                            BarcodeFormat.DATA_MATRIX),
                 DecodeHintType.TRY_HARDER to true))
       }
+  }
 
   /**
    * Lecteur principal (zxing-cpp) : bien plus fiable sur les petits Data
@@ -85,16 +91,18 @@ class ScanActivity : AppCompatActivity() {
    * Le lecteur Java ci-dessus reste en secours si la bibliothèque native
    * ne se charge pas ou ne trouve rien.
    */
-  private val cppReader: CppReader? =
+  private val cppReader: CppReader? by lazy {
       runCatching {
             CppReader().apply {
               options.formats =
-                  setOf(
-                      CppReader.Format.EAN_13,
-                      CppReader.Format.EAN_8,
-                      CppReader.Format.UPC_A,
-                      CppReader.Format.UPC_E,
-                      CppReader.Format.DATA_MATRIX)
+                  if (qrOnly) setOf(CppReader.Format.QR_CODE)
+                  else
+                      setOf(
+                          CppReader.Format.EAN_13,
+                          CppReader.Format.EAN_8,
+                          CppReader.Format.UPC_A,
+                          CppReader.Format.UPC_E,
+                          CppReader.Format.DATA_MATRIX)
               options.tryHarder = true
               options.tryRotate = true
               options.tryDownscale = true
@@ -103,6 +111,7 @@ class ScanActivity : AppCompatActivity() {
             }
           }
           .getOrNull()
+  }
 
   private val permission =
       registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -179,7 +188,8 @@ class ScanActivity : AppCompatActivity() {
           setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
           typeface = Typeface.DEFAULT_BOLD
           text =
-              if (series) "Visez les codes-barres ou les carrés Data Matrix l’un après l’autre."
+              if (qrOnly) "Visez le QR code affiché sur l’autre téléphone."
+              else if (series) "Visez les codes-barres ou les carrés Data Matrix l’un après l’autre."
               else "Visez le code-barres ou le carré Data Matrix."
         }
     panel.addView(status)
@@ -363,6 +373,7 @@ class ScanActivity : AppCompatActivity() {
 
   companion object {
     const val EXTRA_SERIES = "series"
+    const val EXTRA_QR = "qr"
     const val RESULT_CODES = "codes"
     const val RESULT_FORMATS = "formats"
     const val RESULT_ERROR = "error"

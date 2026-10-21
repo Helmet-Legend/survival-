@@ -14,12 +14,15 @@ export interface ScanSource {
   available: boolean;
   /** Lectures normalisées, ou null si l'utilisateur a annulé. */
   scan(series: boolean): Promise<ScanRead[] | null>;
+  /** Texte d'un QR code (association du partage du foyer), ou null. */
+  scanQr?(): Promise<string | null>;
 }
 
 interface NativeScannerModule {
   scan(
     series: boolean,
   ): Promise<Array<{ code: string; format: string }> | null>;
+  scanQr?(): Promise<Array<{ code: string; format: string }> | null>;
 }
 
 export function nativeScanSource(): ScanSource {
@@ -30,8 +33,17 @@ export function nativeScanSource(): ScanSource {
   if (native === undefined) {
     return { available: false, scan: async () => null };
   }
+  const scanQr = native.scanQr;
   return {
     available: true,
+    ...(scanQr
+      ? {
+          scanQr: async () => {
+            const reads = await whileAway(() => scanQr());
+            return reads?.[0]?.code ?? null;
+          },
+        }
+      : {}),
     scan: async series => {
       const reads = await whileAway(() => native.scan(series));
       if (reads === null) {

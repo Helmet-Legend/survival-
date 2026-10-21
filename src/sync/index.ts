@@ -7,3 +7,4 @@ export * from './pairing';
 export * from './secure';
 export * from './channel';
 export * from './exchange';
+export * from './service';
