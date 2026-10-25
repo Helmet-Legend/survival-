@@ -19,7 +19,10 @@ import {
   type PurchaseEntry,
 } from '../../src/plan/purchasePlan';
 import { reminderTimes } from '../../src/resilience/reminders';
-import { saveTargetDays } from '../../src/resilience/resilienceCalculator';
+import {
+  saveHousehold,
+  saveTargetDays,
+} from '../../src/resilience/resilienceCalculator';
 import { NodeSqliteDb } from '../db/sqlite';
 
 const TODAY = '2026-10-18';
@@ -301,5 +304,104 @@ describe('mise à jour, budget et simulateur', () => {
     const cleared = await setPurchaseBudget(db, null, TODAY);
     expect(cleared?.budget).toBeUndefined();
     expect(cleared?.entries.find(e => e.id === 'bag')?.price).toBe(60);
+  });
+});
+
+describe('matériel de base dans le plan', () => {
+  const gearOf = async (repo: InventoryRepository, weaponCount = 0) => ({
+    items: await repo.listItems(),
+    bagNames: [],
+    weaponCount,
+  });
+
+  it('ajoute le matériel « À prévoir » de Kit et matériel, sans doublon avec le kit 72 h', async () => {
+    const { db, repo } = await setup();
+    const input = async () => ({
+      items: await repo.listItems({ bag: 'none' }),
+      bags: [],
+      documentCount: 0,
+      asOf: TODAY,
+      gear: await gearOf(repo),
+    });
+    const plan = await createPurchasePlan(db, {
+      ...(await input()),
+      months: 3,
+    });
+    const ids = plan.entries.map(e => e.id);
+    // Matériel de base absent du kit 72 h.
+    expect(ids).toContain('gear-can_opener');
+    expect(ids).toContain('gear-water_filter');
+    expect(ids).toContain('gear-extinguisher');
+    // Essentiel du kit officiel : acheté le premier mois.
+    expect(plan.entries.find(e => e.id === 'gear-can_opener')).toMatchObject({
+      month: 0,
+      vital: true,
+      category: 'tool',
+    });
+    // Déjà proposés par le kit 72 h (radio, bougies ou briquet) : pas deux fois.
+    expect(ids).toContain('kit-radio');
+    expect(ids).not.toContain('gear-radio');
+    expect(ids).toContain('kit-fire');
+    expect(ids).not.toContain('gear-candles');
+    expect(ids).not.toContain('gear-lighter');
+    // Ce qui ne s'achète pas, ou compté à part.
+    for (const id of ['documents', 'cash', 'keys', 'bag', 'water_reserve']) {
+      expect(ids).not.toContain(`gear-${id}`);
+    }
+    // Foyer sans bébé ni enfant : ni lait infantile ni jeux.
+    expect(ids).not.toContain('gear-baby');
+    expect(ids).not.toContain('gear-kids');
+    // Sans arme enregistrée, le volet armes n'apparaît pas.
+    expect(ids).not.toContain('gear-weapon_safe');
+
+    // Bougies achetées : le point « feu » du kit est rempli, il reste le briquet.
+    await repo.createItem(
+      { name: 'Bougies', category: 'power', unit: 'unit', subtype: 'candle' },
+      { quantity: 10 },
+    );
+    const next = await updatePurchasePlan(db, await input());
+    const nextIds = next.entries.map(e => e.id);
+    expect(nextIds).not.toContain('kit-fire');
+    expect(nextIds).not.toContain('gear-candles');
+    expect(nextIds).toContain('gear-lighter');
+  });
+
+  it('propose le volet armes si une arme est enregistrée, avec la bonne fiche', async () => {
+    const { db, repo } = await setup();
+    const plan = await createPurchasePlan(db, {
+      items: await repo.listItems({ bag: 'none' }),
+      bags: [],
+      documentCount: 0,
+      asOf: TODAY,
+      months: 3,
+      gear: await gearOf(repo, 1),
+    });
+    expect(plan.entries.find(e => e.id === 'gear-weapon_safe')).toMatchObject({
+      category: 'weapon',
+      recordType: 'accessory',
+    });
+    expect(plan.entries.map(e => e.id)).not.toContain('gear-weapon_papers');
+  });
+
+  it('propose lait infantile et jeux si le foyer compte un bébé et un enfant', async () => {
+    const { db, repo } = await setup();
+    await saveHousehold(db, {
+      members: 3,
+      waterLitersPerPersonDay: 3,
+      kcalPerPersonDay: 2000,
+      children: 1,
+      babies: 1,
+    });
+    const plan = await createPurchasePlan(db, {
+      items: await repo.listItems({ bag: 'none' }),
+      bags: [],
+      documentCount: 0,
+      asOf: TODAY,
+      months: 3,
+      gear: await gearOf(repo),
+    });
+    const ids = plan.entries.map(e => e.id);
+    expect(ids).toContain('gear-baby');
+    expect(ids).toContain('gear-kids');
   });
 });

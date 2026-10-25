@@ -202,10 +202,12 @@ describe('échanges chiffrés', () => {
     );
     const { sa, sb } = await connect(a, b);
     const frame = sa.seal(await exportChanges(a, OPTIONS));
-    expect(frame).not.toContain('Eau');
-    expect(Buffer.from(fromBase64Url(frame)).toString('latin1')).not.toContain(
-      'Eau',
-    );
+    // Le nom complet en clair ne doit pas apparaître. Un mot court (« Eau »)
+    // peut sortir par hasard d'un chiffré aléatoire : on cherche le nom entier.
+    expect(frame).not.toContain('Eau minérale');
+    const bytes = Buffer.from(fromBase64Url(frame));
+    expect(bytes.toString('utf8')).not.toContain('Eau minérale');
+    expect(bytes.toString('latin1')).not.toContain('Eau min');
     const report = await applyRemoteChanges(b, sb.open(frame), OPTIONS);
     expect(report.written).toBeGreaterThan(0);
     const items = await new InventoryRepository(b).listItems();

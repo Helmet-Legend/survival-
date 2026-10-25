@@ -63,7 +63,7 @@ function parseEuros(input: string): number | null {
 }
 
 export function PurchasePlanScreen() {
-  const { db, repo, bags, documents, reminders } = useSession();
+  const { db, repo, armory, bags, documents, reminders } = useSession();
   const navigation = useNavigation();
   const [months, setMonths] = useState<number>(PLAN_MONTHS_DEFAULT);
   const [feedback, setFeedback] = useState<{
@@ -78,16 +78,24 @@ export function PurchasePlanScreen() {
   const [budgetText, setBudgetText] = useState<string | null>(null);
 
   const stockInput = async () => {
-    const [items, bagList, docs] = await Promise.all([
+    const [items, allItems, bagList, docs, weapons] = await Promise.all([
       repo.listItems({ bag: 'none' }),
+      repo.listItems(),
       bags.list(),
       documents.list(),
+      armory.listWeapons(),
     ]);
     return {
       items,
       bags: bagList,
       documentCount: docs.length,
       asOf: localToday(),
+      // Matériel de base « À prévoir », vérifié comme dans Kit et matériel.
+      gear: {
+        items: allItems,
+        bagNames: bagList.map(b => b.name),
+        weaponCount: weapons.length,
+      },
     };
   };
 
@@ -241,13 +249,14 @@ export function PurchasePlanScreen() {
         >
           <Text style={text.body}>
             Fenrir liste ce qui manque d’après votre stock : eau et vivres
-            jusqu’à votre objectif d’autonomie, équipement du kit 72 h, articles
-            sous leur stock minimal, sac d’évacuation.
+            jusqu’à votre objectif d’autonomie, équipement du kit 72 h, matériel
+            « À prévoir » de Kit et matériel, articles sous leur stock minimal,
+            sac d’évacuation.
           </Text>
           <Text style={text.muted}>
-            L’essentiel (eau et vivres pour 3 jours, lampe, radio, trousse)
-            tombe le premier mois ; le reste est réparti sur les mois suivants.
-            Aucun prix n’est estimé.
+            L’essentiel (eau et vivres pour 3 jours, lampe, radio, trousse, kit
+            72 h officiel) tombe le premier mois ; le reste est réparti sur les
+            mois suivants. Aucun prix n’est estimé.
           </Text>
           {monthChooser}
           <Button variant="primary" label="Créer le plan" onPress={create} />
@@ -371,6 +380,7 @@ export function PurchasePlanScreen() {
                     : () =>
                         navigation.openStockForm({
                           category: e.category!,
+                          recordType: e.recordType,
                           prefill: e.prefill,
                         })
                 }
