@@ -4,6 +4,7 @@
  */
 import {
   Bell,
+  FileText,
   Lock,
   Moon,
   Smartphone,
@@ -184,10 +185,16 @@ export function SettingsScreen(props: { onLock: () => void }) {
         right={<ShieldCheck color={colors.success} size={20} />}
       >
         <Text style={text.muted}>
-          Les données sont chiffrées sur ce téléphone et ne quittent jamais
-          l’appareil. Le coffre se verrouille dès que l’application passe en
+          Les données sont chiffrées sur ce téléphone et ne sont envoyées à
+          aucun serveur. Le coffre se verrouille dès que l’application passe en
           arrière-plan.
         </Text>
+        <Button
+          icon={FileText}
+          chevron
+          label="Politique de confidentialité"
+          onPress={() => navigation.open('privacy')}
+        />
         <View style={styles.settingRow}>
           <Text style={[text.body, styles.grow]}>
             Reconnaître les codes-barres en ligne

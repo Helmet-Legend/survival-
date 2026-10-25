@@ -107,6 +107,7 @@ import { PlanScreen } from './screens/PlanScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { StockScreen } from './screens/StockScreen';
+import { PrivacyScreen } from './screens/PrivacyScreen';
 import { SyncScreen } from './screens/SyncScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
@@ -420,6 +421,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <AlertsScreen />
               ) : overlay === 'sync' ? (
                 <SyncScreen />
+              ) : overlay === 'privacy' ? (
+                <PrivacyScreen />
               ) : overlay === 'preparation' ? (
                 <KitScreen />
               ) : overlay === 'calculators' ? (
