@@ -133,7 +133,7 @@ jobs:
           curl -sSLo bundletool.jar https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
           keytool -genkeypair -keystore test.jks -alias test -storepass testtest -keypass testtest \
             -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Test"
-          java -jar bundletool.jar build-apks --bundle=Fenrir-play-*.aab --output=fenrir.apks \
+          java -jar bundletool.jar build-apks --bundle="$(ls Fenrir-play-*.aab)" --output=fenrir.apks \
             --mode=universal --ks=test.jks --ks-key-alias=test \
             --ks-pass=pass:testtest --key-pass=pass:testtest
           unzip -o fenrir.apks universal.apk
