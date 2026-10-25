@@ -135,9 +135,12 @@ describe('matériel de base', () => {
     }
     expect(all.filter(g => g.refs.length === 0).map(g => g.id)).toEqual([
       'water_filter',
-      'cookware',
-      'compass',
+      'solar',
+      'gas_mask',
       'rope',
+      'fuel_cans',
+      'jumper_cables',
+      'tyre_kit',
       'weapon_lock',
       'ammo',
       'magazines',
@@ -148,8 +151,12 @@ describe('matériel de base', () => {
       'tourniquet',
     ]);
     expect(gearRefsLabel(all.find(g => g.id === 'keys')!)).toBe(
-      'SGDSN, Géorisques, Canada',
+      'SGDSN, Géorisques, Canada, Luxembourg',
     );
+    // Listes officielles relues en octobre 2026 (Allemagne, Suède, Finlande).
+    expect(all.find(g => g.id === 'smoke_detector')!.refs).toEqual(['bbk']);
+    expect(all.find(g => g.id === 'iodine')!.refs).toEqual(['tuntia']);
+    expect(gearRefsLabel(all.find(g => g.id === 'bucket')!)).toBe('Suède');
   });
 
   it('ajoute le volet armes sans rien en citer dans les exports', async () => {
