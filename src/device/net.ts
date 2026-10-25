@@ -5,7 +5,12 @@
  *
  * Les messages qui passent ici sont déjà chiffrés par `src/sync/secure.ts`.
  */
-import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
+import {
+  DeviceEventEmitter,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
+} from 'react-native';
 
 import {
   ChannelClosedError,
@@ -71,7 +76,7 @@ const UNAVAILABLE: LocalNetwork = {
 
 export function nativeNetwork(): LocalNetwork {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosNet as NativeNet | undefined)
       : undefined;
   if (native === undefined) {
@@ -101,7 +106,7 @@ export function nativeNetwork(): LocalNetwork {
     },
   });
 
-  DeviceEventEmitter.addListener(EVENT, (event: NetEvent) => {
+  eventsOf(native).addListener(EVENT, (event: NetEvent) => {
     switch (event.type) {
       case 'open':
         queueOf(event.id);
@@ -164,5 +169,34 @@ export function nativeNetwork(): LocalNetwork {
         return [];
       }
     },
+  };
+}
+
+/**
+ * Évènements natifs : DeviceEventEmitter sur Android ; sur iOS, le module
+ * est un RCTEventEmitter qui n'émet qu'une fois écouté par NativeEventEmitter.
+ */
+function eventsOf(native: object): {
+  addListener<T>(
+    event: string,
+    listener: (event: T) => void,
+  ): {
+    remove(): void;
+  };
+} {
+  const asHandler = (listener: unknown) =>
+    listener as (...args: unknown[]) => void;
+  if (Platform.OS === 'ios') {
+    const emitter = new NativeEventEmitter(
+      native as ConstructorParameters<typeof NativeEventEmitter>[0],
+    );
+    return {
+      addListener: (event, listener) =>
+        emitter.addListener(event, asHandler(listener)),
+    };
+  }
+  return {
+    addListener: (event, listener) =>
+      DeviceEventEmitter.addListener(event, asHandler(listener)),
   };
 }

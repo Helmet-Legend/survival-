@@ -38,7 +38,7 @@ export function isAwayForPhoto(): boolean {
 
 export function nativePhotoSource(): PhotoSource {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosPhoto as NativePhotoModule | undefined)
       : undefined;
   if (native === undefined) {

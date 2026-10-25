@@ -54,3 +54,21 @@ index 7eb4fea..9a40236 100644
 -<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.poowf.argon2" >
 +<manifest xmlns:android="http://schemas.android.com/apk/res/android">
  </manifest>
+diff --git a/node_modules/react-native-argon2/ios/RNArgon2-Bridging-Header.h b/node_modules/react-native-argon2/ios/RNArgon2-Bridging-Header.h
+index 76e9353..5fff35c 100644
+--- a/node_modules/react-native-argon2/ios/RNArgon2-Bridging-Header.h
++++ b/node_modules/react-native-argon2/ios/RNArgon2-Bridging-Header.h
+@@ -1 +1 @@
+-#import "RCTBridgeModule.h"
++#import <React/RCTBridgeModule.h>
+diff --git a/node_modules/react-native-argon2/ios/RNArgon2.swift b/node_modules/react-native-argon2/ios/RNArgon2.swift
+index a9aad3f..75b0212 100644
+--- a/node_modules/react-native-argon2/ios/RNArgon2.swift
++++ b/node_modules/react-native-argon2/ios/RNArgon2.swift
+@@ -1,5 +1,6 @@
+ import Foundation
+ import Argon2Swift
++import React
+ 
+ @objc(RNArgon2)
+ class RNArgon2: NSObject {

@@ -79,3 +79,70 @@ jobs:
           --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
           --title "Fenrir $VERSION_NAME"
           --notes "$(git log -1 --pretty=%B | head -1)"
+
+  # Version iPhone : fichier .ipa NON signé, à installer sans App Store avec
+  # SideStore ou AltStore (signature par l'identifiant Apple de l'utilisateur).
+  # N'empêche pas la publication de l'APK si elle échoue.
+  ipa:
+    name: Compilation iPhone (IPA)
+    needs: checks
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Base des médicaments (noms par code CIP, hors ligne)
+        run: node scripts/build-medicines.mjs
+      - name: Dépendances iOS (CocoaPods)
+        working-directory: ios
+        run: |
+          bundle install
+          bundle exec pod install
+      - name: Compilation (Release, sans signature)
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/ResiliOS.xcworkspace -scheme ResiliOS \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath build/Fenrir.xcarchive \
+            MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$VERSION_CODE \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            archive > xcodebuild.log 2>&1 || {
+              grep -E "error:|\*\* ARCHIVE FAILED|failed:" -A3 xcodebuild.log | head -n 150
+              exit 1
+            }
+          tail -n 20 xcodebuild.log
+      - name: Paquet IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Fenrir.xcarchive/Products/Applications/ResiliOS.app Payload/
+          zip -qry "Fenrir-$VERSION_NAME.ipa" Payload
+          ls -lh "Fenrir-$VERSION_NAME.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fenrir-ipa
+          path: Fenrir-*.ipa
+          retention-days: 30
+      - name: Ajout à la version publiée
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # La version est créée par la compilation de l'APK : on l'attend.
+          for i in $(seq 1 60); do
+            if gh release view "v$VERSION_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "v$VERSION_NAME" "Fenrir-$VERSION_NAME.ipa" --repo "$GITHUB_REPOSITORY" --clobber
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Version v$VERSION_NAME introuvable : IPA non publiée." >&2
+          exit 1

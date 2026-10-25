@@ -4,7 +4,12 @@
  * par le modèle magnétique embarqué. Absente sur iOS, dans les tests et
  * l'aperçu web.
  */
-import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
+import {
+  DeviceEventEmitter,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
+} from 'react-native';
 
 export interface HeadingReading {
   /** Cap magnétique du haut de l'écran, en degrés [0, 360[. */
@@ -37,7 +42,7 @@ export const NO_COMPASS: CompassSource = {
 
 export function nativeCompass(): CompassSource {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosCompass as NativeCompassModule | undefined)
       : undefined;
   const available =
@@ -50,7 +55,7 @@ export function nativeCompass(): CompassSource {
   return {
     available: true,
     watch: listener => {
-      const subscription = DeviceEventEmitter.addListener(
+      const subscription = eventsOf(native).addListener(
         'ResiliosHeading',
         (event: { heading: number; accuracy: number }) =>
           // SENSOR_STATUS_UNRELIABLE (0) ou ACCURACY_LOW (1).
@@ -73,5 +78,34 @@ export function nativeCompass(): CompassSource {
         return null;
       }
     },
+  };
+}
+
+/**
+ * Évènements natifs : DeviceEventEmitter sur Android ; sur iOS, le module
+ * est un RCTEventEmitter qui n'émet qu'une fois écouté par NativeEventEmitter.
+ */
+function eventsOf(native: object): {
+  addListener<T>(
+    event: string,
+    listener: (event: T) => void,
+  ): {
+    remove(): void;
+  };
+} {
+  const asHandler = (listener: unknown) =>
+    listener as (...args: unknown[]) => void;
+  if (Platform.OS === 'ios') {
+    const emitter = new NativeEventEmitter(
+      native as ConstructorParameters<typeof NativeEventEmitter>[0],
+    );
+    return {
+      addListener: (event, listener) =>
+        emitter.addListener(event, asHandler(listener)),
+    };
+  }
+  return {
+    addListener: (event, listener) =>
+      DeviceEventEmitter.addListener(event, asHandler(listener)),
   };
 }

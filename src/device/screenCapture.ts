@@ -17,7 +17,7 @@ interface NativeScreenModule {
 
 export function nativeScreenCapture(): ScreenCaptureSetting {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosScreen as NativeScreenModule | undefined)
       : undefined;
   if (native === undefined) {

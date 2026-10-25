@@ -28,7 +28,7 @@ interface NativeFilesModule {
 
 export function nativeFiles(): FileAccess {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosFiles as NativeFilesModule | undefined)
       : undefined;
   if (native === undefined) {
