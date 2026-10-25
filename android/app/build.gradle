@@ -78,6 +78,9 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.resilios"
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "com.resilios"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -94,15 +97,44 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Clé d'envoi Google Play, fournie par les secrets GitHub (jamais
+        // dans le dépôt). Absente : la version Play reste signée en débogage,
+        // installable pour essai mais refusée par la Play Console.
+        if (System.getenv("FENRIR_UPLOAD_STORE_FILE")) {
+            upload {
+                storeFile file(System.getenv("FENRIR_UPLOAD_STORE_FILE"))
+                storePassword System.getenv("FENRIR_UPLOAD_STORE_PASSWORD")
+                keyAlias System.getenv("FENRIR_UPLOAD_KEY_ALIAS")
+                keyPassword System.getenv("FENRIR_UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
+    // Deux distributions :
+    // - github : version actuelle (com.resilios), mise à jour intégrée depuis
+    //   les versions publiées sur GitHub ;
+    // - play : Google Play (app.fenrir), mises à jour par le Play Store
+    //   uniquement, sans permission d'installer des paquets.
+    flavorDimensions "distribution"
+    productFlavors {
+        github {
+            dimension "distribution"
+            applicationId "com.resilios"
+            buildConfigField "boolean", "SELF_UPDATE", "true"
+            signingConfig signingConfigs.debug
+        }
+        play {
+            dimension "distribution"
+            applicationId "app.fenrir"
+            buildConfigField "boolean", "SELF_UPDATE", "false"
+            signingConfig signingConfigs.findByName("upload") ?: signingConfigs.debug
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Signature choisie par la distribution (voir productFlavors).
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

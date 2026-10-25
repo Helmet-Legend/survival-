@@ -22,8 +22,11 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
-          // Mise à jour depuis les versions publiées sur GitHub.
-          add(UpdatePackage())
+          // Mise à jour depuis les versions publiées sur GitHub (absente de
+          // la version Google Play, mise à jour par le Play Store).
+          if (BuildConfig.SELF_UPDATE) {
+            add(UpdatePackage())
+          }
           // Photos d'armes et de documents, stockées dans le coffre.
           add(PhotoPackage())
           // Réglage des captures d'écran.
