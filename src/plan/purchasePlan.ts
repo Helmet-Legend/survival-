@@ -263,8 +263,9 @@ const VITAL_CHECKS = new Set(['light', 'radio', 'firstaid', 'medicine']);
 
 /**
  * Matériel de base qui n'entre pas dans le plan : eau et vivres (comptés en
- * quantités ci-dessus), sac d'évacuation (besoin à part), et ce qui ne
- * s'achète pas (copies, plan papier, argent, double des clés).
+ * quantités ci-dessus), sac d'évacuation (besoin à part), ce qui ne s'achète
+ * pas (copies, plan papier, argent, double des clés, plein du réservoir) et
+ * les comprimés d'iode, pris seulement sur consigne des autorités.
  */
 const GEAR_NOT_BOUGHT = new Set([
   'water_reserve',
@@ -276,6 +277,8 @@ const GEAR_NOT_BOUGHT = new Set([
   'cash',
   'keys',
   'weapon_papers',
+  'car_fuel',
+  'iodine',
 ]);
 
 /**

@@ -48,6 +48,10 @@ export type GearRef =
   | 'canada'
   | 'belgique'
   | 'croixrouge'
+  | 'bbk'
+  | 'msb'
+  | 'tuntia'
+  | 'luxembourg'
   | 'csi';
 
 /**
@@ -79,6 +83,25 @@ export const GEAR_REFS: Record<GearRef, { short: string; title: string }> = {
   croixrouge: {
     short: 'Croix-Rouge',
     title: 'Catakit, sac d’urgence (Croix-Rouge française, association)',
+  },
+  bbk: {
+    short: 'Allemagne',
+    title:
+      'Checkliste Notfallvorsorge (Office fédéral de protection civile BBK, Allemagne)',
+  },
+  msb: {
+    short: 'Suède',
+    title: 'Om krisen eller kriget kommer (MSB, Suède, novembre 2024)',
+  },
+  tuntia: {
+    short: 'Finlande',
+    title:
+      'Varautuminen kotona (campagne officielle 72 tuntia, Finlande, 2025)',
+  },
+  luxembourg: {
+    short: 'Luxembourg',
+    title:
+      'Kit en situation d’urgence (infocrise.lu, gouvernement du Luxembourg)',
   },
   csi: {
     short: 'Code de la sécurité intérieure',
@@ -121,6 +144,10 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           'canada',
           'belgique',
           'croixrouge',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
         ],
         label: 'Réserve d’eau potable',
         hint: '6 L par personne pour 72 h (2 L par jour), en bouteilles.',
@@ -130,7 +157,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'water_tablets',
-        refs: ['canada'],
+        refs: ['canada', 'sgdsn'],
         label: 'Pastilles de purification',
         names: ['pastille', 'purification', 'micropur', 'aquatabs'],
         add: {
@@ -151,7 +178,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'water_container',
-        refs: ['croixrouge'],
+        refs: ['croixrouge', 'bbk', 'msb', 'tuntia'],
         label: 'Jerrican ou bidon pliable vide',
         hint: 'Pour aller chercher de l’eau à un point de distribution.',
         names: ['jerrican', 'bidon vide', 'bidon pliable', 'container pliable'],
@@ -168,6 +195,16 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Filtre à eau', subtype: 'other' },
         },
       },
+      {
+        id: 'water_bottle',
+        refs: ['bbk'],
+        label: 'Gourde réutilisable',
+        names: ['gourde', 'nalgene'],
+        add: {
+          category: 'energy',
+          prefill: { name: 'Gourde', subtype: 'other' },
+        },
+      },
     ],
   },
   {
@@ -176,7 +213,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'food',
-        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Vivres non périssables',
         hint: 'De préférence sans cuisson.',
         category: 'food',
@@ -184,7 +231,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'can_opener',
-        refs: ['sgdsn', 'readygov', 'canada'],
+        refs: [
+          'sgdsn',
+          'readygov',
+          'canada',
+          'georisques',
+          'bbk',
+          'msb',
+          'luxembourg',
+        ],
         label: 'Ouvre-boîte manuel',
         names: ['ouvre-boite', 'ouvre boite', 'ouvre-boites'],
         add: {
@@ -194,7 +249,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove',
-        refs: ['canada'],
+        refs: ['canada', 'sgdsn', 'bbk', 'msb', 'tuntia', 'luxembourg'],
         label: 'Petit réchaud',
         category: 'energy',
         subtypes: ['cooking'],
@@ -206,7 +261,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'stove_fuel',
-        refs: ['canada'],
+        refs: ['canada', 'bbk', 'msb'],
         label: 'Combustible pour le réchaud',
         hint: 'Cartouches de gaz, alcool à brûler, tablettes…',
         category: 'power',
@@ -216,7 +271,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'baby',
-        refs: ['georisques', 'canada', 'belgique'],
+        refs: ['georisques', 'canada', 'belgique', 'sgdsn', 'msb'],
         label: 'Lait infantile, petits pots et couches',
         hint: 'Si le foyer compte un bébé.',
         names: [
@@ -231,7 +286,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'pets',
-        refs: ['canada', 'belgique'],
+        refs: [
+          'canada',
+          'belgique',
+          'sgdsn',
+          'georisques',
+          'bbk',
+          'msb',
+          'tuntia',
+        ],
         label: 'Nourriture et affaires des animaux',
         hint: 'Si vous avez des animaux : nourriture, laisse, cage de transport.',
         names: ['croquette', 'patee', 'litiere', 'animaux'],
@@ -239,7 +302,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'cookware',
-        refs: [],
+        refs: ['bbk', 'canada'],
         label: 'Gamelle et couverts',
         names: ['gamelle', 'popote', 'couverts'],
         add: {
@@ -262,6 +325,10 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           'canada',
           'belgique',
           'croixrouge',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
         ],
         label: 'Lampe de poche ou frontale',
         category: 'energy',
@@ -274,7 +341,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'batteries',
-        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Piles de rechange',
         category: 'power',
         subtypes: ['battery'],
@@ -286,7 +363,16 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'powerbank',
-        refs: ['georisques', 'belgique'],
+        refs: [
+          'georisques',
+          'belgique',
+          'sgdsn',
+          'canada',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Batterie externe et chargeur de téléphone',
         category: 'power',
         subtypes: ['powerbank', 'solar'],
@@ -298,7 +384,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'candles',
-        refs: ['sgdsn', 'georisques', 'canada'],
+        refs: ['sgdsn', 'georisques', 'canada', 'bbk', 'msb', 'luxembourg'],
         label: 'Bougies',
         category: 'power',
         subtypes: ['candle'],
@@ -310,7 +396,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'lighter',
-        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'croixrouge'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'croixrouge',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Briquet ou allumettes',
         names: ['briquet', 'allumette', 'ferro'],
         add: {
@@ -329,6 +425,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Bâtons lumineux', subtype: 'lighting' },
         },
       },
+      {
+        id: 'solar',
+        refs: [],
+        label: 'Station d’énergie ou panneau solaire',
+        hint: 'Pour recharger téléphones, radio et lampes sans réseau.',
+        category: 'power',
+        subtypes: ['solar', 'generator'],
+        add: { category: 'power', prefill: { subtype: 'solar' } },
+      },
     ],
   },
   {
@@ -337,7 +442,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'radio',
-        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Radio à piles ou à manivelle',
         hint: 'Pour suivre les consignes des autorités.',
         category: 'energy',
@@ -346,6 +461,16 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         add: {
           category: 'energy',
           prefill: { name: 'Radio à piles', subtype: 'communication' },
+        },
+      },
+      {
+        id: 'car_charger',
+        refs: ['msb'],
+        label: 'Chargeur de téléphone pour la voiture',
+        names: ['allume-cigare', 'chargeur voiture', 'chargeur de voiture'],
+        add: {
+          category: 'power',
+          prefill: { name: 'Chargeur de voiture', subtype: 'other' },
         },
       },
       {
@@ -361,7 +486,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'contacts',
-        refs: ['belgique', 'canada'],
+        refs: ['belgique', 'canada', 'bbk', 'msb', 'luxembourg'],
         label: 'Numéros utiles notés sur papier, stylo',
         hint: 'Famille et urgences : sans téléphone, plus de répertoire.',
       },
@@ -373,7 +498,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'paper_map',
-        refs: ['readygov'],
+        refs: ['readygov', 'canada', 'msb'],
         label: 'Carte routière papier',
         names: ['carte routiere', 'carte ign', 'carte papier', 'atlas'],
         add: {
@@ -383,7 +508,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'compass',
-        refs: [],
+        refs: ['msb'],
         label: 'Boussole',
         names: ['boussole'],
         add: {
@@ -406,6 +531,10 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           'canada',
           'belgique',
           'croixrouge',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
         ],
         label: 'Trousse de premiers secours',
         category: 'medical',
@@ -415,7 +544,17 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'medicine',
-        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'readygov',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Médicaments habituels',
         hint: 'Vos traitements, une copie des ordonnances, et les médicaments courants conseillés par votre pharmacien.',
         category: 'medical',
@@ -423,15 +562,107 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         add: { category: 'medical', prefill: { subtype: 'medicine' } },
       },
       {
+        id: 'thermometer',
+        refs: ['bbk'],
+        label: 'Thermomètre médical',
+        category: 'medical',
+        subtypes: ['diagnostic'],
+        names: ['thermometre'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Thermomètre', subtype: 'diagnostic' },
+        },
+      },
+      {
+        id: 'pain_fever',
+        refs: ['bbk', 'luxembourg'],
+        label: 'Médicament contre la douleur et la fièvre',
+        hint: 'Paracétamol par exemple, sur conseil de votre pharmacien.',
+        names: [
+          'paracetamol',
+          'doliprane',
+          'dafalgan',
+          'efferalgan',
+          'ibuprofene',
+          'antalgique',
+        ],
+        add: { category: 'medical', prefill: { subtype: 'medicine' } },
+      },
+      {
+        id: 'digestive',
+        refs: ['bbk'],
+        label: 'Médicament contre la diarrhée et les nausées',
+        hint: 'Sur conseil de votre pharmacien.',
+        names: ['diarrhee', 'smecta', 'imodium', 'loperamide', 'nausee'],
+        add: { category: 'medical', prefill: { subtype: 'medicine' } },
+      },
+      {
+        id: 'electrolytes',
+        refs: ['bbk'],
+        label: 'Sels de réhydratation orale',
+        names: ['rehydratation', 'electrolyte'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Sels de réhydratation', subtype: 'medicine' },
+        },
+      },
+      {
+        id: 'iodine',
+        refs: ['tuntia'],
+        label: 'Comprimés d’iode',
+        hint: 'À ne prendre que sur consigne des autorités (préfet).',
+        names: ['iode', 'iodure'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Comprimés d’iode', subtype: 'medicine' },
+        },
+      },
+      {
+        id: 'tweezers',
+        refs: ['bbk', 'canada', 'luxembourg'],
+        label: 'Pince à épiler et ciseaux',
+        names: ['pince a epiler', 'ciseaux'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Pince à épiler', subtype: 'other' },
+        },
+      },
+      {
+        id: 'sunscreen',
+        refs: ['bbk', 'canada'],
+        label: 'Crème solaire et anti-moustiques',
+        names: ['solaire', 'moustique', 'repulsif'],
+        add: { category: 'medical', prefill: { subtype: 'hygiene' } },
+      },
+      {
+        id: 'medical_aids',
+        refs: ['bbk', 'msb', 'canada'],
+        label: 'Aides et matériel médical de rechange',
+        hint: 'Appareil auditif et ses piles, matériel habituel (diabète…).',
+        names: ['auditif'],
+        add: { category: 'medical', prefill: { subtype: 'other' } },
+      },
+      {
+        id: 'gas_mask',
+        refs: [],
+        label: 'Masque respiratoire à cartouches',
+        hint: 'Demi-masque ou masque intégral, avec des filtres adaptés (norme EN 14387).',
+        names: ['masque a gaz', 'cartouche', 'abek'],
+        add: {
+          category: 'medical',
+          prefill: { name: 'Masque à cartouches', subtype: 'protection' },
+        },
+      },
+      {
         id: 'glasses',
-        refs: ['sgdsn', 'georisques', 'readygov'],
+        refs: ['sgdsn', 'georisques', 'readygov', 'canada', 'bbk'],
         label: 'Lunettes de rechange',
         hint: 'Si vous en portez ; et le produit pour lentilles.',
         names: ['lunettes de vue', 'lunettes de rechange'],
       },
       {
         id: 'masks',
-        refs: ['readygov', 'canada', 'croixrouge'],
+        refs: ['readygov', 'canada', 'croixrouge', 'sgdsn', 'bbk', 'tuntia'],
         label: 'Masques anti-poussière (FFP2)',
         names: ['masque', 'ffp2'],
         add: {
@@ -441,7 +672,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'disposable_gloves',
-        refs: ['croixrouge'],
+        refs: ['croixrouge', 'bbk', 'canada'],
         label: 'Gants jetables',
         names: ['gants jetables', 'gants nitrile', 'gants latex'],
         add: {
@@ -451,7 +682,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'hygiene',
-        refs: ['readygov', 'canada'],
+        refs: [
+          'readygov',
+          'canada',
+          'sgdsn',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Savon, gel hydroalcoolique et articles de toilette',
         hint: 'Avec les protections hygiéniques si besoin.',
         category: 'medical',
@@ -461,7 +700,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'wipes',
-        refs: ['readygov', 'belgique'],
+        refs: ['readygov', 'belgique', 'bbk', 'msb'],
         label: 'Lingettes humides',
         hint: 'Pour se laver sans eau courante.',
         names: ['lingette'],
@@ -472,7 +711,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'toilet_paper',
-        refs: ['canada'],
+        refs: ['canada', 'bbk', 'msb', 'tuntia'],
         label: 'Papier toilette',
         names: ['papier toilette', 'papier hygienique'],
         add: {
@@ -482,7 +721,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'trash_bags',
-        refs: ['readygov', 'canada'],
+        refs: ['readygov', 'canada', 'bbk', 'msb', 'tuntia'],
         label: 'Sacs poubelle et attaches',
         hint: 'Déchets et toilettes de fortune.',
         names: [
@@ -495,6 +734,24 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           category: 'tool',
           prefill: { name: 'Sacs poubelle', subtype: 'other' },
         },
+      },
+      {
+        id: 'bucket',
+        refs: ['msb'],
+        label: 'Seau avec couvercle',
+        hint: 'Toilettes de fortune, avec des sacs poubelle et de la sciure ou de la litière.',
+        names: ['seau'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Seau avec couvercle', subtype: 'other' },
+        },
+      },
+      {
+        id: 'paper_towels',
+        refs: ['canada', 'bbk'],
+        label: 'Essuie-tout et mouchoirs',
+        names: ['essuie', 'mouchoir'],
+        add: { category: 'medical', prefill: { subtype: 'hygiene' } },
       },
     ],
   },
@@ -514,7 +771,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'sleeping',
-        refs: ['readygov', 'canada', 'belgique'],
+        refs: ['readygov', 'canada', 'belgique', 'bbk', 'msb', 'luxembourg'],
         label: 'Sac de couchage ou couverture',
         category: 'energy',
         subtypes: ['sleeping'],
@@ -526,23 +783,35 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'warm_clothes',
-        refs: ['sgdsn', 'georisques', 'belgique'],
+        refs: ['sgdsn', 'georisques', 'belgique', 'bbk', 'msb', 'tuntia'],
         label: 'Vêtements chauds',
+        hint: 'Bonnet, gants, écharpe, vêtements en laine.',
         category: 'energy',
         subtypes: ['protection'],
         names: ['vetement', 'polaire', 'poncho', 'impermeable', 'veste'],
         add: { category: 'energy', prefill: { subtype: 'protection' } },
       },
       {
+        id: 'rain_gear',
+        refs: ['bbk', 'msb', 'canada'],
+        label: 'Vêtements de pluie',
+        hint: 'Poncho ou veste imperméable.',
+        names: ['poncho', 'impermeable', 'pluie'],
+        add: {
+          category: 'energy',
+          prefill: { name: 'Poncho', subtype: 'protection' },
+        },
+      },
+      {
         id: 'change_clothes',
-        refs: ['readygov', 'canada'],
+        refs: ['readygov', 'canada', 'bbk', 'luxembourg'],
         label: 'Vêtements et chaussures de rechange',
         hint: 'Des chaussures solides, pour marcher.',
         names: ['chaussure', 'bottes', 'vetements de rechange'],
       },
       {
         id: 'tarp',
-        refs: ['readygov'],
+        refs: ['readygov', 'canada'],
         label: 'Bâche ou film plastique',
         hint: 'Avec le ruban adhésif, pour calfeutrer une pièce.',
         category: 'energy',
@@ -553,6 +822,24 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
           prefill: { name: 'Bâche', subtype: 'shelter' },
         },
       },
+      {
+        id: 'heater',
+        refs: ['bbk', 'msb'],
+        label: 'Chauffage d’appoint sans électricité',
+        hint: 'Pétrole ou gaz : aérer souvent et l’éteindre avant de dormir.',
+        names: ['chauffage', 'poele a petrole', 'radiateur a gaz'],
+        add: { category: 'energy', prefill: { subtype: 'other' } },
+      },
+      {
+        id: 'heater_fuel',
+        refs: ['bbk', 'msb', 'tuntia'],
+        label: 'Combustible du chauffage',
+        hint: 'Pétrole, gaz, ou bois sec pour une cheminée ou un poêle.',
+        category: 'power',
+        subtypes: ['wood'],
+        names: ['petrole', 'bois de chauffage', 'buche', 'granule'],
+        add: { category: 'power', prefill: { subtype: 'wood' } },
+      },
     ],
   },
   {
@@ -561,7 +848,15 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     items: [
       {
         id: 'knife',
-        refs: ['sgdsn', 'canada', 'belgique', 'croixrouge'],
+        refs: [
+          'sgdsn',
+          'canada',
+          'belgique',
+          'croixrouge',
+          'georisques',
+          'bbk',
+          'luxembourg',
+        ],
         label: 'Couteau multifonction',
         category: 'tool',
         subtypes: ['cutting', 'multitool'],
@@ -580,7 +875,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'duct_tape',
-        refs: ['readygov'],
+        refs: ['readygov', 'canada', 'tuntia'],
         label: 'Ruban adhésif renforcé',
         names: ['adhesif', 'scotch', 'duct', 'chatterton'],
         add: {
@@ -590,7 +885,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'work_gloves',
-        refs: ['canada'],
+        refs: ['canada', 'bbk'],
         label: 'Gants de travail',
         names: ['gants de travail', 'gants de protection', 'gants cuir'],
         add: {
@@ -600,12 +895,47 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'extinguisher',
-        refs: ['readygov'],
+        refs: ['readygov', 'bbk', 'msb', 'tuntia'],
         label: 'Extincteur',
         names: ['extincteur'],
         add: {
           category: 'tool',
           prefill: { name: 'Extincteur', subtype: 'other' },
+        },
+      },
+      {
+        id: 'fire_blanket',
+        refs: ['tuntia'],
+        label: 'Couverture anti-feu',
+        names: ['anti-feu', 'anti feu', 'ignifuge'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Couverture anti-feu', subtype: 'other' },
+        },
+      },
+      {
+        id: 'smoke_detector',
+        refs: ['bbk'],
+        label: 'Détecteur de fumée',
+        hint: 'Obligatoire dans tout logement en France.',
+        names: ['detecteur de fumee', 'daaf'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Détecteur de fumée', subtype: 'other' },
+        },
+      },
+      {
+        id: 'co_detector',
+        refs: ['bbk'],
+        label: 'Détecteur de monoxyde de carbone',
+        hint: 'Avec un chauffage d’appoint, un réchaud ou un groupe électrogène.',
+        names: ['monoxyde'],
+        add: {
+          category: 'tool',
+          prefill: {
+            name: 'Détecteur de monoxyde de carbone',
+            subtype: 'other',
+          },
         },
       },
       {
@@ -621,25 +951,86 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
     ],
   },
   {
+    id: 'vehicle',
+    title: 'Véhicule',
+    items: [
+      {
+        id: 'car_fuel',
+        refs: ['msb'],
+        label: 'Réservoir de la voiture plein',
+        hint: 'Ou batterie chargée pour une voiture électrique.',
+      },
+      {
+        id: 'fuel_cans',
+        refs: [],
+        label: 'Jerricans de carburant',
+        hint: 'Homologués pour le carburant.',
+        category: 'power',
+        subtypes: ['fuel'],
+        add: {
+          category: 'power',
+          prefill: { name: 'Jerrican de carburant', subtype: 'fuel' },
+        },
+      },
+      {
+        id: 'jumper_cables',
+        refs: [],
+        label: 'Câbles de démarrage ou booster',
+        names: ['demarrage', 'booster'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Câbles de démarrage', subtype: 'other' },
+        },
+      },
+      {
+        id: 'tyre_kit',
+        refs: [],
+        label: 'Kit anti-crevaison',
+        names: ['crevaison'],
+        add: {
+          category: 'tool',
+          prefill: { name: 'Kit anti-crevaison', subtype: 'repair' },
+        },
+      },
+    ],
+  },
+  {
     id: 'papers',
     title: 'Documents, argent, évacuation',
     items: [
       {
         id: 'documents',
-        refs: ['sgdsn', 'georisques', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'luxembourg',
+        ],
         label: 'Copies des documents essentiels',
         hint: 'Pièces d’identité, carte Vitale, assurances, dans une pochette étanche.',
         source: 'documents',
       },
       {
         id: 'cash',
-        refs: ['sgdsn', 'georisques', 'canada', 'belgique'],
+        refs: [
+          'sgdsn',
+          'georisques',
+          'canada',
+          'belgique',
+          'bbk',
+          'msb',
+          'tuntia',
+          'luxembourg',
+        ],
         label: 'Argent liquide',
         hint: 'Les paiements par carte peuvent être coupés.',
       },
       {
         id: 'keys',
-        refs: ['sgdsn', 'georisques', 'canada'],
+        refs: ['sgdsn', 'georisques', 'canada', 'luxembourg'],
         label: 'Double des clés (maison, voiture)',
       },
       {
@@ -651,7 +1042,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
       },
       {
         id: 'kids',
-        refs: ['belgique'],
+        refs: ['belgique', 'sgdsn', 'georisques', 'canada', 'luxembourg'],
         label: 'Jeux ou livres pour les enfants',
         hint: 'Si le foyer compte des enfants.',
       },
