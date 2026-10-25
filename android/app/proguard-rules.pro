@@ -8,3 +8,26 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# --- Fenrir ---------------------------------------------------------------
+# Réduction du code (R8) en version finale. Les classes appelées depuis le
+# code natif (JNI) ou par réflexion sont gardées telles quelles.
+
+# Modules natifs de Fenrir (écran, rappels, fichiers, scanner, réseau…).
+-keep class com.resilios.** { *; }
+
+# Bibliothèques React Native avec code natif.
+-keep class com.op.sqlite.** { *; }
+-keep class com.poowf.argon2.** { *; }
+-keep class com.oblador.keychain.** { *; }
+-keep class com.horcrux.svg.** { *; }
+-keep class com.th3rdwave.safeareacontext.** { *; }
+-keep class org.linusu.** { *; }
+
+# Argon2 (dérivation de la clé du coffre) et décodage Data Matrix : JNI.
+-keep class com.lambdapioneer.argon2kt.** { *; }
+-keep class zxingcpp.** { *; }
+-dontwarn zxingcpp.**
+
+# Lecteur de codes-barres ZXing (Java).
+-keep class com.google.zxing.** { *; }
