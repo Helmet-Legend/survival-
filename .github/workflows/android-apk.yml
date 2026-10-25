@@ -108,14 +108,18 @@ jobs:
           bundle install
           bundle exec pod install
       - name: Compilation (Release, sans signature)
-        run: >-
-          set -o pipefail &&
-          xcodebuild -workspace ios/ResiliOS.xcworkspace -scheme ResiliOS
-          -configuration Release -sdk iphoneos -destination 'generic/platform=iOS'
-          -archivePath build/Fenrir.xcarchive
-          MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$VERSION_CODE
-          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
-          archive | tail -n 200
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/ResiliOS.xcworkspace -scheme ResiliOS \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath build/Fenrir.xcarchive \
+            MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$VERSION_CODE \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            archive > xcodebuild.log 2>&1 || {
+              grep -E "error:|\*\* ARCHIVE FAILED|failed:" -A3 xcodebuild.log | head -n 150
+              exit 1
+            }
+          tail -n 20 xcodebuild.log
       - name: Paquet IPA
         run: |
           mkdir -p Payload

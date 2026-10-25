@@ -13,7 +13,7 @@ interface NativeTilesModule {
 
 export function nativeTileFetch(): TileFetch {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosTiles as NativeTilesModule | undefined)
       : undefined;
   if (native === undefined) {

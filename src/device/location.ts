@@ -37,7 +37,7 @@ const TIMEOUT_MS = 30_000;
 
 export function nativeLocation(): LocationSource {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosLocation as NativeLocationModule | undefined)
       : undefined;
   if (native === undefined) {

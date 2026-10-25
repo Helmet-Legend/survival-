@@ -27,7 +27,7 @@ interface NativeScannerModule {
 
 export function nativeScanSource(): ScanSource {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosScanner as NativeScannerModule | undefined)
       : undefined;
   if (native === undefined) {

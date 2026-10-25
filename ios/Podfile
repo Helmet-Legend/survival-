@@ -17,6 +17,9 @@ end
 target 'ResiliOS' do
   config = use_native_modules!
 
+  # Modules natifs de Fenrir pour iOS (équivalents des modules Android).
+  pod 'FenrirNative', :path => './FenrirNative'
+
   use_react_native!(
     :path => config[:reactNativePath],
     # An absolute path to your application root.

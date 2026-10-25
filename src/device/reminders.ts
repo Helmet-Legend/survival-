@@ -14,7 +14,7 @@ interface NativeRemindersModule {
 
 export function nativeReminders(): ReminderScheduler {
   const native =
-    Platform.OS === 'android'
+    Platform.OS === 'android' || Platform.OS === 'ios'
       ? (NativeModules.ResiliosReminders as NativeRemindersModule | undefined)
       : undefined;
   if (native === undefined) {
