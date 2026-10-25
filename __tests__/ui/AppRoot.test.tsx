@@ -150,6 +150,10 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+// Le premier rendu charge toute l'application : sur une machine d'intégration
+// chargée, il peut dépasser les 5 s par défaut (0,8 s en local).
+jest.setTimeout(30000);
+
 describe('premier lancement', () => {
   it('crée le coffre avec code maître et code de contrainte', async () => {
     const { manager } = makeManager();
