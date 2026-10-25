@@ -1,5 +1,5 @@
-# Sonde temporaire : lit les listes officielles de kits d'urgence (sites
-# injoignables depuis l'environnement de développement). À supprimer.
+# Sonde temporaire : parcourt resilience-urbaine.com et relève les listes
+# (sites injoignables depuis l'environnement de développement). À supprimer.
 name: Sonde kits officiels
 
 on:
@@ -8,44 +8,58 @@ on:
     paths: ['.github/workflows/sonde-kits.yml']
 
 jobs:
-  lire:
-    name: ${{ matrix.name }}
+  pages:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: bbk, url: 'https://www.bbk.bund.de/SharedDocs/Downloads/DE/Mediathek/Publikationen/Buergerinformationen/Ratgeber/ratgeber-notfallvosorge-checkliste.pdf?__blob=publicationFile&v=10' }
-          - { name: readygov, url: 'https://www.ready.gov/kit' }
-          - { name: tuntia, url: 'https://72tuntia.fi/wp-content/uploads/2025/01/spek_72_tuntia_varautuminen_kotona_2025_01_21_v01.pdf' }
-          - { name: msb, url: 'https://rib.msb.se/filer/pdf/30828.pdf' }
-          - { name: dsb, url: 'https://sikkerhverdag.no/globalassets/din-beredskap/brosjyrer-alle-sprak/dsb-egenberedskap-bokmal-uu-web_ny.pdf' }
-          - { name: luxembourg, url: 'https://infocrise.public.lu/dam-assets/contenu/kit-urgence.pdf' }
-          - { name: sgdsn, url: 'https://www.info.gouv.fr/upload/media/mixed/0001/16/b250783992e0c766ae97bce7cb6eb1e8f081fe33.pdf' }
-          - { name: canada, url: 'https://www.canada.ca/fr/services/police/urgences/protection/preparez-vous/kits-urgence/obtenir-kit.html' }
-          - { name: georisques, url: 'https://www.georisques.gouv.fr/sites/default/files/2022-08/KIT%2072H_A4-HD.pdf' }
-          - { name: belgique, url: 'https://centredecrise.be/fr/que-pouvez-vous-faire/kit-durgence' }
-          - { name: suisse, url: 'https://www.bwl.admin.ch/bwl/fr/home/themen/notvorrat.html' }
+    timeout-minutes: 20
     steps:
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
-      - name: Lecture
-        env:
-          URL: ${{ matrix.url }}
+      - name: Parcours du site
         run: |
           set +e
-          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-          curl -sSL -A "$UA" -m 60 -o doc "$URL" -w "HTTP %{http_code} %{url_effective}\n"
-          if file doc | grep -q PDF; then
-            pdftotext -layout doc - | sed 's/[[:space:]]\+/ /g' | grep -v '^ *$' | head -n 900
-          else
-            python3 - doc <<'PY'
-          import sys, html, re
-          t = open(sys.argv[1], encoding='utf-8', errors='replace').read()
-          t = re.sub(r'(?is)<(script|style|noscript|svg|header|footer|nav).*?</\1>', ' ', t)
-          t = re.sub(r'(?i)<(br|/p|/li|/h\d|/div|/tr)[^>]*>', '\n', t)
-          t = html.unescape(re.sub(r'<[^>]+>', ' ', t))
-          lines = [re.sub(r'\s+', ' ', l).strip() for l in t.splitlines()]
-          print('\n'.join(l for l in lines if len(l) > 2)[:30000])
+          python3 - <<'PY'
+          import html, re, urllib.request, urllib.parse, collections
+          UA = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Chrome/124 Safari/537.36'}
+          ROOT = 'https://www.resilience-urbaine.com/'
+          host = urllib.parse.urlparse(ROOT).netloc
+          def get(u):
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(u, headers=UA), timeout=30)
+                  return r.geturl(), r.read().decode('utf-8', 'replace')
+              except Exception as e:
+                  print('ÉCHEC', u, e); return u, ''
+          seen, queue, pages = set(), collections.deque([ROOT]), []
+          # Plan du site, s'il existe.
+          for sm in ['sitemap.xml', 'sitemap_index.xml', 'wp-sitemap.xml', 'page-sitemap.xml', 'post-sitemap.xml']:
+              _, t = get(ROOT + sm)
+              for loc in re.findall(r'<loc>([^<]+)</loc>', t):
+                  if loc.endswith('.xml'):
+                      _, t2 = get(loc)
+                      queue.extend(re.findall(r'<loc>([^<]+)</loc>', t2))
+                  else:
+                      queue.append(loc)
+          while queue and len(pages) < 200:
+              u = queue.popleft().split('#')[0]
+              if u in seen or urllib.parse.urlparse(u).netloc.replace('www.', '') != host.replace('www.', ''):
+                  continue
+              if re.search(r'\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|xml)(\?|$)', u, re.I):
+                  continue
+              seen.add(u)
+              final, t = get(u)
+              if not t:
+                  continue
+              pages.append((final, t))
+              for href in re.findall(r'href="([^"]+)"', t):
+                  queue.append(urllib.parse.urljoin(final, html.unescape(href)))
+          print('PAGES', len(pages))
+          def clean(s):
+              return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', s))).strip()
+          for final, t in pages:
+              title = clean((re.findall(r'(?is)<title>(.*?)</title>', t) or [''])[0])
+              body = re.sub(r'(?is)<(script|style|noscript|svg|header|footer|nav).*?</\1>', ' ', t)
+              items = [clean(x) for x in re.findall(r'(?is)<li[^>]*>(.*?)</li>', body)]
+              items = [x for x in items if 2 < len(x) < 200]
+              heads = [clean(x) for x in re.findall(r'(?is)<h[1-4][^>]*>(.*?)</h[1-4]>', body)]
+              print('\n=====', final, '|', title)
+              print('TITRES:', ' / '.join(h for h in heads if h)[:1500])
+              if items:
+                  print('LISTE:', ' ; '.join(items)[:6000])
           PY
-          fi
