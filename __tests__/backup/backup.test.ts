@@ -136,7 +136,7 @@ describe('sauvegarde chiffrée', () => {
 
     const envelope = JSON.parse(text);
     const data = base64ToBytes(envelope.data);
-    data[10] ^= 1;
+    data[10] = (data[10] + 1) % 256; // octet chiffré altéré
     envelope.data = bytesToBase64(data);
     await expect(
       restoreBackup(target, JSON.stringify(envelope), PASSWORD, new JsArgon2()),

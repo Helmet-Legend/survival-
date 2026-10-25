@@ -192,7 +192,8 @@ export function SettingsScreen(props: { onLock: () => void }) {
         <Button
           icon={FileText}
           chevron
-          label="Politique de confidentialité"
+          label="Politique complète"
+          accessibilityLabel="Lire la politique de confidentialité"
           onPress={() => navigation.open('privacy')}
         />
         <View style={styles.settingRow}>

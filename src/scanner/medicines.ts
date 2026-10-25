@@ -19,7 +19,6 @@ function load(): MedicineTable {
   if (table === null) {
     try {
       // Chargée à la première lecture seulement : plusieurs mégaoctets.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const raw = require('./medicines.data.json') as Partial<MedicineTable>;
       table = {
         generated: raw.generated ?? null,

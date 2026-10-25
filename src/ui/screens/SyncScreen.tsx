@@ -182,8 +182,8 @@ export function SyncScreen() {
     }
   };
 
-  const join = (text: string) =>
-    run(() => joinFromInvite(ctx, network, text.trim()));
+  const join = (pasted: string) =>
+    run(() => joinFromInvite(ctx, network, pasted.trim()));
 
   const scan = async () => {
     setError(null);
@@ -191,10 +191,10 @@ export function SyncScreen() {
       return;
     }
     try {
-      const text = await scanSource.scanQr();
-      if (text) {
+      const scanned = await scanSource.scanQr();
+      if (scanned) {
         setStep('working');
-        await join(text);
+        await join(scanned);
       }
     } catch (e) {
       setError(message(e));

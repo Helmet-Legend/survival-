@@ -219,7 +219,7 @@ describe('échanges chiffrés', () => {
     const first = sa.seal({ n: 1 });
     const second = sa.seal({ n: 2 });
     const bytes = fromBase64Url(first);
-    bytes[3] ^= 1;
+    bytes[3] = (bytes[3] + 1) % 256; // octet chiffré altéré
     expect(codeOf(() => sb.open(toBase64Url(bytes)))).toBe('TAMPERED');
     expect(codeOf(() => sb.open(second))).toBe('TAMPERED'); // désordre
     expect(sb.open(first)).toEqual({ n: 1 });

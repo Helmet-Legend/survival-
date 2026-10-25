@@ -248,12 +248,10 @@ export function planText(plan: FamilyPlan): string {
         : `- ${parts}${c.outOfArea ? ' · hors zone' : ''}`;
     }),
   );
-  const meeting = (label: string, point: MeetingPoint) =>
-    point.place === ''
+  const meeting = (label: string, spot: MeetingPoint) =>
+    spot.place === ''
       ? ''
-      : `${label} : ${point.place}${
-          point.position ? ` (${point.position})` : ''
-        }`;
+      : `${label} : ${spot.place}${spot.position ? ` (${spot.position})` : ''}`;
   add('POINTS DE REGROUPEMENT', [
     meeting('Près du domicile', plan.meetingNear),
     meeting('Hors du quartier', plan.meetingFar),
