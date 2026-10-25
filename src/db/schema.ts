@@ -863,6 +863,36 @@ const migration17: Migration = {
   ],
 };
 
+/**
+ * Boîtes de rangement étiquetées (QR + numéro). Une boîte contient des lots :
+ * une partie d'un article peut être dans une boîte, le reste ailleurs, sans
+ * changer la fiche ni le total du stock.
+ */
+const migration18: Migration = {
+  version: 18,
+  name: 'boîtes étiquetées',
+  statements: [
+    `CREATE TABLE boxes (
+       id         TEXT PRIMARY KEY NOT NULL,
+       label_no   INTEGER NOT NULL CHECK (label_no > 0),
+       name       TEXT CHECK (name IS NULL OR length(name) <= 60),
+       location   TEXT CHECK (location IS NULL OR length(location) <= 60),
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('boxes'),
+    `ALTER TABLE inventory_lots ADD COLUMN box_id TEXT
+       REFERENCES boxes (id) ON DELETE SET NULL`,
+    'CREATE INDEX idx_inventory_lots_box ON inventory_lots (box_id)',
+    ...syncTriggers({
+      table: 'boxes',
+      key: r => `${r}.id`,
+      weapon: () => '0',
+      time: 'updated_at',
+    }),
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -881,6 +911,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration15,
   migration16,
   migration17,
+  migration18,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -34,6 +34,7 @@ import { randomBytes } from 'crypto';
 import { prepareDatabase } from '../../src/db/connection';
 import { hostInvite } from '../../src/sync';
 import { AppRoot } from '../../src/ui/AppRoot';
+import * as QrModule from '../../src/ui/components/QrCode';
 import { NodeSqliteDb } from '../db/sqlite';
 import { FakeWifi } from '../sync/fakeNetwork';
 import { createVault, type VaultContent } from '../../src/vault';
@@ -724,6 +725,78 @@ describe('écrans', () => {
     );
     expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
     expect(screen.getByText('Vigilance orange crues')).toBeTruthy();
+  });
+
+  it('fait l’inventaire d’une boîte depuis le stock et l’ouvre par son QR', async () => {
+    const printed: string[] = [];
+    let label = '';
+    await openApp({
+      files: {
+        available: true,
+        saveText: async () => true,
+        openText: async () => null,
+        printHtml: async (_job, html) => {
+          printed.push(html);
+        },
+      },
+      scanSource: {
+        available: true,
+        scan: async () => null,
+        scanQr: async () => label,
+      },
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('Boîtes : 0 boîte'));
+    expect(screen.getByText('Aucune boîte.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Nouvelle boîte'));
+    expect(screen.getByText('Nouvelle boîte : N° 1')).toBeTruthy();
+    await fireEvent.changeText(
+      screen.getByLabelText('Emplacement (facultatif)'),
+      'Garage',
+    );
+    await fireEvent.press(screen.getByText('Créer la boîte'));
+    expect(await screen.findByText('Cette boîte est vide.')).toBeTruthy();
+
+    // 4 kg des 10 kg de riz partent dans la boîte.
+    await fireEvent.press(screen.getByText('Contenu depuis le stock'));
+    const more = await screen.findByLabelText('Riz : un de plus dans la boîte');
+    for (let i = 0; i < 4; i++) {
+      await fireEvent.press(more);
+    }
+    expect(screen.getByText('6 kg hors boîte')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Enregistrer le contenu'));
+    expect(
+      await screen.findByText('Contenu de la boîte N° 1 enregistré.'),
+    ).toBeTruthy();
+    expect(await screen.findByLabelText('Riz, 4 kg')).toBeTruthy();
+
+    const qr = jest.spyOn(QrModule, 'QrCode');
+    await fireEvent.press(screen.getByText('Étiquette QR'));
+    expect(
+      await screen.findByLabelText('Étiquette QR de la boîte N° 1'),
+    ).toBeTruthy();
+    label = qr.mock.calls[qr.mock.calls.length - 1][0].text;
+    qr.mockRestore();
+    expect(label).toMatch(/^fenrir:boite:/);
+    await fireEvent.press(screen.getByText('Imprimer l’étiquette'));
+    expect(printed[0]).toContain('N° 1');
+    // Rien du contenu ni de l'emplacement sur l'étiquette.
+    expect(printed[0]).not.toContain('Riz');
+    expect(printed[0]).not.toContain('Garage');
+
+    await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));
+    expect(await screen.findByLabelText('Boîte N° 1 : 1 article')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Scanner une boîte'));
+    expect(await screen.findByLabelText('Riz, 4 kg')).toBeTruthy();
+    expect(screen.getByText('4 kg · sans péremption')).toBeTruthy();
+
+    // Le stock du foyer est inchangé.
+    await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Nourriture : 36 000 kcal, 1 article'),
+    ).toBeTruthy();
   });
 
   it('réunit kit 72 h et matériel, coche à la main, exporte et imprime', async () => {

@@ -20,6 +20,7 @@ export const SHARED_TABLES: readonly SharedTable[] = [
   { name: 'family_plan', keys: ['id'] },
   { name: 'preparation_marks', keys: ['scope', 'item'] },
   { name: 'bags', keys: ['id'] },
+  { name: 'boxes', keys: ['id'] },
   { name: 'inventory_items', keys: ['id'] },
   { name: 'inventory_lots', keys: ['id'] },
   { name: 'weapons', keys: ['id'] },

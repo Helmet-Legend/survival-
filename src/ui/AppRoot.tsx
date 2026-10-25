@@ -32,6 +32,7 @@ import type { VaultKeyManager } from '../crypto/VaultKeyManager';
 import {
   ArmoryRepository,
   BagRepository,
+  BoxRepository,
   DocumentRepository,
   InventoryRepository,
   PhotoRepository,
@@ -213,6 +214,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       documents: new DocumentRepository(db),
       photos: new PhotoRepository(db),
       bags: new BagRepository(db),
+      boxes: new BoxRepository(db),
       photoSource,
       screenCapture,
       reminders,

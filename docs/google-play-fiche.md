@@ -21,6 +21,7 @@ Textes prêts à coller. Langue principale : français (France).
 > • Dates de péremption, lots et quantités, historique des mouvements.
 > • Scanner de codes-barres et des carrés Data Matrix des boîtes de médicaments (reconnus sans réseau).
 > • Sacs d'évacuation : contenu, péremptions et autonomie de chaque sac.
+> • Boîtes de rangement : l'inventaire de chaque boîte fermée, fait à partir du stock, avec une étiquette QR numérotée ; en la scannant, Fenrir affiche son contenu et sa prochaine péremption.
 > • Volet armes et munitions facultatif, pour l'inventaire de ce que vous détenez légalement.
 >
 > **COMBIEN DE TEMPS TENEZ-VOUS ?**

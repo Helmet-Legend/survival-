@@ -3,6 +3,7 @@ import type { SqlDatabase } from '../../src/db/types';
 import {
   ArmoryRepository,
   BagRepository,
+  BoxRepository,
   InventoryRepository,
   PhotoRepository,
 } from '../../src/inventory';
@@ -47,6 +48,7 @@ async function phone(prefix: string) {
     repo: new InventoryRepository(db, { newId, today }),
     armory: new ArmoryRepository(db, { newId, today }),
     bags: new BagRepository(db, { newId }),
+    boxes: new BoxRepository(db, { newId, today }),
     photos: new PhotoRepository(db, { newId }),
   };
 }
@@ -245,6 +247,30 @@ describe('synchronisation entre deux téléphones', () => {
     expect(await count(b.db, 'inventory_items')).toBe(2);
     expect(await count(b.db, 'inventory_lots')).toBe(2);
     expect(await countPendingChanges(a.db)).toBe(0);
+  });
+
+  it('envoie les boîtes et leur contenu', async () => {
+    const [a, b] = [await phone('a'), await phone('b')];
+    const box = await a.boxes.create({ location: 'Garage' });
+    const rice = await a.repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
+      { quantity: 10, expirationDate: '2028-03-01' },
+    );
+    await a.boxes.put(box.id, rice.id, 4);
+
+    await exchange(a.db, b.db);
+    const [received] = await b.boxes.list();
+    expect(received).toMatchObject({ labelNo: 1, location: 'Garage' });
+    expect(await b.boxes.contents(box.id)).toEqual([
+      expect.objectContaining({ name: 'Riz', quantity: 4 }),
+    ]);
+    expect(await quantities(b.repo)).toEqual(new Map([['Riz', 10]]));
+
+    // Boîte supprimée d'un côté : le contenu reste, hors boîte.
+    await b.boxes.delete(box.id);
+    await exchange(a.db, b.db);
+    expect(await a.boxes.list()).toEqual([]);
+    expect(await quantities(a.repo)).toEqual(new Map([['Riz', 10]]));
   });
 
   it('additionne les consommations faites des deux côtés', async () => {

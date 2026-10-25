@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 import type {
   ArmoryRepository,
   BagRepository,
+  BoxRepository,
   DocumentRepository,
   InventoryRepository,
   PhotoRepository,
@@ -32,6 +33,7 @@ export interface Session {
   photos: PhotoRepository;
   /** Sacs d'évacuation. */
   bags: BagRepository;
+  boxes: BoxRepository;
   /** Appareil photo et galerie (indisponibles hors Android). */
   photoSource: PhotoSource;
   /** Autorisation des captures d'écran (indisponible hors Android). */
