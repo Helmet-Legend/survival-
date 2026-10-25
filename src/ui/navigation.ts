@@ -21,7 +21,8 @@ export type Overlay =
   | 'purchases'
   | 'crisis'
   | 'household'
-  | 'sync';
+  | 'sync'
+  | 'privacy';
 
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {
@@ -91,6 +92,7 @@ const OVERLAY_BACK: Record<Overlay, string> = {
   crisis: 'Retour au simulateur',
   household: 'Retour à Mon foyer',
   sync: 'Retour au partage',
+  privacy: 'Retour à la confidentialité',
 };
 
 /** Libellé du retour vers l'écran précédent (écran secondaire, sinon section). */
