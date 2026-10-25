@@ -110,9 +110,11 @@ jobs:
           path: Fenrir-play-*.aab
           retention-days: 90
 
-  # Lance l'APK final (code réduit par R8) sur un téléphone Android virtuel :
-  # un plantage au démarrage (classe retirée à tort, module natif absent)
-  # fait échouer ce contrôle. Ne bloque pas la publication.
+  # Lance l'application finale (code réduit par R8) sur un téléphone Android
+  # virtuel x86_64 : un plantage au démarrage (classe retirée à tort, module
+  # natif absent) fait échouer ce contrôle. L'APK GitHub ne contient que le
+  # code ARM 64 bits ; on part donc du paquet Play (même code, x86_64
+  # compris), converti en APK universel. Ne bloque pas la publication.
   demarrage:
     name: Démarrage sur téléphone virtuel
     needs: apk
@@ -121,7 +123,21 @@ jobs:
     steps:
       - uses: actions/download-artifact@v5
         with:
-          name: fenrir-apk
+          name: fenrir-play-aab
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: APK universel depuis le paquet Play
+        run: |
+          curl -sSLo bundletool.jar https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
+          keytool -genkeypair -keystore test.jks -alias test -storepass testtest -keypass testtest \
+            -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Test"
+          java -jar bundletool.jar build-apks --bundle=Fenrir-play-*.aab --output=fenrir.apks \
+            --mode=universal --ks=test.jks --ks-key-alias=test \
+            --ks-pass=pass:testtest --key-pass=pass:testtest
+          unzip -o fenrir.apks universal.apk
+          unzip -l universal.apk | grep -E "lib/x86_64/libreactnative.so"
       - name: Accélération matérielle (KVM)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -134,13 +150,13 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: |
-            adb install -r Fenrir-*.apk
+            adb install -r universal.apk
             adb logcat -c
-            adb shell am start -W -n com.resilios/.MainActivity
+            adb shell am start -W -n app.fenrir/com.resilios.MainActivity
             sleep 30
             adb logcat -d > logcat.txt
-            if grep -E "FATAL EXCEPTION|AndroidRuntime: Process: com.resilios|ClassNotFoundException|NoSuchMethodError" logcat.txt; then echo "::error::Fenrir plante au démarrage"; grep -A30 "FATAL EXCEPTION" logcat.txt | head -80; exit 1; fi
-            adb shell pidof com.resilios || { echo "::error::Fenrir ne tourne plus après 30 s"; tail -100 logcat.txt; exit 1; }
+            if grep -E "FATAL EXCEPTION|AndroidRuntime: Process: app.fenrir|ClassNotFoundException: (com.resilios|com.facebook|com.op|com.poowf|com.oblador|com.horcrux|com.th3rdwave|org.linusu|com.lambdapioneer|zxingcpp|com.google.zxing)|NoSuchMethodError" logcat.txt; then echo "::error::Fenrir plante au démarrage"; grep -A30 "FATAL EXCEPTION" logcat.txt | head -80; exit 1; fi
+            adb shell pidof app.fenrir || { echo "::error::Fenrir ne tourne plus après 30 s"; tail -100 logcat.txt; exit 1; }
             echo "Fenrir démarre et tourne après 30 s."
 
   # Version iPhone : fichier .ipa NON signé, à installer sans App Store avec
