@@ -2,8 +2,9 @@
  * Plan d'achats échelonné : ce qui manque pour compléter la préparation,
  * réparti sur plusieurs mois, l'essentiel d'abord. Les manques viennent du
  * stock réel : eau et vivres jusqu'à 3 jours puis jusqu'à l'objectif
- * d'autonomie, équipement du kit 72 h, articles sous leur stock minimal,
- * sac d'évacuation, et les manques d'une crise simulée. Aucun prix n'est
+ * d'autonomie, équipement du kit 72 h, matériel de base « À prévoir » de la
+ * liste Kit et matériel, articles sous leur stock minimal, sac d'évacuation,
+ * et les manques d'une crise simulée. Aucun prix n'est
  * inventé : l'utilisateur peut saisir le prix de ses achats et un budget
  * mensuel, que le plan respecte en reportant ce qui dépasse.
  *
@@ -14,6 +15,7 @@
 import type { SqlDatabase } from '../db/types';
 import type { BagSummary, ItemCategory, ItemSummary } from '../inventory';
 import { computeRestockPlan, loadMinStockItems } from '../resilience/restock';
+import { getBaseGear, isEssential } from './baseGear';
 import {
   dailyKcalNeed,
   loadConsumableLots,
@@ -37,6 +39,8 @@ export interface PurchaseEntry {
   detail: string | null;
   /** Fiche d'ajout à ouvrir une fois l'achat fait. */
   category: ItemCategory | null;
+  /** Armement : fiche de munition ou d'accessoire. */
+  recordType?: 'ammo' | 'accessory';
   prefill?: Record<string, string>;
   /** Essentiel : à acheter en premier. */
   vital: boolean;
@@ -68,6 +72,7 @@ export interface Need {
   label: string;
   detail: string | null;
   category: ItemCategory | null;
+  recordType?: 'ammo' | 'accessory';
   prefill?: Record<string, string>;
   vital: boolean;
   /** Quantité d'un achat d'un bloc (eau, vivres des 3 premiers jours). */
@@ -151,6 +156,7 @@ export function schedule(
     const base = {
       label: need.label,
       category: need.category,
+      ...(need.recordType ? { recordType: need.recordType } : {}),
       prefill: need.prefill,
       vital: need.vital,
       done: false,
@@ -255,6 +261,47 @@ export function applyBudget(plan: PurchasePlan, from: number): PurchasePlan {
 
 const VITAL_CHECKS = new Set(['light', 'radio', 'firstaid', 'medicine']);
 
+/**
+ * Matériel de base qui n'entre pas dans le plan : eau et vivres (comptés en
+ * quantités ci-dessus), sac d'évacuation (besoin à part), et ce qui ne
+ * s'achète pas (copies, plan papier, argent, double des clés).
+ */
+const GEAR_NOT_BOUGHT = new Set([
+  'water_reserve',
+  'food',
+  'bag',
+  'documents',
+  'contacts',
+  'family_plan',
+  'cash',
+  'keys',
+  'weapon_papers',
+]);
+
+/**
+ * Matériel de base déjà couvert par un point du kit 72 h : proposé seulement
+ * si ce point est rempli (bougies présentes mais pas de briquet, par
+ * exemple), sinon le kit 72 h le propose déjà.
+ */
+const GEAR_IN_KIT: Record<string, string> = {
+  light: 'light',
+  batteries: 'batteries',
+  powerbank: 'powerbank',
+  radio: 'radio',
+  firstaid: 'firstaid',
+  medicine: 'medicine',
+  candles: 'fire',
+  lighter: 'fire',
+  warm_clothes: 'warm',
+};
+
+/** Matériel de base : tout le stock (maison et sacs) et les armes. */
+export interface GearInput {
+  items: readonly ItemSummary[];
+  bagNames: readonly string[];
+  weaponCount: number;
+}
+
 export async function collectNeeds(
   db: SqlDatabase,
   input: {
@@ -262,9 +309,10 @@ export async function collectNeeds(
     bags: readonly BagSummary[];
     documentCount: number;
     asOf: string;
+    gear?: GearInput;
   },
 ): Promise<{ needs: Need[]; targetDays: number }> {
-  const [lots, household, targetDays, shortfalls, preparation] =
+  const [lots, household, targetDays, shortfalls, preparation, gear] =
     await Promise.all([
       loadConsumableLots(db),
       loadHousehold(db),
@@ -277,6 +325,14 @@ export async function collectNeeds(
         documentCount: input.documentCount,
         asOf: input.asOf,
       }),
+      input.gear
+        ? getBaseGear(db, {
+            items: input.gear.items,
+            documentCount: input.documentCount,
+            bagNames: input.gear.bagNames,
+            weaponCount: input.gear.weaponCount,
+          })
+        : null,
     ]);
   const base = { lots, household, items: shortfalls, asOf: input.asOf };
   const official = computeRestockPlan({ ...base, targetDays: OFFICIAL_TIER });
@@ -322,6 +378,35 @@ export async function collectNeeds(
       category: d.add?.category ?? null,
       prefill: d.add?.prefill,
       vital: VITAL_CHECKS.has(d.id),
+    });
+  }
+  // Proposés seulement si le foyer compte un bébé ou des enfants.
+  const notForHousehold = new Set([
+    ...((household.babies ?? 0) > 0 ? [] : ['baby']),
+    ...((household.children ?? 0) > 0 ? [] : ['kids']),
+  ]);
+  const kitMissing = new Set(
+    preparation.results.filter(r => !r.done).map(r => r.definition.id),
+  );
+  for (const result of gear?.results ?? []) {
+    const d = result.definition;
+    const kit = GEAR_IN_KIT[d.id];
+    if (
+      result.status !== 'missing' ||
+      GEAR_NOT_BOUGHT.has(d.id) ||
+      notForHousehold.has(d.id) ||
+      (kit !== undefined && kitMissing.has(kit))
+    ) {
+      continue;
+    }
+    needs.push({
+      id: `gear-${d.id}`,
+      label: d.label,
+      detail: d.hint ?? null,
+      category: d.add?.category ?? null,
+      ...(d.add?.recordType ? { recordType: d.add.recordType } : {}),
+      prefill: d.add?.prefill,
+      vital: isEssential(d),
     });
   }
   if (input.bags.every(b => b.itemCount === 0)) {
@@ -414,15 +499,17 @@ export async function savePurchasePlan(
   );
 }
 
+interface StockInput {
+  items: readonly ItemSummary[];
+  bags: readonly BagSummary[];
+  documentCount: number;
+  asOf: string;
+  gear?: GearInput;
+}
+
 export async function createPurchasePlan(
   db: SqlDatabase,
-  input: {
-    items: readonly ItemSummary[];
-    bags: readonly BagSummary[];
-    documentCount: number;
-    asOf: string;
-    months: number;
-  },
+  input: StockInput & { months: number },
 ): Promise<PurchasePlan> {
   const { needs, targetDays } = await collectNeeds(db, input);
   const plan: PurchasePlan = {
@@ -433,13 +520,6 @@ export async function createPurchasePlan(
   };
   await savePurchasePlan(db, plan);
   return plan;
-}
-
-interface StockInput {
-  items: readonly ItemSummary[];
-  bags: readonly BagSummary[];
-  documentCount: number;
-  asOf: string;
 }
 
 /**
