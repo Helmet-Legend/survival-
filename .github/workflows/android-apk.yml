@@ -37,7 +37,7 @@ jobs:
     name: Compilation de l'APK
     needs: checks
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
     env:
@@ -60,11 +60,11 @@ jobs:
       - name: Compilation (arm64-v8a, la quasi-totalité des téléphones récents)
         working-directory: android
         run: >-
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleGithubRelease --no-daemon --stacktrace
           -PreactNativeArchitectures=arm64-v8a
           -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
       - name: Nommage de l'APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "Fenrir-$VERSION_NAME.apk"
+        run: cp android/app/build/outputs/apk/github/release/app-github-release.apk "Fenrir-$VERSION_NAME.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: fenrir-apk
@@ -79,6 +79,36 @@ jobs:
           --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
           --title "Fenrir $VERSION_NAME"
           --notes "$(git log -1 --pretty=%B | head -1)"
+      # Version Google Play (app.fenrir) : paquet .aab à envoyer dans la Play
+      # Console, signé avec la clé d'envoi si les secrets sont configurés.
+      # Non publié dans la release GitHub (il ne s'installe pas directement).
+      - name: Clé d'envoi Google Play
+        env:
+          KEYSTORE_B64: ${{ secrets.FENRIR_UPLOAD_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+            echo "FENRIR_UPLOAD_STORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secrets de la clé d'envoi absents : le paquet Play est signé en débogage et sera refusé par la Play Console."
+          fi
+      - name: Paquet Google Play (AAB)
+        working-directory: android
+        env:
+          FENRIR_UPLOAD_STORE_PASSWORD: ${{ secrets.FENRIR_UPLOAD_STORE_PASSWORD }}
+          FENRIR_UPLOAD_KEY_ALIAS: ${{ secrets.FENRIR_UPLOAD_KEY_ALIAS }}
+          FENRIR_UPLOAD_KEY_PASSWORD: ${{ secrets.FENRIR_UPLOAD_KEY_PASSWORD }}
+        run: >-
+          ./gradlew bundlePlayRelease --no-daemon --stacktrace
+          -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
+          -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
+      - name: Nommage du paquet Play
+        run: cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "Fenrir-play-$VERSION_NAME.aab"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fenrir-play-aab
+          path: Fenrir-play-*.aab
+          retention-days: 90
 
   # Version iPhone : fichier .ipa NON signé, à installer sans App Store avec
   # SideStore ou AltStore (signature par l'identifiant Apple de l'utilisateur).
