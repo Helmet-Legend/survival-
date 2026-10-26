@@ -8,6 +8,7 @@ import {
   BatteryCharging,
   CalendarClock,
   ChevronRight,
+  Save,
   CircleAlert,
   CirclePlus,
   Hourglass,
@@ -67,6 +68,7 @@ import {
 } from '../theme';
 import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
+import { backupAge, getBackupStatus } from '../../backup/lastBackup';
 
 export function HomeScreen() {
   const { db, repo, documents, bags } = useSession();
@@ -84,6 +86,7 @@ export function HomeScreen() {
       docs,
       bagList,
       plan,
+      backup,
     ] = await Promise.all([
       getResilienceReport(db, today),
       getExpiryAlerts(db, today),
@@ -94,6 +97,7 @@ export function HomeScreen() {
       documents.list(),
       bags.list(),
       loadPurchasePlan(db),
+      getBackupStatus(db, today),
     ]);
     const energy = computeEnergy(items, report.household.members, whPerPerson);
     // Partage du foyer : état de la synchronisation, si un téléphone est associé.
@@ -120,6 +124,7 @@ export function HomeScreen() {
       readiness,
       plan,
       share,
+      backup,
     };
   });
 
@@ -226,6 +231,27 @@ export function HomeScreen() {
               <Text style={text.subtle}>
                 Ajoutez vos vivres dans Stocks › Nourriture. L’eau seule couvre{' '}
                 {report.water.days} j.
+              </Text>
+            </View>
+            <ChevronRight color={colors.text} size={20} />
+          </Pressable>
+        ) : null}
+        {data.backup.due ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Pensez à sauvegarder votre coffre. Ouvrir la sauvegarde"
+            onPress={() => navigation.open('settings')}
+            style={({ pressed }) => [styles.backup, pressed && styles.pressed]}
+          >
+            <Save color={colors.warning} size={20} />
+            <View style={styles.grow}>
+              <Text style={styles.backupText}>
+                Pensez à sauvegarder votre coffre
+              </Text>
+              <Text style={text.subtle}>
+                {data.backup.daysSince === null
+                  ? 'Aucune sauvegarde pour l’instant'
+                  : `Dernière sauvegarde ${backupAge(data.backup.daysSince)}`}
               </Text>
             </View>
             <ChevronRight color={colors.text} size={20} />
@@ -603,6 +629,19 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row' },
   targetText: { color: colors.text, fontSize: 14 },
   limitingText: { color: colors.cyanSoft, fontSize: 15, fontWeight: '600' },
+  backup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: sizes.touch,
+    paddingVertical: space.s,
+    paddingHorizontal: space.m,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: tint(colors.warning, '66'),
+    backgroundColor: solidTint(colors.warning, 0.07),
+  },
+  backupText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   noFood: {
     flexDirection: 'row',
     alignItems: 'center',

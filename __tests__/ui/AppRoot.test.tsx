@@ -427,6 +427,67 @@ describe('cycle de vie', () => {
     open.mockRestore();
   });
 
+  it('rappelle de sauvegarder après 30 jours et oublie le rappel ensuite', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, {
+      masterPin: MASTER,
+      duressPin: DURESS,
+    });
+    await new InventoryRepository(db).createItem(
+      { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
+      { quantity: 10 },
+    );
+    await db.execute(
+      `UPDATE inventory_items SET created_at = '${addDays(
+        localToday(),
+        -40,
+      )}T08:00:00.000Z'`,
+    );
+    db.close();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        files={{
+          available: true,
+          saveText: async () => true,
+          openText: async () => null,
+        }}
+        backupCrypto={{
+          engine: new JsArgon2(),
+          random: new SeededRandom(7),
+          params: TEST_ARGON2_PARAMS,
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText(
+        'Pensez à sauvegarder votre coffre. Ouvrir la sauvegarde',
+      ),
+    );
+    expect(
+      await screen.findByText('Aucune sauvegarde pour l’instant.'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Exporter une sauvegarde'));
+    for (const label of [
+      'Mot de passe de la sauvegarde',
+      'Confirmer le mot de passe',
+    ]) {
+      await fireEvent.changeText(
+        screen.getByLabelText(label),
+        'phrase secrète',
+      );
+    }
+    await fireEvent.press(screen.getByText('Chiffrer et enregistrer'));
+    expect(
+      await screen.findByText('Dernière sauvegarde : aujourd’hui'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Retour à l’accueil'));
+    await screen.findByText('Autonomie du foyer');
+    expect(screen.queryByText('Pensez à sauvegarder votre coffre')).toBeNull();
+  });
+
   it('exporte une sauvegarde chiffrée puis la restaure', async () => {
     const ctx = await existingVault();
     const file: { saved: { name: string; text: string } | null } = {
