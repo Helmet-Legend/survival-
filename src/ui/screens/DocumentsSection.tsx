@@ -5,22 +5,33 @@
  */
 import {
   BookUser,
+  Camera,
   Car,
   FileText,
   HeartPulse,
   IdCard,
+  ImagePlus,
   Pencil,
   Plus,
+  ScanLine,
   ShieldPlus,
   Trash2,
   X,
   type LucideIcon,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {
   DOCUMENT_KINDS,
+  DOCUMENT_PAGES_MAX,
   DOCUMENT_RENEW_DAYS,
   InventoryError,
   type DocumentKind,
@@ -248,8 +259,30 @@ function DocumentForm(props: {
   onDone: (message: string, id: string) => Promise<void>;
   onCancel?: () => void;
 }) {
-  const { documents } = useSession();
+  const { documents, photos, photoSource } = useSession();
   const [kind, setKind] = useState<DocumentKind>(props.doc?.kind ?? 'id_card');
+  // Nouveau document : pages scannées ou photos prises avant l'ajout,
+  // enregistrées avec lui.
+  const [pages, setPages] = useState<string[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canAddPages = props.doc === undefined && photoSource.available;
+  const addPages = async (from: 'scan' | 'take' | 'pick') => {
+    setPageError(null);
+    setBusy(true);
+    try {
+      const room = DOCUMENT_PAGES_MAX - pages.length;
+      const images =
+        from === 'scan'
+          ? (await photoSource.scan?.(room)) ?? []
+          : [await photoSource[from]()].filter((b): b is string => b !== null);
+      setPages(current => [...current, ...images].slice(0, DOCUMENT_PAGES_MAX));
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   const [title, setTitle] = useState(props.doc?.title ?? '');
   const [holder, setHolder] = useState(props.doc?.holder ?? '');
   const [number, setNumber] = useState(props.doc?.number ?? '');
@@ -279,9 +312,16 @@ function DocumentForm(props: {
       const saved = props.doc
         ? await documents.update(props.doc.id, input)
         : await documents.create(input);
+      for (const page of pages) {
+        await photos.add('document', saved.id, page);
+      }
       await props.onDone(
         props.doc
           ? `« ${saved.title} » modifié.`
+          : pages.length > 0
+          ? `« ${saved.title} » ajouté avec ${pages.length} page${
+              pages.length > 1 ? 's' : ''
+            }.`
           : `« ${saved.title} » ajouté. Vous pouvez maintenant le photographier.`,
         saved.id,
       );
@@ -310,6 +350,73 @@ function DocumentForm(props: {
           />
         ))}
       </View>
+      {canAddPages ? (
+        <View style={styles.pages}>
+          <Text style={styles.fieldLabel}>
+            Pages du document ({pages.length} / {DOCUMENT_PAGES_MAX})
+          </Text>
+          {pages.length > 0 ? (
+            <ScrollView horizontal contentContainerStyle={styles.wrap}>
+              {pages.map((page, i) => (
+                <Pressable
+                  key={i}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retirer la page ${i + 1}`}
+                  onPress={() =>
+                    setPages(current => current.filter((_, j) => j !== i))
+                  }
+                >
+                  <Image
+                    source={{ uri: `data:image/jpeg;base64,${page}` }}
+                    style={styles.pageThumb}
+                  />
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+          {pages.length > 0 ? (
+            <Text style={text.subtle}>Touchez une page pour la retirer.</Text>
+          ) : null}
+          {pageError ? <Text style={styles.error}>{pageError}</Text> : null}
+          {photoSource.scan ? (
+            <Button
+              variant="primary"
+              icon={ScanLine}
+              label={
+                pages.length > 0
+                  ? 'Scanner d’autres pages'
+                  : 'Scanner le document'
+              }
+              disabled={busy || pages.length >= DOCUMENT_PAGES_MAX}
+              onPress={() => {
+                void addPages('scan');
+              }}
+            />
+          ) : null}
+          <View style={styles.row}>
+            <Button
+              compact
+              icon={Camera}
+              label="Photographier"
+              disabled={busy || pages.length >= DOCUMENT_PAGES_MAX}
+              onPress={() => {
+                void addPages('take');
+              }}
+            />
+            <Button
+              compact
+              variant="ghost"
+              icon={ImagePlus}
+              label="Galerie"
+              accessibilityLabel="Choisir une image dans la galerie"
+              disabled={busy || pages.length >= DOCUMENT_PAGES_MAX}
+              onPress={() => {
+                void addPages('pick');
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
       <Field
         label="Intitulé (facultatif)"
         value={title}
@@ -399,5 +506,19 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   fieldLabel: { color: colors.textMuted, fontSize: 14 },
+  pages: {
+    gap: space.s,
+    padding: space.m,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderActive,
+  },
+  pageThumb: {
+    width: 56,
+    height: 76,
+    borderRadius: radius.s,
+    backgroundColor: colors.surfaceRaised,
+  },
   error: { color: colors.danger },
 });

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Version Google Play : les mises à jour passent par le Play Store, donc ni
-     permission d'installer des paquets ni partage du fichier téléchargé. -->
+<!-- Version Google Play : les mises à jour passent par le Play Store, donc
+     pas de permission d'installer des paquets. Le partage de fichiers reste
+     pour l'appareil photo (res/xml/update_paths.xml : photos seulement). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
@@ -8,10 +9,4 @@
         android:name="android.permission.REQUEST_INSTALL_PACKAGES"
         tools:node="remove" />
 
-    <application>
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.updates"
-            tools:node="remove" />
-    </application>
 </manifest>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Version Google Play : seul le dossier de la photo en cours est partagé
+  (avec l'appareil photo), effacé dès sa lecture. Pas de mise à jour intégrée.
+-->
+<paths>
+    <cache-path name="photos" path="photos/" />
+</paths>

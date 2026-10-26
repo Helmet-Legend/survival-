@@ -5,7 +5,7 @@
  * les deux restent identiques.
  */
 
-export const PRIVACY_UPDATED = '2026-10-25';
+export const PRIVACY_UPDATED = '2026-10-26';
 
 export const PRIVACY_CONTACT =
   'https://github.com/Helmet-Legend/survival-/issues';
@@ -30,6 +30,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     title: 'Autorisations demandées',
     paragraphs: [
       'Caméra : lire les codes-barres et prendre des photos d’articles ou de documents. Les images restent dans le coffre chiffré.',
+      'Scan de documents (facultatif) : sur Android, Fenrir ouvre le scanner de documents des services Google Play ; sur iPhone, celui d’iOS. Les pages sont traitées sur le téléphone et seules celles que vous validez reviennent dans le coffre chiffré. Sur Android, Google reçoit des statistiques techniques sur l’utilisation de ce scanner (performances, erreurs), jamais les images.',
       'Position : afficher votre position à la demande (écran Urgence, carte, points de repère). Elle n’est jamais suivie en arrière-plan ni envoyée par Fenrir. Si vous choisissez de l’envoyer par SMS, c’est votre application de messagerie qui l’envoie, au destinataire que vous choisissez.',
       'Notifications : rappels de péremption au texte neutre (« Un rappel vous attend. »), sans nom d’article.',
       'Réseau local : trouver et joindre le téléphone associé pour le partage du foyer.',

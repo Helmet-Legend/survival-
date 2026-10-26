@@ -13,6 +13,6 @@ Pod::Spec.new do |s|
   s.source_files = "*.{h,m,swift}"
   s.swift_version = "5.9"
   s.frameworks = "CoreLocation", "UserNotifications", "AVFoundation", "Network",
-                 "PhotosUI", "UniformTypeIdentifiers", "WebKit"
+                 "PhotosUI", "UniformTypeIdentifiers", "VisionKit", "WebKit"
   install_modules_dependencies(s)
 end

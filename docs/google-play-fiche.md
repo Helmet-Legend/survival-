@@ -20,6 +20,7 @@ Textes prêts à coller. Langue principale : français (France).
 > • Fiches adaptées à chaque catégorie : eau, nourriture, santé et médicaments, énergie et éclairage, matériel, documents.
 > • Dates de péremption, lots et quantités, historique des mouvements.
 > • Scanner de codes-barres et des carrés Data Matrix des boîtes de médicaments (reconnus sans réseau).
+> • Scanner de documents : pages nettes et redressées, jusqu'à 30 par document, gardées dans le coffre chiffré.
 > • Sacs d'évacuation : contenu, péremptions et autonomie de chaque sac.
 > • Boîtes de rangement : l'inventaire de chaque boîte fermée, fait à partir du stock, avec une étiquette QR numérotée ; en la scannant, Fenrir affiche son contenu et sa prochaine péremption.
 > • Volet armes et munitions facultatif, pour l'inventaire de ce que vous détenez légalement.
@@ -74,6 +75,7 @@ Non, l'application ne contient pas d'annonces.
   | Type | Collectée | Partagée | Traitement | Facultatif | Finalité |
   | --- | --- | --- | --- | --- | --- |
   | Position approximative (zone de carte téléchargée, département suivi) | Oui | Non | Éphémère | Oui | Fonctionnalités de l'application |
+  | Infos et performances de l'appli › Diagnostics (scanner de documents ML Kit : performances, erreurs) | Oui | Non | Non | Oui | Analyse, fonctionnalités de l'application |
 
 - Ne pas déclarer : position précise (jamais envoyée par l'application ; l'envoi par SMS est une action de l'utilisateur dans sa messagerie), photos (restent sur l'appareil), identifiants (aucun), données de santé et inventaire (restent sur l'appareil), codes-barres (identifiant de produit, pas une donnée de l'utilisateur).
 

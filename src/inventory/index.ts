@@ -45,7 +45,9 @@ export {
 } from './documentRepository';
 export {
   PHOTO_MAX_BASE64_LENGTH,
+  DOCUMENT_PAGES_MAX,
   PHOTOS_PER_OWNER_MAX,
+  photoLimit,
   PhotoRepository,
   type Photo,
   type PhotoMime,

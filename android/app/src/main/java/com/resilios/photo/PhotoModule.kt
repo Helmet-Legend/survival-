@@ -16,6 +16,12 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.WritableNativeArray
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailabilityLight
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.concurrent.thread
@@ -29,6 +35,10 @@ import kotlin.concurrent.thread
  *
  * L'appareil photo du système est utilisé par intention : l'application
  * n'a pas besoin de la permission CAMERA.
+ *
+ * Scan de document : le scanner de Google Play (bords, redressement,
+ * filtres, plusieurs pages), traité sur le téléphone. Absent sans les
+ * services Google ; « Photographier » reste alors disponible.
  */
 class PhotoModule(private val context: ReactApplicationContext) :
     ReactContextBaseJavaModule(context), ActivityEventListener {
@@ -41,6 +51,37 @@ class PhotoModule(private val context: ReactApplicationContext) :
   }
 
   override fun getName() = "ResiliosPhoto"
+
+  override fun getConstants(): Map<String, Any> =
+      mapOf(
+          "canScanDocuments" to
+              (GoogleApiAvailabilityLight.getInstance().isGooglePlayServicesAvailable(context) ==
+                  ConnectionResult.SUCCESS))
+
+  /** Pages scannées (JPEG base64, une par page), ou null si annulé. */
+  @ReactMethod
+  fun scanDocument(maxPages: Double, promise: Promise) {
+    val activity = start(promise) ?: return
+    val options =
+        GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(false)
+            .setPageLimit(maxPages.toInt().coerceIn(1, 100))
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .build()
+    GmsDocumentScanning.getClient(options)
+        .getStartScanIntent(activity)
+        .addOnSuccessListener { sender ->
+          try {
+            activity.startIntentSenderForResult(sender, REQUEST_SCAN, null, 0, 0, 0)
+          } catch (e: Exception) {
+            fail("SCAN_FAILED", e.message ?: "Scanner indisponible")
+          }
+        }
+        .addOnFailureListener { e ->
+          fail("SCAN_UNAVAILABLE", e.message ?: "Scanner de documents indisponible")
+        }
+  }
 
   @ReactMethod
   fun takePhoto(promise: Promise) {
@@ -86,6 +127,10 @@ class PhotoModule(private val context: ReactApplicationContext) :
       resultCode: Int,
       data: Intent?
   ) {
+    if (requestCode == REQUEST_SCAN) {
+      onScanResult(resultCode, data)
+      return
+    }
     if (requestCode != REQUEST_CAMERA && requestCode != REQUEST_PICK) {
       return
     }
@@ -115,6 +160,43 @@ class PhotoModule(private val context: ReactApplicationContext) :
     }
   }
 
+  private fun onScanResult(resultCode: Int, data: Intent?) {
+    val promise = pending ?: return
+    pending = null
+    val pages =
+        if (resultCode == Activity.RESULT_OK) {
+          data
+              ?.let { GmsDocumentScanningResult.fromActivityResultIntent(it) }
+              ?.pages
+              .orEmpty()
+              .map { it.imageUri }
+        } else {
+          emptyList()
+        }
+    if (pages.isEmpty()) {
+      promise.resolve(null)
+      return
+    }
+    thread(name = "resilios-scan") {
+      try {
+        val out = WritableNativeArray()
+        for (uri in pages) {
+          out.pushString(encode(uri, SCAN_MAX_SIDE))
+        }
+        promise.resolve(out)
+      } catch (e: Exception) {
+        promise.reject("SCAN_FAILED", e.message ?: "Page illisible", e)
+      } finally {
+        // Les pages du scanner sont dans le cache de l'application : effacées.
+        for (uri in pages) {
+          if (uri.scheme == "file") {
+            uri.path?.let { File(it).delete() }
+          }
+        }
+      }
+    }
+  }
+
   override fun onNewIntent(intent: Intent) {}
 
   private fun start(promise: Promise): Activity? {
@@ -138,8 +220,8 @@ class PhotoModule(private val context: ReactApplicationContext) :
     pending = null
   }
 
-  /** Réduit l'image (côté le plus long ≤ MAX_SIDE), la redresse et l'encode. */
-  private fun encode(uri: Uri): String {
+  /** Réduit l'image (côté le plus long ≤ maxSide), la redresse et l'encode. */
+  private fun encode(uri: Uri, maxSide: Int = MAX_SIDE): String {
     val resolver = context.contentResolver
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
@@ -148,7 +230,7 @@ class PhotoModule(private val context: ReactApplicationContext) :
       throw IllegalArgumentException("Image illisible")
     }
     var sample = 1
-    while (longest / (sample * 2) >= MAX_SIDE) {
+    while (longest / (sample * 2) >= maxSide) {
       sample *= 2
     }
     val decoded =
@@ -167,7 +249,7 @@ class PhotoModule(private val context: ReactApplicationContext) :
           }
         } ?: 0f
 
-    val scale = minOf(1f, MAX_SIDE.toFloat() / maxOf(decoded.width, decoded.height))
+    val scale = minOf(1f, maxSide.toFloat() / maxOf(decoded.width, decoded.height))
     val matrix =
         Matrix().apply {
           postScale(scale, scale)
@@ -186,7 +268,10 @@ class PhotoModule(private val context: ReactApplicationContext) :
   companion object {
     private const val REQUEST_CAMERA = 0x5245
     private const val REQUEST_PICK = 0x5246
+    private const val REQUEST_SCAN = 0x5247
     private const val MAX_SIDE = 1600
+    /** Pages de documents : assez fines pour être réimprimées en A4. */
+    private const val SCAN_MAX_SIDE = 2500
     private const val JPEG_QUALITY = 82
   }
 }
