@@ -2341,6 +2341,39 @@ describe('fiches par type de produit', () => {
     expect(screen.getByLabelText('Lentilles, 2 kg')).toBeTruthy();
   });
 
+  it('affiche une longue liste par paquets de 40', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, {
+      masterPin: MASTER,
+      duressPin: DURESS,
+    });
+    const repo = new InventoryRepository(db);
+    for (let i = 0; i < 45; i++) {
+      await repo.createItem(
+        {
+          name: `Conserve ${String(i).padStart(2, '0')}`,
+          category: 'food',
+          unit: 'unit',
+          caloriesPerUnit: 300,
+        },
+        { quantity: 2 },
+      );
+    }
+    db.close();
+    await render(<AppRoot manager={ctx.manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Nourriture' }),
+    );
+    expect(await screen.findByText('Conserve 39')).toBeTruthy();
+    expect(screen.queryByText('Conserve 40')).toBeNull();
+    await fireEvent.press(screen.getByText('Afficher la suite (5)'));
+    expect(await screen.findByText('Conserve 44')).toBeTruthy();
+    expect(screen.queryByText(/^Afficher la suite/)).toBeNull();
+  });
+
   it('remplit un sac d’évacuation sans toucher au stock du foyer', async () => {
     const ctx = await existingVault();
     await render(<AppRoot manager={ctx.manager} content={content} />);
