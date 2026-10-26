@@ -259,6 +259,14 @@ describe('Data Matrix des médicaments', () => {
       lot: 'ABDHD0015',
       expiry: '2026-11-30',
     });
+    // Boîte réelle au code imprimé en blanc sur noir (lu après inversion).
+    expect(
+      parseGs1(`010340093138414421987808003206${GS}17281231104073`),
+    ).toEqual({
+      code: '3400931384144',
+      expiry: '2028-12-31',
+      lot: '4073',
+    });
     // Forme lisible renvoyée par certains lecteurs.
     expect(
       parseGs1('(01)03400930281857(21)78427771786858(10)ABDHD0015(17)261130'),
