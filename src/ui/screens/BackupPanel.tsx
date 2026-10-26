@@ -15,12 +15,19 @@ import {
   restoreBackup,
 } from '../../backup/backup';
 import { stockCsv } from '../../backup/csv';
+import {
+  backupAge,
+  getBackupStatus,
+  loadLastBackup,
+  saveLastBackup,
+} from '../../backup/lastBackup';
 import { localToday } from '../../lib/dates';
 import { syncReminders } from '../../resilience/reminders';
 import { Button, Field, Notice, Panel } from '../components/controls';
 import { CATEGORY_TITLES, formatDate, UNIT_LABELS } from '../format';
 import { useSession } from '../session';
-import { colors, space, text } from '../theme';
+import { colors, radius, space, text } from '../theme';
+import { useLoader } from '../useLoader';
 
 type Mode = 'idle' | 'export' | 'restore';
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
@@ -38,6 +45,9 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const { data: status, reload: reloadStatus } = useLoader(() =>
+    getBackupStatus(db),
+  );
 
   if (!files.available || backupCrypto === null) {
     return null;
@@ -75,6 +85,10 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
         content,
       );
       reset();
+      if (saved) {
+        await saveLastBackup(db);
+        await reloadStatus();
+      }
       setFeedback(
         saved
           ? {
@@ -110,7 +124,13 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
     setFieldError(null);
     setBusy(true);
     try {
+      // La date de la dernière sauvegarde reste celle de ce téléphone.
+      const lastBackup = await loadLastBackup(db);
       const summary = await restoreBackup(db, pending, password, crypto.engine);
+      if (lastBackup !== null) {
+        await saveLastBackup(db, lastBackup);
+      }
+      await reloadStatus();
       await syncReminders(db, reminders).catch(() => undefined);
       reset();
       setFeedback({
@@ -158,9 +178,22 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
       title="Sauvegarde"
       right={<DatabaseBackup color={colors.cyan} size={20} />}
     >
+      {status ? (
+        <View style={[styles.last, status.due && styles.lastDue]}>
+          <Text style={[text.body, status.due && styles.lastDueText]}>
+            {status.last === null || status.daysSince === null
+              ? 'Aucune sauvegarde pour l’instant.'
+              : `Dernière sauvegarde : ${backupAge(status.daysSince)}`}
+          </Text>
+          {status.last !== null && (status.daysSince ?? 0) > 1 ? (
+            <Text style={text.subtle}>le {formatDate(status.last)}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <Text style={text.muted}>
         Votre coffre n’existe que sur ce téléphone. Exportez une sauvegarde
-        chiffrée et gardez-la ailleurs : carte SD, clé USB, ordinateur.
+        chiffrée et gardez-la ailleurs, de préférence hors du téléphone : Google
+        Drive, clé USB, carte SD retirée ensuite, ordinateur.
       </Text>
 
       {mode === 'export' ? (
@@ -264,6 +297,15 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
 }
 
 const styles = StyleSheet.create({
+  last: {
+    gap: space.xs,
+    padding: space.s,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  lastDue: { borderColor: colors.warning },
+  lastDueText: { color: colors.warning },
   form: { gap: space.m },
   actions: { gap: space.s },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
