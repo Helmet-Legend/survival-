@@ -65,11 +65,9 @@ export {
   BOX_SOON_DAYS,
   BoxRepository,
   boxQr,
-  boxTitle,
   parseBoxQr,
   type Box,
   type BoxCandidate,
-  type BoxInput,
   type BoxLine,
   type BoxSummary,
 } from './boxRepository';

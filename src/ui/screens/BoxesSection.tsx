@@ -1,25 +1,27 @@
 /**
  * Dossier « Boîtes » de l'écran Stocks : l'inventaire de chaque boîte de
- * rangement fermée, fait à partir du stock. Chaque boîte a un numéro et une
- * étiquette QR ; la scanner ouvre son contenu et sa prochaine péremption.
- * L'étiquette ne porte que le numéro et un identifiant, jamais le contenu.
+ * rangement fermée, fait à partir du stock. Une boîte n'a qu'un numéro et
+ * une étiquette QR ; la scanner ouvre son contenu et sa prochaine
+ * péremption. L'étiquette ne porte que le numéro et un identifiant, jamais
+ * le contenu.
  */
 import {
   ArrowLeft,
   Box as BoxIcon,
-  Pencil,
   Plus,
   Printer,
   QrCode as QrIcon,
+  Save,
   ScanQrCode,
+  Square,
+  SquareCheck,
   Trash2,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   boxQr,
-  boxTitle,
   parseBoxQr,
   type Box,
   type BoxCandidate,
@@ -28,15 +30,13 @@ import {
 import {
   Button,
   EmptyState,
-  Field,
   Notice,
   Panel,
   SearchField,
   StatusChip,
-  Stepper,
 } from '../components/controls';
 import { QrCode, qrSvg } from '../components/QrCode';
-import { formatDate, formatNumber, UNIT_LABELS } from '../format';
+import { formatDate, formatNumber, parseDecimal, UNIT_LABELS } from '../format';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -69,95 +69,42 @@ export function boxStatus(
   return null;
 }
 
-/** Une ligne d'état sous le titre : emplacement, contenu, péremption. */
+/** « 3 articles · prochaine péremption 14/03/2027 », ou « Vide ». */
 function boxDetail(box: BoxSummary): string {
+  if (box.itemCount === 0) {
+    return 'Vide';
+  }
   return [
-    box.location,
-    box.itemCount === 0 ? 'Vide' : articles(box.itemCount),
-    box.nextExpiration ? `péremption ${formatDate(box.nextExpiration)}` : null,
+    articles(box.itemCount),
+    box.nextExpiration
+      ? `prochaine péremption ${formatDate(box.nextExpiration)}`
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
 }
 
-/**
- * Page imprimée : une étiquette par boîte (QR et numéro seulement), trois
- * par ligne, sans couper une étiquette entre deux pages.
- */
-export function labelsHtml(boxes: readonly Box[]): string {
-  const labels = boxes
-    .map(
-      b => `<div class="label">${qrSvg(boxQr(b.id), '45mm')}
-<div class="no">N° ${b.labelNo}</div></div>`,
-    )
-    .join('\n');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Étiquettes Fenrir</title>
+/** Page de l'étiquette : le QR et le numéro, rien d'autre. */
+export function labelHtml(box: Box): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Boîte N° ${
+    box.labelNo
+  }</title>
 <style>
-  @page { margin: 10mm; }
+  @page { margin: 12mm; }
   body { font-family: sans-serif; margin: 0; }
-  .sheet { display: flex; flex-wrap: wrap; gap: 4mm; }
-  .label { width: 58mm; box-sizing: border-box; border: 0.3mm dashed #999;
-    padding: 3mm; text-align: center; break-inside: avoid; page-break-inside: avoid; }
-  .no { font-size: 20pt; font-weight: bold; margin-top: 1mm; }
-</style></head><body><div class="sheet">
-${labels}
-</div></body></html>`;
+  .label { width: 60mm; box-sizing: border-box; border: 0.3mm dashed #999;
+    padding: 4mm; text-align: center; }
+  .no { font-size: 22pt; font-weight: bold; margin-top: 2mm; }
+</style></head><body>
+<div class="label">${qrSvg(boxQr(box.id), '50mm')}
+<div class="no">N° ${box.labelNo}</div></div>
+</body></html>`;
 }
 
-function BoxForm(props: {
-  initial?: Box;
-  nextNo?: number;
-  onSubmit: (name: string, location: string) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(props.initial?.name ?? '');
-  const [location, setLocation] = useState(props.initial?.location ?? '');
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <Panel accent={BOX_COLOR} style={styles.form}>
-      {props.initial ? null : (
-        <>
-          <Text style={text.h3}>Nouvelle boîte : N° {props.nextNo}</Text>
-          <Text style={text.muted}>
-            Le numéro est donné automatiquement, à la suite des autres boîtes.
-          </Text>
-        </>
-      )}
-      <Field
-        label="Nom (facultatif)"
-        value={name}
-        onChangeText={setName}
-        placeholder="Ex : Conserves, pharmacie"
-        maxLength={60}
-        error={error}
-      />
-      <Field
-        label="Emplacement (facultatif)"
-        value={location}
-        onChangeText={setLocation}
-        placeholder="Ex : garage, étagère du haut"
-        maxLength={60}
-      />
-      <View style={styles.row}>
-        <Button
-          variant="primary"
-          label={props.initial ? 'Enregistrer' : 'Créer la boîte'}
-          onPress={() => {
-            props.onSubmit(name, location).catch((e: unknown) => {
-              setError(failure(e));
-            });
-          }}
-        />
-        <Button variant="ghost" label="Annuler" onPress={props.onCancel} />
-      </View>
-    </Panel>
-  );
-}
-
-/** Étiquette d'une boîte : QR et numéro, à afficher ou imprimer. */
+/** Étiquette d'une boîte : à enregistrer (Drive, Téléchargements…) ou imprimer. */
 function LabelPanel(props: { box: Box }) {
   const { files } = useSession();
-  const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(null);
   const { box } = props;
   return (
     <Panel accent={BOX_COLOR} style={styles.form}>
@@ -169,37 +116,112 @@ function LabelPanel(props: { box: Box }) {
         />
       </View>
       <Text style={[text.h2, styles.center]}>N° {box.labelNo}</Text>
-      <Text style={text.muted}>
-        L’étiquette ne porte que ce numéro : le contenu reste dans le coffre
-        chiffré et ne s’affiche qu’après déverrouillage de Fenrir.
+      <Text style={[text.muted, styles.center]}>
+        Seulement le numéro : le contenu reste dans Fenrir.
       </Text>
-      {error ? <Notice tone="error" message={error} /> : null}
-      {files.printHtml ? (
-        <Button
-          compact
-          variant="primary"
-          icon={Printer}
-          label="Imprimer l’étiquette"
-          onPress={() => {
-            setError(null);
-            files
-              .printHtml?.(`Étiquette N° ${box.labelNo}`, labelsHtml([box]))
-              .catch((e: unknown) => setError(failure(e)));
-          }}
-        />
-      ) : null}
+      {feedback ? <Notice {...feedback} /> : null}
+      <View style={styles.row}>
+        {files.available ? (
+          <Button
+            compact
+            variant="primary"
+            icon={Save}
+            label="Enregistrer l’étiquette"
+            onPress={() => {
+              setFeedback(null);
+              files
+                .saveText(
+                  `etiquette-boite-${box.labelNo}.html`,
+                  'text/html',
+                  labelHtml(box),
+                )
+                .then(saved =>
+                  setFeedback(
+                    saved
+                      ? {
+                          tone: 'ok',
+                          message:
+                            'Étiquette enregistrée : ouvrez-la sur l’ordinateur pour l’imprimer.',
+                        }
+                      : { tone: 'error', message: 'Enregistrement annulé.' },
+                  ),
+                )
+                .catch((e: unknown) =>
+                  setFeedback({ tone: 'error', message: failure(e) }),
+                );
+            }}
+          />
+        ) : null}
+        {files.printHtml ? (
+          <Button
+            compact
+            variant="secondary"
+            icon={Printer}
+            label="Imprimer"
+            onPress={() => {
+              setFeedback(null);
+              files
+                .printHtml?.(`Boîte N° ${box.labelNo}`, labelHtml(box))
+                .catch((e: unknown) =>
+                  setFeedback({ tone: 'error', message: failure(e) }),
+                );
+            }}
+          />
+        ) : null}
+      </View>
     </Panel>
   );
 }
 
-/** Pas du réglage : 1 pour les pièces, kilos et litres ; 100 en g et mL. */
-function stepOf(candidate: BoxCandidate): number {
-  return candidate.unit === 'g' || candidate.unit === 'mL' ? 100 : 1;
+/** Quantité saisie : − / champ / +, bornée entre 0 et `max`. */
+function QuantityField(props: {
+  name: string;
+  value: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  const [typed, setTyped] = useState<string | null>(null);
+  const clamp = (v: number) =>
+    Math.min(props.max, Math.max(0, Number.isFinite(v) ? v : 0));
+  return (
+    <View style={styles.qty}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${props.name} : un de moins`}
+        onPress={() => props.onChange(clamp(props.value - 1))}
+        style={styles.step}
+      >
+        <Text style={styles.stepText}>−</Text>
+      </Pressable>
+      <TextInput
+        accessibilityLabel={`${props.name} : quantité dans la boîte`}
+        keyboardType="decimal-pad"
+        value={typed ?? formatNumber(props.value)}
+        onChangeText={setTyped}
+        onEndEditing={() => {
+          if (typed !== null) {
+            props.onChange(clamp(parseDecimal(typed)));
+            setTyped(null);
+          }
+        }}
+        style={styles.qtyInput}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${props.name} : un de plus`}
+        onPress={() => props.onChange(clamp(props.value + 1))}
+        style={styles.step}
+      >
+        <Text style={styles.stepText}>+</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 /**
- * Contenu de la boîte choisi dans le stock : pour chaque article, la
- * quantité voulue dans la boîte. Le total du stock ne change pas.
+ * « Qu'y a-t-il dedans ? » : on coche les articles du stock rangés dans la
+ * boîte (tout ce qui est disponible par défaut), et on règle la quantité
+ * si l'article est réparti entre plusieurs boîtes.
  */
 function FillPanel(props: {
   box: Box;
@@ -210,12 +232,14 @@ function FillPanel(props: {
   const [targets, setTargets] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const { box } = props;
-  const { data, reload } = useLoader(
+  const { data } = useLoader(
     () => boxes.candidates(box.id, query),
     [box.id, query],
   );
   const target = (c: BoxCandidate) => targets[c.itemId] ?? c.inBox;
   const changed = (data ?? []).filter(c => target(c) !== c.inBox);
+  const set = (c: BoxCandidate, value: number) =>
+    setTargets(t => ({ ...t, [c.itemId]: value }));
 
   const save = async () => {
     setError(null);
@@ -229,7 +253,6 @@ function FillPanel(props: {
         }
       }
       setTargets({});
-      await reload();
       await props.onSaved(`Contenu de la boîte N° ${box.labelNo} enregistré.`);
     } catch (e) {
       setError(failure(e));
@@ -238,10 +261,11 @@ function FillPanel(props: {
 
   return (
     <Panel accent={BOX_COLOR} style={styles.form}>
+      <Text style={text.h3}>Qu’y a-t-il dedans ?</Text>
       <Text style={text.muted}>
-        Choisissez dans le stock ce qui est dans cette boîte, et combien. Le
-        total du stock ne change pas : les lots qui périment le plus tard
-        partent dans la boîte fermée, les plus proches restent à portée de main.
+        Cochez ce qui est dans la boîte. Si un article est réparti entre
+        plusieurs boîtes, réglez la quantité : le reste reste disponible pour
+        les autres.
       </Text>
       <SearchField
         label="Rechercher dans le stock"
@@ -255,42 +279,41 @@ function FillPanel(props: {
       ) : null}
       {data?.map(c => {
         const value = target(c);
-        const step = stepOf(c);
         const max = c.loose + c.inBox;
-        const unit = UNIT_LABELS[c.unit];
+        const checked = value > 0;
+        const Icon = checked ? SquareCheck : Square;
         return (
-          <View key={c.itemId} style={styles.candidate}>
-            <View style={styles.grow}>
-              <Text style={text.body}>{c.name}</Text>
-              <Text style={text.subtle}>
-                {formatNumber(max - value)} {unit} hors boîte
-              </Text>
-            </View>
-            <Stepper
-              value={formatNumber(value)}
-              canDecrease={value > 0}
-              canIncrease={value < max}
-              decreaseLabel={`${c.name} : un de moins dans la boîte`}
-              increaseLabel={`${c.name} : un de plus dans la boîte`}
-              onDecrease={() =>
-                setTargets(t => ({
-                  ...t,
-                  [c.itemId]: Math.max(0, value - step),
-                }))
-              }
-              onIncrease={() =>
-                setTargets(t => ({
-                  ...t,
-                  [c.itemId]: Math.min(max, value + step),
-                }))
-              }
-            />
+          <View key={c.itemId} style={[styles.pick, checked && styles.pickOn]}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked }}
+              accessibilityLabel={`${c.name} dans la boîte`}
+              onPress={() => set(c, checked ? 0 : max)}
+              style={styles.pickMain}
+            >
+              <Icon color={checked ? BOX_COLOR : colors.textMuted} size={24} />
+              <View style={styles.grow}>
+                <Text style={text.body}>{c.name}</Text>
+                <Text style={text.subtle}>
+                  {formatNumber(max - value)} {UNIT_LABELS[c.unit]} hors de
+                  cette boîte
+                </Text>
+              </View>
+            </Pressable>
+            {checked ? (
+              <QuantityField
+                name={c.name}
+                value={value}
+                max={max}
+                onChange={v => set(c, v)}
+              />
+            ) : null}
           </View>
         );
       })}
       <Button
         variant="primary"
-        label="Enregistrer le contenu"
+        label="Valider"
         disabled={changed.length === 0}
         onPress={() => void save()}
       />
@@ -298,16 +321,17 @@ function FillPanel(props: {
   );
 }
 
-/** Une boîte ouverte : contenu, étiquette, remplissage, modification. */
+/** Une boîte ouverte : contenu, prochaine péremption, contenu, étiquette. */
 function BoxView(props: {
   id: string;
+  scanned: boolean;
   onBack: () => void;
   onFeedback: (feedback: Feedback) => void;
 }) {
   const { boxes } = useSession();
   const [panel, setPanel] = useState<'label' | 'fill' | null>(null);
-  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   const { data, error, reload } = useLoader(async () => {
     const [box, lines] = await Promise.all([
       boxes.summary(props.id),
@@ -343,63 +367,31 @@ function BoxView(props: {
   return (
     <>
       {back}
-      {editing ? (
-        <BoxForm
-          initial={box}
-          onCancel={() => setEditing(false)}
-          onSubmit={async (name, location) => {
-            await boxes.update(box.id, { name, location });
-            setEditing(false);
-            props.onFeedback({ message: 'Boîte modifiée.', tone: 'ok' });
-            await reload();
-          }}
-        />
-      ) : (
-        <View style={styles.head}>
-          <View style={styles.grow}>
-            <Text style={text.label}>Boîte N° {box.labelNo}</Text>
-            <Text accessibilityRole="header" style={text.h2}>
-              {boxTitle(box)}
-            </Text>
-            <Text style={text.muted}>
-              {[box.location, articles(box.itemCount)]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-            {box.nextExpiration ? (
-              <Text style={text.subtle}>
-                Prochaine péremption : {formatDate(box.nextExpiration)}
-              </Text>
-            ) : null}
-          </View>
-          {status ? (
-            <StatusChip tone={status.tone} label={status.label} />
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Modifier la boîte N° ${box.labelNo}`}
-            onPress={() => setEditing(true)}
-            hitSlop={8}
-            style={styles.iconButton}
-          >
-            <Pencil color={colors.text} size={18} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Supprimer la boîte N° ${box.labelNo}`}
-            onPress={() => setConfirming(true)}
-            hitSlop={8}
-            style={styles.iconButton}
-          >
-            <Trash2 color={colors.danger} size={18} />
-          </Pressable>
+      {props.scanned ? <Notice tone="ok" message="Étiquette lue." /> : null}
+      {saved ? <Notice tone="ok" message={saved} /> : null}
+      <View style={styles.head}>
+        <View style={styles.grow}>
+          <Text accessibilityRole="header" style={text.h2}>
+            Boîte N° {box.labelNo}
+          </Text>
+          <Text style={text.muted}>{boxDetail(box)}</Text>
         </View>
-      )}
+        {status ? <StatusChip tone={status.tone} label={status.label} /> : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Supprimer la boîte N° ${box.labelNo}`}
+          onPress={() => setConfirming(true)}
+          hitSlop={8}
+          style={styles.iconButton}
+        >
+          <Trash2 color={colors.danger} size={18} />
+        </Pressable>
+      </View>
       {confirming ? (
         <Panel accent={colors.danger} style={styles.form}>
           <Text style={text.body}>
             Supprimer la boîte N° {box.labelNo} ? Son contenu reste dans le
-            stock, hors boîte.
+            stock.
           </Text>
           <View style={styles.row}>
             <Button
@@ -431,17 +423,17 @@ function BoxView(props: {
       <View style={styles.row}>
         <Button
           compact
-          variant={panel === 'label' ? 'primary' : 'secondary'}
-          icon={QrIcon}
-          label="Étiquette QR"
-          onPress={() => setPanel(panel === 'label' ? null : 'label')}
+          variant={panel === 'fill' ? 'primary' : 'secondary'}
+          icon={BoxIcon}
+          label="Choisir le contenu"
+          onPress={() => setPanel(panel === 'fill' ? null : 'fill')}
         />
         <Button
           compact
-          variant={panel === 'fill' ? 'primary' : 'secondary'}
-          icon={BoxIcon}
-          label="Contenu depuis le stock"
-          onPress={() => setPanel(panel === 'fill' ? null : 'fill')}
+          variant={panel === 'label' ? 'primary' : 'secondary'}
+          icon={QrIcon}
+          label="Étiquette"
+          onPress={() => setPanel(panel === 'label' ? null : 'label')}
         />
       </View>
       {panel === 'label' ? <LabelPanel box={box} /> : null}
@@ -449,16 +441,17 @@ function BoxView(props: {
         <FillPanel
           box={box}
           onSaved={async message => {
-            props.onFeedback({ message, tone: 'ok' });
+            setSaved(message);
+            setPanel(null);
             await reload();
           }}
         />
       ) : null}
-      {lines.length === 0 ? (
+      {lines.length === 0 && panel !== 'fill' ? (
         <EmptyState
           icon={BoxIcon}
           title="Cette boîte est vide."
-          message="Choisissez son contenu dans le stock avec « Contenu depuis le stock »."
+          message="Touchez « Choisir le contenu »."
         />
       ) : null}
       {lines.map(line => {
@@ -493,16 +486,14 @@ function BoxView(props: {
   );
 }
 
-/** Liste des boîtes, création, scan d'une étiquette et planche à imprimer. */
-export function BoxesSection(props: {
-  /** Boîte à ouvrir d'emblée (scan depuis un autre écran). */
-  initialBox?: string | null;
-}) {
-  const { boxes, files, scanSource } = useSession();
-  const [openId, setOpenId] = useState<string | null>(props.initialBox ?? null);
-  const [creating, setCreating] = useState(false);
+/** Liste des boîtes, création et scan d'une étiquette. */
+export function BoxesSection() {
+  const { boxes, scanSource } = useSession();
+  const [open, setOpen] = useState<{ id: string; scanned: boolean } | null>(
+    null,
+  );
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const { data, error, reload } = useLoader(() => boxes.list(), [openId]);
+  const { data, error } = useLoader(() => boxes.list(), [open]);
 
   const scan = async () => {
     setFeedback(null);
@@ -524,100 +515,68 @@ export function BoxesSection(props: {
           message: 'Cette étiquette ne correspond à aucune boîte du coffre.',
         });
       } else {
-        setOpenId(id);
+        setOpen({ id, scanned: true });
       }
     } catch (e) {
       setFeedback({ tone: 'error', message: failure(e) });
     }
   };
 
-  const scanButton = scanSource.scanQr ? (
-    <Button
-      compact
-      variant="secondary"
-      icon={ScanQrCode}
-      label="Scanner une boîte"
-      onPress={() => void scan()}
-    />
-  ) : null;
-
-  if (openId !== null) {
+  if (open !== null) {
     return (
       <>
         {feedback ? <Notice {...feedback} /> : null}
         <BoxView
-          key={openId}
-          id={openId}
-          onBack={() => setOpenId(null)}
+          key={open.id}
+          id={open.id}
+          scanned={open.scanned}
+          onBack={() => setOpen(null)}
           onFeedback={setFeedback}
         />
-        <View style={styles.row}>{scanButton}</View>
       </>
     );
   }
 
   const list = data ?? [];
-  const nextNo = list.reduce((max, b) => Math.max(max, b.labelNo), 0) + 1;
   return (
     <>
       <Text style={text.muted}>
-        L’inventaire de chaque boîte fermée, fait à partir du stock. Collez son
-        étiquette : en la scannant, Fenrir affiche son contenu et sa prochaine
-        péremption.
+        Collez l’étiquette sur la boîte fermée : en la scannant, Fenrir affiche
+        son contenu.
       </Text>
       {feedback ? <Notice {...feedback} /> : null}
       {error ? <Notice tone="error" message={error} /> : null}
       <View style={styles.row}>
-        {creating ? null : (
-          <Button
-            compact
-            variant="primary"
-            icon={Plus}
-            label="Nouvelle boîte"
-            onPress={() => setCreating(true)}
-          />
-        )}
-        {scanButton}
-      </View>
-      {files.printHtml && list.length > 0 ? (
-        <View style={styles.back}>
-          <Button
-            compact
-            variant="ghost"
-            icon={Printer}
-            label="Imprimer toutes les étiquettes"
-            onPress={() => {
-              setFeedback(null);
-              files
-                .printHtml?.('Étiquettes des boîtes', labelsHtml(list))
-                .catch((e: unknown) =>
-                  setFeedback({ tone: 'error', message: failure(e) }),
-                );
-            }}
-          />
-        </View>
-      ) : null}
-      {creating ? (
-        <BoxForm
-          nextNo={nextNo}
-          onCancel={() => setCreating(false)}
-          onSubmit={async (name, location) => {
-            const box = await boxes.create({ name, location });
-            setCreating(false);
-            setFeedback({
-              message: `Boîte N° ${box.labelNo} créée.`,
-              tone: 'ok',
-            });
-            await reload();
-            setOpenId(box.id);
+        <Button
+          compact
+          variant="primary"
+          icon={Plus}
+          label="Nouvelle boîte"
+          onPress={() => {
+            setFeedback(null);
+            boxes
+              .create()
+              .then(box => setOpen({ id: box.id, scanned: false }))
+              .catch((e: unknown) =>
+                setFeedback({ tone: 'error', message: failure(e) }),
+              );
           }}
         />
-      ) : null}
-      {data !== null && list.length === 0 && !creating ? (
+        {scanSource.scanQr ? (
+          <Button
+            compact
+            variant="secondary"
+            icon={ScanQrCode}
+            label="Scanner une boîte"
+            onPress={() => void scan()}
+          />
+        ) : null}
+      </View>
+      {data !== null && list.length === 0 ? (
         <EmptyState
           icon={BoxIcon}
           title="Aucune boîte."
-          message="Créez une boîte, choisissez son contenu dans le stock, puis imprimez son étiquette."
+          message="Touchez « Nouvelle boîte »."
         />
       ) : null}
       {list.map(box => {
@@ -626,19 +585,17 @@ export function BoxesSection(props: {
           <Pressable
             key={box.id}
             accessibilityRole="button"
-            accessibilityLabel={`Boîte N° ${box.labelNo}${
-              box.name ? `, ${box.name}` : ''
-            } : ${box.itemCount === 0 ? 'vide' : articles(box.itemCount)}${
+            accessibilityLabel={`Boîte N° ${box.labelNo} : ${boxDetail(box)}${
               status ? `, ${status.label}` : ''
             }`}
-            onPress={() => setOpenId(box.id)}
-            style={({ pressed }) => [styles.row2, pressed && styles.pressed]}
+            onPress={() => setOpen({ id: box.id, scanned: false })}
+            style={({ pressed }) => [styles.boxRow, pressed && styles.pressed]}
           >
             <View style={styles.badge}>
               <Text style={styles.badgeText}>N° {box.labelNo}</Text>
             </View>
             <View style={styles.grow}>
-              <Text style={text.h3}>{boxTitle(box)}</Text>
+              <Text style={text.h3}>Boîte N° {box.labelNo}</Text>
               <Text style={text.subtle}>{boxDetail(box)}</Text>
             </View>
             {status ? (
@@ -674,7 +631,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  candidate: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  pick: {
+    gap: space.s,
+    padding: space.m,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickOn: { borderColor: BOX_COLOR },
+  pickMain: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  qty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    alignSelf: 'flex-end',
+  },
+  step: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepText: { color: colors.text, fontSize: 20 },
+  qtyInput: {
+    minWidth: 64,
+    height: 44,
+    paddingHorizontal: space.s,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderActive,
+    color: colors.text,
+    fontSize: 16,
+    textAlign: 'center',
+  },
   card: {
     gap: space.xs,
     padding: space.m,
@@ -685,7 +677,7 @@ const styles = StyleSheet.create({
   },
   cardDanger: { borderColor: colors.danger },
   danger: { color: colors.danger, fontSize: 14 },
-  row2: {
+  boxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.m,

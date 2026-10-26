@@ -19,17 +19,10 @@ import {
 } from './inventoryRepository';
 import type { ItemCategory, ItemUnit } from './types';
 
-export interface BoxInput {
-  name?: string | null;
-  location?: string | null;
-}
-
 export interface Box {
   id: string;
   /** Numéro imprimé sur l'étiquette. */
   labelNo: number;
-  name: string | null;
-  location: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,28 +79,10 @@ export function parseBoxQr(value: string): string | null {
   return /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : null;
 }
 
-/** « Conserves », ou « Boîte N° 3 » sans nom. */
-export function boxTitle(box: Box): string {
-  return box.name ?? `Boîte N° ${box.labelNo}`;
-}
-
-function text(value: string | null | undefined, field: string): string | null {
-  const trimmed = typeof value === 'string' ? value.trim() : '';
-  if (trimmed.length > 60) {
-    throw new InventoryError('VALIDATION', '60 caractères au maximum', {
-      field,
-    });
-  }
-  return trimmed === '' ? null : trimmed;
-}
-
 function toBox(row: SqlRow): Box {
-  const optional = (value: unknown) => (value === null ? null : String(value));
   return {
     id: String(row.id),
     labelNo: Number(row.label_no),
-    name: optional(row.name),
-    location: optional(row.location),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -149,21 +124,12 @@ export class BoxRepository {
   }
 
   /** Nouvelle boîte, numérotée à la suite des autres. */
-  async create(input: BoxInput = {}): Promise<Box> {
+  async create(): Promise<Box> {
     const id = this.newId();
     await this.db.execute(
-      `INSERT INTO boxes (id, label_no, name, location)
-       SELECT ?, COALESCE(MAX(label_no), 0) + 1, ?, ? FROM boxes`,
-      [id, text(input.name, 'name'), text(input.location, 'location')],
-    );
-    return this.get(id);
-  }
-
-  async update(id: string, input: BoxInput): Promise<Box> {
-    await this.get(id);
-    await this.db.execute(
-      'UPDATE boxes SET name = ?, location = ? WHERE id = ?',
-      [text(input.name, 'name'), text(input.location, 'location'), id],
+      `INSERT INTO boxes (id, label_no)
+       SELECT ?, COALESCE(MAX(label_no), 0) + 1 FROM boxes`,
+      [id],
     );
     return this.get(id);
   }

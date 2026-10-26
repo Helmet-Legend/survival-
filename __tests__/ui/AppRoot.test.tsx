@@ -728,15 +728,18 @@ describe('écrans', () => {
   });
 
   it('fait l’inventaire d’une boîte depuis le stock et l’ouvre par son QR', async () => {
-    const printed: string[] = [];
+    const out: { saved?: [string, string]; printed?: string } = {};
     let label = '';
     await openApp({
       files: {
         available: true,
-        saveText: async () => true,
+        saveText: async (name, _mime, html) => {
+          out.saved = [name, html];
+          return true;
+        },
         openText: async () => null,
         printHtml: async (_job, html) => {
-          printed.push(html);
+          out.printed = html;
         },
       },
       scanSource: {
@@ -750,46 +753,53 @@ describe('écrans', () => {
     expect(screen.getByText('Aucune boîte.')).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Nouvelle boîte'));
-    expect(screen.getByText('Nouvelle boîte : N° 1')).toBeTruthy();
-    await fireEvent.changeText(
-      screen.getByLabelText('Emplacement (facultatif)'),
-      'Garage',
-    );
-    await fireEvent.press(screen.getByText('Créer la boîte'));
     expect(await screen.findByText('Cette boîte est vide.')).toBeTruthy();
+    expect(screen.getByText('Boîte N° 1')).toBeTruthy();
 
-    // 4 kg des 10 kg de riz partent dans la boîte.
-    await fireEvent.press(screen.getByText('Contenu depuis le stock'));
-    const more = await screen.findByLabelText('Riz : un de plus dans la boîte');
-    for (let i = 0; i < 4; i++) {
-      await fireEvent.press(more);
-    }
-    expect(screen.getByText('6 kg hors boîte')).toBeTruthy();
-    await fireEvent.press(screen.getByText('Enregistrer le contenu'));
+    // Coché : tout le riz disponible ; puis 4 kg seulement dans cette boîte.
+    await fireEvent.press(screen.getByText('Choisir le contenu'));
+    await fireEvent.press(
+      await screen.findByRole('checkbox', { name: 'Riz dans la boîte' }),
+    );
+    expect(screen.getByText('0 kg hors de cette boîte')).toBeTruthy();
+    const qty = screen.getByLabelText('Riz : quantité dans la boîte');
+    await fireEvent.changeText(qty, '4');
+    await fireEvent(qty, 'endEditing');
+    expect(screen.getByText('6 kg hors de cette boîte')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Valider'));
     expect(
       await screen.findByText('Contenu de la boîte N° 1 enregistré.'),
     ).toBeTruthy();
-    expect(await screen.findByLabelText('Riz, 4 kg')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 4 kg')).toBeTruthy();
+    expect(screen.getByText('4 kg · sans péremption')).toBeTruthy();
 
     const qr = jest.spyOn(QrModule, 'QrCode');
-    await fireEvent.press(screen.getByText('Étiquette QR'));
+    await fireEvent.press(screen.getByText('Étiquette'));
     expect(
       await screen.findByLabelText('Étiquette QR de la boîte N° 1'),
     ).toBeTruthy();
     label = qr.mock.calls[qr.mock.calls.length - 1][0].text;
     qr.mockRestore();
     expect(label).toMatch(/^fenrir:boite:/);
-    await fireEvent.press(screen.getByText('Imprimer l’étiquette'));
-    expect(printed[0]).toContain('N° 1');
-    // Rien du contenu ni de l'emplacement sur l'étiquette.
-    expect(printed[0]).not.toContain('Riz');
-    expect(printed[0]).not.toContain('Garage');
+    await fireEvent.press(screen.getByText('Enregistrer l’étiquette'));
+    expect(
+      await screen.findByText(
+        'Étiquette enregistrée : ouvrez-la sur l’ordinateur pour l’imprimer.',
+      ),
+    ).toBeTruthy();
+    expect(out.saved?.[0]).toBe('etiquette-boite-1.html');
+    await fireEvent.press(screen.getByText('Imprimer'));
+    // Le numéro, rien du contenu.
+    for (const html of [out.saved?.[1], out.printed]) {
+      expect(html).toContain('N° 1');
+      expect(html).not.toContain('Riz');
+    }
 
     await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));
     expect(await screen.findByLabelText('Boîte N° 1 : 1 article')).toBeTruthy();
     await fireEvent.press(screen.getByText('Scanner une boîte'));
-    expect(await screen.findByLabelText('Riz, 4 kg')).toBeTruthy();
-    expect(screen.getByText('4 kg · sans péremption')).toBeTruthy();
+    expect(await screen.findByText('Étiquette lue.')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 4 kg')).toBeTruthy();
 
     // Le stock du foyer est inchangé.
     await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));

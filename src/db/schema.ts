@@ -864,7 +864,7 @@ const migration17: Migration = {
 };
 
 /**
- * Boîtes de rangement étiquetées (QR + numéro). Une boîte contient des lots :
+ * Boîtes de rangement étiquetées (QR + numéro, rien d'autre). Une boîte contient des lots :
  * une partie d'un article peut être dans une boîte, le reste ailleurs, sans
  * changer la fiche ni le total du stock.
  */
@@ -875,8 +875,6 @@ const migration18: Migration = {
     `CREATE TABLE boxes (
        id         TEXT PRIMARY KEY NOT NULL,
        label_no   INTEGER NOT NULL CHECK (label_no > 0),
-       name       TEXT CHECK (name IS NULL OR length(name) <= 60),
-       location   TEXT CHECK (location IS NULL OR length(location) <= 60),
        created_at TEXT NOT NULL DEFAULT ${NOW},
        updated_at TEXT NOT NULL DEFAULT ${NOW}
      ) STRICT`,

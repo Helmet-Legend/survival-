@@ -251,7 +251,7 @@ describe('synchronisation entre deux téléphones', () => {
 
   it('envoie les boîtes et leur contenu', async () => {
     const [a, b] = [await phone('a'), await phone('b')];
-    const box = await a.boxes.create({ location: 'Garage' });
+    const box = await a.boxes.create();
     const rice = await a.repo.createItem(
       { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
       { quantity: 10, expirationDate: '2028-03-01' },
@@ -260,7 +260,7 @@ describe('synchronisation entre deux téléphones', () => {
 
     await exchange(a.db, b.db);
     const [received] = await b.boxes.list();
-    expect(received).toMatchObject({ labelNo: 1, location: 'Garage' });
+    expect(received).toMatchObject({ labelNo: 1 });
     expect(await b.boxes.contents(box.id)).toEqual([
       expect.objectContaining({ name: 'Riz', quantity: 4 }),
     ]);

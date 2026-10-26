@@ -3,7 +3,6 @@ import {
   BagRepository,
   BoxRepository,
   boxQr,
-  boxTitle,
   InventoryRepository,
   parseBoxQr,
 } from '../../src/inventory';
@@ -23,18 +22,12 @@ async function setup() {
 describe('boîtes étiquetées', () => {
   it('numérote les boîtes à la suite, sans limite', async () => {
     const { boxes } = await setup();
-    for (let i = 0; i < 14; i++) {
-      await boxes.create({ location: 'Garage' });
+    for (let i = 0; i < 15; i++) {
+      await boxes.create();
     }
-    const named = await boxes.create({ name: 'Conserves' });
     const list = await boxes.list();
     expect(list.map(b => b.labelNo)).toEqual(
       Array.from({ length: 15 }, (_, i) => i + 1),
-    );
-    expect(boxTitle(list[0])).toBe('Boîte N° 1');
-    expect(boxTitle(named)).toBe('Conserves');
-    await expect(boxes.create({ name: 'x'.repeat(61) })).rejects.toThrow(
-      '60 caractères',
     );
   });
 
