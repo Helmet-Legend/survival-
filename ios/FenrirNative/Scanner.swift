@@ -118,7 +118,8 @@ private final class ScanViewController: UIViewController, AVCaptureMetadataOutpu
     session.addOutput(output)
     output.setMetadataObjectsDelegate(self, queue: .main)
     let wanted: [AVMetadataObject.ObjectType] =
-      qr ? [.qr] : [.ean13, .ean8, .upce, .dataMatrix]
+      // En lecture d'articles, le QR sert aux étiquettes des boîtes.
+      qr ? [.qr] : [.ean13, .ean8, .upce, .dataMatrix, .qr]
     output.metadataObjectTypes = wanted.filter { output.availableMetadataObjectTypes.contains($0) }
 
     let layer = AVCaptureVideoPreviewLayer(session: session)
@@ -173,10 +174,15 @@ private final class ScanViewController: UIViewController, AVCaptureMetadataOutpu
     _ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject],
     from connection: AVCaptureConnection
   ) {
-    guard !finished,
-      let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-      let code = object.stringValue, !code.isEmpty
-    else { return }
+    // Lecture d'articles : les QR codes des emballages (publicité, sites)
+    // sont ignorés, seules les étiquettes des boîtes comptent.
+    let object = metadataObjects
+      .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+      .first { candidate in
+        guard let text = candidate.stringValue, !text.isEmpty else { return false }
+        return qr || candidate.type != .qr || text.hasPrefix(ScanViewController.boxPrefix)
+      }
+    guard !finished, let object = object, let code = object.stringValue else { return }
     let now = Date().timeIntervalSince1970
     if code == lastCode && now - lastSeen < ScanViewController.repeatGap {
       lastSeen = now
@@ -194,6 +200,9 @@ private final class ScanViewController: UIViewController, AVCaptureMetadataOutpu
     let n = reads.count
     status.text = "\(n) lecture\(n > 1 ? "s" : "") · dernier code : \(code)"
   }
+
+  /** Début du texte des étiquettes de boîtes (voir boxRepository.ts). */
+  static let boxPrefix = "fenrir:boite:"
 
   /** Noms des formats identiques à ceux de ZXing sur Android. */
   private static func name(of type: AVMetadataObject.ObjectType) -> String {

@@ -159,9 +159,23 @@ export function ScanScreen() {
 
   const scan = (series: boolean) =>
     run(async () => {
-      const codes = await scanSource.scan(series);
-      if (codes === null) {
+      const reads = await scanSource.scan(series);
+      if (reads === null) {
         return null;
+      }
+      // Étiquette d'une boîte de rangement, lue seule : on ouvre la boîte.
+      const boxRead = reads.find(r => r.box !== undefined);
+      if (boxRead?.box !== undefined && reads.length === 1) {
+        navigation.goTo('stock', { category: 'boxes', boxId: boxRead.box });
+        return null;
+      }
+      const codes = reads.filter(r => r.box === undefined);
+      if (codes.length === 0 && boxRead !== undefined) {
+        return {
+          tone: 'error',
+          message:
+            'Étiquettes de boîtes ignorées en série : scannez une boîte seule pour l’ouvrir.',
+        };
       }
       if (codes.length === 0) {
         return { tone: 'error', message: 'Aucun code-barres reconnu.' };
@@ -243,6 +257,9 @@ export function ScanScreen() {
               disabled={busy}
               onPress={() => scan(true)}
             />
+            <Text style={text.muted}>
+              Une étiquette de boîte ouvre directement son contenu.
+            </Text>
           </View>
         ) : (
           <Text style={text.muted}>

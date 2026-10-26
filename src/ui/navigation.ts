@@ -40,10 +40,12 @@ export interface StockFormTarget {
 
 /** Catégorie et message à afficher en arrivant sur les Stocks. */
 export interface StockFocus {
-  category?: ItemCategory | 'watch' | 'documents' | 'bags';
+  category?: ItemCategory | 'watch' | 'documents' | 'bags' | 'boxes';
   message?: string;
   /** Sac d'évacuation à rouvrir (retour de fiche). */
   bagId?: string;
+  /** Boîte à ouvrir (étiquette lue par le scanner). */
+  boxId?: string;
 }
 
 export interface Navigation {

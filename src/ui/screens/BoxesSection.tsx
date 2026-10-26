@@ -523,10 +523,13 @@ function BoxView(props: {
 }
 
 /** Liste des boîtes, création et scan d'une étiquette. */
-export function BoxesSection() {
+export function BoxesSection(props: {
+  /** Boîte à ouvrir d'emblée : lue par le scanner, ou touchée sur un lot. */
+  initial?: { id: string; scanned: boolean } | null;
+}) {
   const { boxes, scanSource } = useSession();
   const [open, setOpen] = useState<{ id: string; scanned: boolean } | null>(
-    null,
+    props.initial ?? null,
   );
   const [feedback, setFeedback] = useState<Feedback>(null);
   const { data, error } = useLoader(() => boxes.list(), [open]);

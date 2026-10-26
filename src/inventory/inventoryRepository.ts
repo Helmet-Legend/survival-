@@ -116,6 +116,8 @@ export interface InventoryLot {
   expirationDate: string | null;
   /** Calculé à la date du jour. */
   isExpired: boolean;
+  /** Boîte de rangement où se trouve le lot (absent : hors boîte). */
+  box?: { id: string; labelNo: number };
 }
 
 export interface ItemSummary extends InventoryItem {
@@ -555,7 +557,8 @@ export class InventoryRepository {
   ): Promise<{ item: InventoryItem; lots: InventoryLot[] }> {
     const item = await this.requireItem(id);
     const { rows } = await this.db.execute(
-      `SELECT id, item_id, quantity, acquired_at, expiration_date
+      `SELECT id, item_id, quantity, acquired_at, expiration_date, box_id,
+              (SELECT label_no FROM boxes WHERE boxes.id = box_id) AS box_label
          FROM inventory_lots
         WHERE item_id = ?
         ORDER BY ${CONSUMPTION_ORDER}`,
@@ -900,6 +903,9 @@ export class InventoryRepository {
       acquiredAt: String(row.acquired_at),
       expirationDate,
       isExpired: expirationDate !== null && expirationDate < this.today(),
+      ...(typeof row.box_id === 'string' && row.box_label != null
+        ? { box: { id: row.box_id, labelNo: Number(row.box_label) } }
+        : {}),
     };
   }
 }

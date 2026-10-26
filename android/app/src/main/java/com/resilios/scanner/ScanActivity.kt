@@ -80,7 +80,9 @@ class ScanActivity : AppCompatActivity() {
                             BarcodeFormat.UPC_A,
                             BarcodeFormat.UPC_E,
                             // Boîtes de médicaments : code, lot et péremption (GS1).
-                            BarcodeFormat.DATA_MATRIX),
+                            BarcodeFormat.DATA_MATRIX,
+                            // Étiquettes des boîtes de rangement Fenrir.
+                            BarcodeFormat.QR_CODE),
                 DecodeHintType.TRY_HARDER to true))
       }
   }
@@ -102,7 +104,8 @@ class ScanActivity : AppCompatActivity() {
                           CppReader.Format.EAN_8,
                           CppReader.Format.UPC_A,
                           CppReader.Format.UPC_E,
-                          CppReader.Format.DATA_MATRIX)
+                          CppReader.Format.DATA_MATRIX,
+                          CppReader.Format.QR_CODE)
               options.tryHarder = true
               options.tryRotate = true
               options.tryDownscale = true
@@ -270,7 +273,10 @@ class ScanActivity : AppCompatActivity() {
       if (finished) {
         return
       }
-      val found = runCatching { cppReader?.read(image) }.getOrNull()?.firstOrNull()
+      val found =
+          runCatching { cppReader?.read(image) }
+              .getOrNull()
+              ?.firstOrNull { accepted(it.text ?: "", it.format.name) }
       val cppCode = found?.text
       if (found != null && !cppCode.isNullOrEmpty()) {
         val format = found.format.name
@@ -325,8 +331,18 @@ class ScanActivity : AppCompatActivity() {
     return out
   }
 
+  /**
+   * Lecture d'articles : seuls les QR codes des étiquettes de boîtes
+   * comptent ; ceux des emballages (publicité, sites) sont ignorés.
+   */
+  private fun accepted(code: String, format: String): Boolean =
+      qrOnly || format != "QR_CODE" || code.startsWith(BOX_QR_PREFIX)
+
   private fun onRead(code: String, format: String) {
     if (finished) {
+      return
+    }
+    if (!accepted(code, format)) {
       return
     }
     val now = SystemClock.elapsedRealtime()
@@ -377,6 +393,8 @@ class ScanActivity : AppCompatActivity() {
     const val RESULT_CODES = "codes"
     const val RESULT_FORMATS = "formats"
     const val RESULT_ERROR = "error"
+    /** Début du texte des étiquettes de boîtes (voir boxRepository.ts). */
+    private const val BOX_QR_PREFIX = "fenrir:boite:"
     /** Absence minimale d'un code avant de le compter à nouveau. */
     private const val REPEAT_GAP_MS = 1500L
   }

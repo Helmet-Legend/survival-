@@ -3,6 +3,7 @@
  * même produit peut être lu en UPC-A (12 chiffres), UPC-E (8) ou EAN-13 :
  * tous sont ramenés à l'EAN-13, sauf l'EAN-8 qui reste à 8 chiffres.
  */
+import { parseBoxQr } from '../inventory/boxRepository';
 
 function checkDigitValid(digits: string): boolean {
   let sum = 0;
@@ -74,6 +75,8 @@ export interface ScanRead {
   /** Péremption `AAAA-MM-JJ` lue dans le code (Data Matrix GS1). */
   expiry?: string;
   lot?: string;
+  /** Étiquette d'une boîte de rangement : son identifiant. */
+  box?: string;
 }
 
 const GS = String.fromCharCode(29);
@@ -171,6 +174,10 @@ export function parseGs1(raw: string): ScanRead | null {
 export function readFromScanner(raw: string, format: string): ScanRead | null {
   if (format === 'DATA_MATRIX') {
     return parseGs1(raw);
+  }
+  if (format === 'QR_CODE') {
+    const box = parseBoxQr(raw);
+    return box === null ? null : { code: raw.trim(), box };
   }
   const code = normalizeBarcode(raw, format);
   return code === null ? null : { code };
