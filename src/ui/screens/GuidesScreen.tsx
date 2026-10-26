@@ -55,6 +55,7 @@ import {
 } from '../components/controls';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
+import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 
 interface GuideRow {
@@ -109,6 +110,11 @@ export function GuidesScreen() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [slug, setSlug] = useState<string | null>(null);
+  // « Retour » : de la recherche ou d'une catégorie à toutes les catégories
+  // (la fiche ouverte se referme d'elle-même).
+  useBack(category !== null || query !== '', () =>
+    query !== '' ? setQuery('') : setCategory(null),
+  );
 
   const { data, error } = useLoader(async (): Promise<GuideRow[]> => {
     if (query.trim() === '') {
@@ -137,7 +143,19 @@ export function GuidesScreen() {
   }, [query]);
 
   if (slug !== null) {
-    return <GuideReader slug={slug} onBack={() => setSlug(null)} />;
+    return (
+      <GuideReader
+        slug={slug}
+        onBack={() => setSlug(null)}
+        backLabel={
+          query.trim() !== ''
+            ? 'Retour aux résultats'
+            : category !== null
+            ? `Retour : ${category}`
+            : undefined
+        }
+      />
+    );
   }
 
   const searching = query.trim() !== '';
@@ -282,6 +300,7 @@ export function GuideReader(props: {
   backLabel?: string;
 }) {
   const { db } = useSession();
+  useBack(true, props.onBack);
   const { data, error } = useLoader(async () => {
     const { rows } = await db.execute(
       'SELECT title, category, body FROM survival_guides WHERE slug = ?',

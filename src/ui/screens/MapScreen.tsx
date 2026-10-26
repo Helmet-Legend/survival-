@@ -59,6 +59,7 @@ import type { MapView } from './map/OfflineMap';
 import { PointsView, type PointsRoute } from './map/PointsView';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text } from '../theme';
+import { useBack } from '../useBackHandler';
 
 type Mode = 'points' | 'map' | 'coords' | 'bearing';
 
@@ -290,6 +291,10 @@ export function MapScreen() {
   }, [target, declination, position]);
 
   const fix = position !== null && !('error' in position) ? position : null;
+  // « Retour » : d'un point (fiche, saisie) à la liste des points.
+  useBack(mode === 'points' && pointsRoute.kind !== 'list', () =>
+    setPointsRoute({ kind: 'list' }),
+  );
 
   return (
     <ScrollView

@@ -91,6 +91,7 @@ import {
   type StatusTone,
 } from '../theme';
 import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
+import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 import { ScrollEndContext, useProgressive } from '../useProgressive';
 import { ArmorySection } from './ArmorySection';
@@ -274,6 +275,10 @@ export function StockScreen() {
     setBagId(null);
     setOpenBox(null);
   };
+  // « Retour » : du sac à la liste des sacs, puis d'un dossier à « Tous ».
+  useBack(filter !== 'all', () =>
+    inBag ? setBagId(null) : showFilter('all'),
+  );
   const showBox = (id: string) => {
     setFilter('boxes');
     setBagId(null);

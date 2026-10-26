@@ -80,7 +80,13 @@ export function EmergencyScreen() {
   const [reflex, setReflex] = useState<string | null>(null);
 
   if (reflex !== null) {
-    return <GuideReader slug={reflex} onBack={() => setReflex(null)} />;
+    return (
+      <GuideReader
+        slug={reflex}
+        onBack={() => setReflex(null)}
+        backLabel="Retour à l’urgence"
+      />
+    );
   }
 
   const locate = async () => {

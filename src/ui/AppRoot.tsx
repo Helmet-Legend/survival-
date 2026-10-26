@@ -113,6 +113,7 @@ import { SyncScreen } from './screens/SyncScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
 import { colors, fonts, radius, sizes, space, text } from './theme';
+import { useBackHandler } from './useBackHandler';
 
 type Phase =
   | { kind: 'loading' }
@@ -300,6 +301,36 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       stockFocus,
     }),
     [stockFocus, overlay, overlayStack, tab],
+  );
+
+  // « Retour » d'Android : fiche d'ajout, écran secondaire, puis section.
+  useBackHandler(
+    phase.kind === 'open'
+      ? () => {
+          if (overlay === 'stockForm' && formTarget !== null) {
+            if (formTarget.barcode !== undefined) {
+              navigation.open('scan');
+            } else {
+              navigation.goTo(
+                'stock',
+                formTarget.bagId
+                  ? { category: 'bags', bagId: formTarget.bagId }
+                  : { category: formTarget.category },
+              );
+            }
+            return true;
+          }
+          if (overlay !== null) {
+            navigation.close();
+            return true;
+          }
+          if (tab !== 'home') {
+            navigation.goTo('home');
+            return true;
+          }
+          return false;
+        }
+      : null,
   );
 
   useEffect(() => {

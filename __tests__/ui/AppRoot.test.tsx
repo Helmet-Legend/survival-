@@ -35,6 +35,7 @@ import { randomBytes } from 'crypto';
 import { prepareDatabase } from '../../src/db/connection';
 import { hostInvite } from '../../src/sync';
 import { AppRoot } from '../../src/ui/AppRoot';
+import { pressBack } from '../../src/ui/useBackHandler';
 import * as QrModule from '../../src/ui/components/QrCode';
 import { NodeSqliteDb } from '../db/sqlite';
 import { FakeWifi } from '../sync/fakeNetwork';
@@ -2184,6 +2185,50 @@ describe('écrans', () => {
     expect(screen.queryByLabelText('Riz, 10 kg')).toBeNull();
   });
 
+  it('« retour » d’Android remonte d’un cran, jusqu’à l’Accueil', async () => {
+    await openApp();
+    const back = async () => {
+      let handled = false;
+      await act(async () => {
+        handled = pressBack();
+      });
+      return handled;
+    };
+    // Fiche guide → dossier → toutes les catégories → Accueil.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    await fireEvent.press(
+      await screen.findByLabelText(/^Équipement et protection, \d+ fiches?$/),
+    );
+    await fireEvent.press(
+      await screen.findByText(
+        'Protections balistiques — NIJ IIIA, III, IV et casque FAST',
+      ),
+    );
+    expect(await screen.findByText('Tableau comparatif')).toBeTruthy();
+    expect(await back()).toBe(true);
+    expect(await screen.findByText('Toutes les catégories')).toBeTruthy();
+    expect(screen.queryByText('Tableau comparatif')).toBeNull();
+    expect(await back()).toBe(true);
+    expect(screen.queryByText('Toutes les catégories')).toBeNull();
+    expect(await back()).toBe(true);
+    expect(await screen.findByText('Autonomie du foyer')).toBeTruthy();
+    // Écran secondaire : retour à la section d'où il a été ouvert.
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    expect(await screen.findByText('Mode lumière rouge')).toBeTruthy();
+    expect(await back()).toBe(true);
+    expect(await screen.findByText('Autonomie du foyer')).toBeTruthy();
+    // Stocks : d'un dossier à « Tous », puis à l'Accueil.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press((await screen.findAllByText('Documents'))[0]);
+    expect(await screen.findByText('Ajouter un document')).toBeTruthy();
+    expect(await back()).toBe(true);
+    expect(screen.queryByText('Ajouter un document')).toBeNull();
+    expect(await back()).toBe(true);
+    expect(await screen.findByText('Autonomie du foyer')).toBeTruthy();
+    // À l'Accueil, Android garde la main (sortie de l'application).
+    expect(await back()).toBe(false);
+  });
+
   it('cherche dans les fiches sans tenir compte des accents', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
@@ -2192,7 +2237,7 @@ describe('écrans', () => {
       'severe',
     );
     await fireEvent.press(await screen.findByText('Hypothermie'));
-    expect(await screen.findByText('Toutes les fiches')).toBeTruthy();
+    expect(await screen.findByText('Retour aux résultats')).toBeTruthy();
     expect(
       screen.getByText(
         'Mettre la victime à l’abri du vent et l’isoler du sol.',
@@ -2233,7 +2278,9 @@ describe('écrans', () => {
     );
     expect(await screen.findByText('0 sur 9 vérifiés')).toBeTruthy();
     // Fermeture : retour à la liste du dossier.
-    await fireEvent.press(screen.getByText('Toutes les fiches'));
+    await fireEvent.press(
+      screen.getByText('Retour : Équipement et protection'),
+    );
     expect(
       (await screen.findAllByText('Équipement et protection')).length,
     ).toBeGreaterThan(0);
