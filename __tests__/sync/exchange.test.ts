@@ -12,6 +12,7 @@ import {
   getPeer,
   joinWithInvite,
   memoryChannelPair,
+  splitPayload,
   updatePeerOptions,
   type Channel,
   type ExchangeContext,
@@ -67,6 +68,69 @@ async function sync(a: Phone, b: Phone) {
   ]);
   return { atA, atB };
 }
+
+describe('envoi en plusieurs paquets', () => {
+  const row = (key: string, text: string) => ({
+    table: 'inventory_items',
+    key,
+    hlc: '0000000000001:0000:aa',
+    deleted: false,
+    weapon: false,
+    base: null,
+    data: { id: key, name: text },
+  });
+  const payload = (rows: ReturnType<typeof row>[]) => ({
+    format: 1,
+    device: 'aa',
+    clock: '0000000000001:0000:aa',
+    rows,
+  });
+
+  it('garde un seul paquet quand l’envoi est petit', () => {
+    const p = payload([row('1', 'Eau'), row('2', 'Riz')]);
+    expect(splitPayload(p)).toEqual([p]);
+    expect(splitPayload(payload([]))).toEqual([payload([])]);
+  });
+
+  it('découpe un gros envoi sans couper de ligne ni perdre l’en-tête', () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      row(String(i), 'x'.repeat(100)),
+    );
+    const parts = splitPayload(payload(rows), 400);
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.flatMap(p => p.rows)).toEqual(rows);
+    for (const part of parts) {
+      expect(part.clock).toBe('0000000000001:0000:aa');
+      expect(part.rows.length).toBeGreaterThan(0);
+    }
+    // Une ligne plus grosse que le budget part seule.
+    expect(
+      splitPayload(payload([row('big', 'x'.repeat(1000))]), 10),
+    ).toHaveLength(1);
+  });
+
+  it('réunit deux stocks envoyés en petits paquets', async () => {
+    const [a, b] = [await phone('a'), await phone('b')];
+    a.ctx.partChars = 300;
+    b.ctx.partChars = 300;
+    for (let i = 0; i < 25; i++) {
+      await a.repo.createItem({
+        name: `Conserve ${String(i).padStart(2, '0')}`,
+        category: 'food',
+        unit: 'unit',
+      });
+    }
+    await b.repo.createItem({ name: 'Lampe', category: 'tool', unit: 'unit' });
+    await pair(a, b);
+    expect(await names(b)).toEqual(await names(a));
+    expect(await names(b)).toHaveLength(26);
+    // Un téléphone qui envoie en un seul paquet reste compris.
+    b.ctx.partChars = undefined;
+    await b.repo.createItem({ name: 'Radio', category: 'tool', unit: 'unit' });
+    await sync(a, b);
+    expect(await names(a)).toContain('Radio');
+  });
+});
 
 describe('échange entre deux téléphones', () => {
   it('associe par QR code et réunit les deux stocks', async () => {
