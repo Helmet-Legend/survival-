@@ -34,6 +34,7 @@ import { randomBytes } from 'crypto';
 import { prepareDatabase } from '../../src/db/connection';
 import { hostInvite } from '../../src/sync';
 import { AppRoot } from '../../src/ui/AppRoot';
+import * as QrModule from '../../src/ui/components/QrCode';
 import { NodeSqliteDb } from '../db/sqlite';
 import { FakeWifi } from '../sync/fakeNetwork';
 import { createVault, type VaultContent } from '../../src/vault';
@@ -724,6 +725,88 @@ describe('écrans', () => {
     );
     expect(await screen.findByLabelText('Retour à l’accueil')).toBeTruthy();
     expect(screen.getByText('Vigilance orange crues')).toBeTruthy();
+  });
+
+  it('fait l’inventaire d’une boîte depuis le stock et l’ouvre par son QR', async () => {
+    const out: { saved?: [string, string]; printed?: string } = {};
+    let label = '';
+    await openApp({
+      files: {
+        available: true,
+        saveText: async (name, _mime, html) => {
+          out.saved = [name, html];
+          return true;
+        },
+        openText: async () => null,
+        printHtml: async (_job, html) => {
+          out.printed = html;
+        },
+      },
+      scanSource: {
+        available: true,
+        scan: async () => null,
+        scanQr: async () => label,
+      },
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('Boîtes : 0 boîte'));
+    expect(screen.getByText('Aucune boîte.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Nouvelle boîte'));
+    expect(await screen.findByText('Cette boîte est vide.')).toBeTruthy();
+    expect(screen.getByText('Boîte N° 1')).toBeTruthy();
+
+    // Coché : tout le riz disponible ; puis 4 kg seulement dans cette boîte.
+    await fireEvent.press(screen.getByText('Choisir le contenu'));
+    await fireEvent.press(
+      await screen.findByRole('checkbox', { name: 'Riz dans la boîte' }),
+    );
+    expect(screen.getByText('0 kg hors de cette boîte')).toBeTruthy();
+    const qty = screen.getByLabelText('Riz : quantité dans la boîte');
+    await fireEvent.changeText(qty, '4');
+    await fireEvent(qty, 'endEditing');
+    expect(screen.getByText('6 kg hors de cette boîte')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Valider'));
+    expect(
+      await screen.findByText('Contenu de la boîte N° 1 enregistré.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 4 kg')).toBeTruthy();
+    expect(screen.getByText('4 kg · sans péremption')).toBeTruthy();
+
+    const qr = jest.spyOn(QrModule, 'QrCode');
+    await fireEvent.press(screen.getByText('Étiquette'));
+    expect(
+      await screen.findByLabelText('Étiquette QR de la boîte N° 1'),
+    ).toBeTruthy();
+    label = qr.mock.calls[qr.mock.calls.length - 1][0].text;
+    qr.mockRestore();
+    expect(label).toMatch(/^fenrir:boite:/);
+    await fireEvent.press(screen.getByText('Enregistrer l’étiquette'));
+    expect(
+      await screen.findByText(
+        'Étiquette enregistrée : ouvrez-la sur l’ordinateur pour l’imprimer.',
+      ),
+    ).toBeTruthy();
+    expect(out.saved?.[0]).toBe('etiquette-boite-1.html');
+    await fireEvent.press(screen.getByText('Imprimer'));
+    // Le numéro, rien du contenu.
+    for (const html of [out.saved?.[1], out.printed]) {
+      expect(html).toContain('N° 1');
+      expect(html).not.toContain('Riz');
+    }
+
+    await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));
+    expect(await screen.findByLabelText('Boîte N° 1 : 1 article')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Scanner une boîte'));
+    expect(await screen.findByText('Étiquette lue.')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 4 kg')).toBeTruthy();
+
+    // Le stock du foyer est inchangé.
+    await fireEvent.press(screen.getByLabelText('Toutes les boîtes'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
+    expect(
+      await screen.findByLabelText('Nourriture : 36 000 kcal, 1 article'),
+    ).toBeTruthy();
   });
 
   it('réunit kit 72 h et matériel, coche à la main, exporte et imprime', async () => {

@@ -351,6 +351,8 @@ describe('migration 3 (armes et munitions)', () => {
         expiration_date: '2027-06-30',
         created_at: '2026-01-02T03:04:05.000Z',
         updated_at: '2026-01-02T03:04:05.000Z',
+        // Ajoutée par la migration 18 (boîtes) : hors boîte.
+        box_id: null,
       },
     ]);
     expect(await names(db, 'table')).not.toContain('inventory_lots_backup');

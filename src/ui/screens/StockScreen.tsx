@@ -5,6 +5,7 @@
  */
 import {
   Backpack,
+  Box as BoxIcon,
   ChevronDown,
   ChevronRight,
   FolderLock,
@@ -93,6 +94,7 @@ import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
 import { useLoader } from '../useLoader';
 import { ArmorySection } from './ArmorySection';
 import { BAG_COLOR, BagHeader, BagsSection } from './BagsSection';
+import { BOX_COLOR, BoxesSection } from './BoxesSection';
 import { DocumentsSection, documentStatus } from './DocumentsSection';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
@@ -191,6 +193,10 @@ function bagAlerts(list: readonly BagSummary[]): number {
   return list.reduce((sum, b) => sum + b.expiredLots + b.soonLots, 0);
 }
 
+function boxCount(list: readonly { id: string }[]): string {
+  return `${list.length} boîte${list.length > 1 ? 's' : ''}`;
+}
+
 function articles(count: number): string {
   return `${count} article${count > 1 ? 's' : ''}`;
 }
@@ -229,7 +235,13 @@ function CategoryBanner(props: { category: ItemCategory; detail: string }) {
   );
 }
 
-type StockFilter = ItemCategory | 'all' | 'watch' | 'documents' | 'bags';
+type StockFilter =
+  | ItemCategory
+  | 'all'
+  | 'watch'
+  | 'documents'
+  | 'bags'
+  | 'boxes';
 
 /** Articles du stock général à surveiller (périmés, bientôt, sous le minimum). */
 function watchCount(items: readonly ItemSummary[]): number {
@@ -238,7 +250,7 @@ function watchCount(items: readonly ItemSummary[]): number {
 }
 
 export function StockScreen() {
-  const { repo, armory, documents, bags } = useSession();
+  const { repo, armory, documents, bags, boxes } = useSession();
   const navigation = useNavigation();
   const focus = navigation.stockFocus;
   const [filter, setFilter] = useState<StockFilter>(focus?.category ?? 'all');
@@ -246,6 +258,7 @@ export function StockScreen() {
   const [bagId, setBagId] = useState<string | null>(focus?.bagId ?? null);
   const [choosing, setChoosing] = useState(false);
   const isDocs = filter === 'documents';
+  const isBoxes = filter === 'boxes';
   const isBags = filter === 'bags';
   const inBag = isBags && bagId !== null;
   const isWatch = filter === 'watch';
@@ -273,38 +286,41 @@ export function StockScreen() {
     // Le contenu des sacs d'évacuation reste dans son dossier.
     const all = (await repo.listItems({ bag: 'none' })) as ItemSummary[];
     const today = localToday();
-    const items = isDocs
-      ? []
-      : isWatch
-      ? ((await repo.listItems({ query, bag: 'none' })) as ItemSummary[])
-          .map(item => ({ item, state: itemState(item, today) }))
-          .filter(x => x.state !== null)
-          .sort(
-            (a, b) =>
-              STATE_RANK[a.state!.label] - STATE_RANK[b.state!.label] ||
-              (a.item.nextExpiration ?? '9999').localeCompare(
-                b.item.nextExpiration ?? '9999',
-              ),
-          )
-          .map(x => x.item)
-      : isBags
-      ? bagId === null
+    const items =
+      isDocs || isBoxes
         ? []
-        : ((await repo.listItems({ bag: bagId, query })) as ItemSummary[])
-      : ((await repo.listItems({
-          category: filter === 'all' || isWatch ? undefined : filter,
-          query,
-          bag: 'none',
-        })) as ItemSummary[]);
+        : isWatch
+        ? ((await repo.listItems({ query, bag: 'none' })) as ItemSummary[])
+            .map(item => ({ item, state: itemState(item, today) }))
+            .filter(x => x.state !== null)
+            .sort(
+              (a, b) =>
+                STATE_RANK[a.state!.label] - STATE_RANK[b.state!.label] ||
+                (a.item.nextExpiration ?? '9999').localeCompare(
+                  b.item.nextExpiration ?? '9999',
+                ),
+            )
+            .map(x => x.item)
+        : isBags
+        ? bagId === null
+          ? []
+          : ((await repo.listItems({ bag: bagId, query })) as ItemSummary[])
+        : ((await repo.listItems({
+            category: filter === 'all' || isWatch ? undefined : filter,
+            query,
+            bag: 'none',
+          })) as ItemSummary[]);
     const detail =
       expanded === null ? null : await repo.getItem(expanded).catch(() => null);
     const weapons = await armory.listWeapons();
     const docs = await documents.list();
     const bagList = await bags.list();
+    const boxList = await boxes.list();
     return {
       weapons,
       docs,
       bags: bagList,
+      boxes: boxList,
       bag: bagList.find(b => b.id === bagId) ?? null,
       all,
       items,
@@ -400,6 +416,11 @@ export function StockScreen() {
           onPress={() => showFilter('bags')}
         />
         <Chip
+          label="Boîtes"
+          selected={isBoxes}
+          onPress={() => showFilter('boxes')}
+        />
+        <Chip
           label="Documents"
           selected={isDocs}
           onPress={() => showFilter('documents')}
@@ -457,7 +478,9 @@ export function StockScreen() {
         />
       ) : null}
 
-      {isDocs || (isBags && !inBag) ? null : (
+      {isBoxes ? <BoxesSection /> : null}
+
+      {isDocs || isBoxes || (isBags && !inBag) ? null : (
         <>
           <SearchField
             label="Rechercher un article"
@@ -650,6 +673,25 @@ export function StockScreen() {
                     </Text>
                   ) : null}
                 </Text>
+              </View>
+              <ChevronRight color={colors.text} size={22} />
+            </Pressable>
+          ) : null}
+
+          {showCategories && data ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Boîtes : ${boxCount(data.boxes)}`}
+              onPress={() => showFilter('boxes')}
+              style={({ pressed }) => [
+                styles.category,
+                pressed && styles.pressed,
+              ]}
+            >
+              <IconTile icon={BoxIcon} color={BOX_COLOR} />
+              <View style={styles.grow}>
+                <Text style={text.h3}>Boîtes</Text>
+                <Text style={text.muted}>{boxCount(data.boxes)}</Text>
               </View>
               <ChevronRight color={colors.text} size={22} />
             </Pressable>

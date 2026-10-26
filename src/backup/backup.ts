@@ -88,6 +88,7 @@ export interface BackupSummary {
 const TABLE_ORDER = [
   'settings',
   'bags',
+  'boxes',
   'inventory_items',
   'inventory_lots',
   'stock_movements',

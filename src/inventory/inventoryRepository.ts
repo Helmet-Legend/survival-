@@ -191,7 +191,7 @@ const TEXT_MAX = 500;
 /** Les quantités sont arrondies au millionième pour éviter 0,30000000000000004. */
 const QUANTITY_SCALE = 1e6;
 
-function roundQuantity(value: number): number {
+export function roundQuantity(value: number): number {
   return Math.round(value * QUANTITY_SCALE) / QUANTITY_SCALE;
 }
 
@@ -359,7 +359,7 @@ function validateDate(
 }
 
 /** Minuscules sans accents, pour la recherche. */
-function fold(text: string): string {
+export function fold(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
@@ -419,10 +419,11 @@ const ITEM_COLUMNS = `i.id, i.name, i.category, i.unit, i.calories_per_unit,
   i.bag_id, i.created_at, i.updated_at`;
 
 /**
- * Ordre de consommation : péremption la plus proche d'abord, lots non
- * périssables en dernier, puis le plus ancien.
+ * Ordre de consommation : lots hors boîte d'abord (une boîte fermée reste
+ * fermée), puis péremption la plus proche, lots non périssables en dernier,
+ * puis le plus ancien.
  */
-const CONSUMPTION_ORDER = `(expiration_date IS NULL), expiration_date,
+const CONSUMPTION_ORDER = `(box_id IS NOT NULL), (expiration_date IS NULL), expiration_date,
   acquired_at, created_at, id`;
 
 // --- Dépôt ------------------------------------------------------------------

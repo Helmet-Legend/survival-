@@ -503,7 +503,10 @@ async function resolveReferences(
   switch (table) {
     case 'inventory_lots': {
       const ok = await refs('inventory_items', 'item_id');
-      return rows.filter(r => ok.has(asId(r.data?.item_id) ?? ''));
+      const boxes = await refs('boxes', 'box_id');
+      return rows
+        .filter(r => ok.has(asId(r.data?.item_id) ?? ''))
+        .map(r => clear(r, 'box_id', boxes));
     }
     case 'inventory_items': {
       const ok = await refs('bags', 'bag_id');
