@@ -39,6 +39,7 @@ import { QrCode, qrSvg } from '../components/QrCode';
 import { formatDate, formatNumber, parseDecimal, UNIT_LABELS } from '../format';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
+import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 import { useProgressive } from '../useProgressive';
 
@@ -532,6 +533,7 @@ export function BoxesSection(props: {
     props.initial ?? null,
   );
   const [feedback, setFeedback] = useState<Feedback>(null);
+  useBack(open !== null, () => setOpen(null));
   const { data, error } = useLoader(() => boxes.list(), [open]);
 
   const scan = async () => {

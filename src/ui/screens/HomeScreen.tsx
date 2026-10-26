@@ -345,6 +345,7 @@ export function HomeScreen() {
             accessibilityLabel="Voir tout : plan d’action, à racheter et péremptions"
             onPress={() => navigation.open('plan')}
             hitSlop={12}
+            style={styles.seeAll}
           >
             <Text style={styles.link}>Voir tout</Text>
           </Pressable>
@@ -549,9 +550,14 @@ function buildTodos(data: HomeData, navigation: Navigation): Todo[] {
   return todos;
 }
 
-/** « 45 k » au-delà de 10 000 : tient dans une colonne étroite. */
+/**
+ * Valeur entière, comme dans les Stocks ; « 1,2 M » au-delà du million pour
+ * tenir dans la colonne (le texte rétrécit sinon).
+ */
 function compact(n: number): string {
-  return n >= 10000 ? `${formatNumber(n / 1000, 0)} k` : formatNumber(n, 0);
+  return n >= 1_000_000
+    ? `${formatNumber(n / 1_000_000, 1)} M`
+    : formatNumber(n, 0);
 }
 
 /** Une ressource dans la carte Autonomie : valeur et part de l'objectif. */
@@ -609,6 +615,8 @@ function QuickLink(props: {
 }
 
 const styles = StyleSheet.create({
+  // Cible d'au moins 44 px de haut, sans changer la ligne de titre.
+  seeAll: { minHeight: 44, justifyContent: 'center', marginVertical: -12 },
   page: {
     paddingHorizontal: sizes.screenPadding,
     paddingBottom: space.xl,

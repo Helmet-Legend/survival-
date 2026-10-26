@@ -157,21 +157,24 @@ export function KitScreen() {
         le kit du guide officiel « Tous responsables ».
       </Text>
 
-      <View style={styles.chips}>
-        <Chip
-          label="Maison"
-          selected={data.kind === 'home'}
-          onPress={() => setScope('home')}
-        />
-        {data.bagList.map(b => (
+      {/* Maison ou un sac : rien à choisir tant qu'il n'y a pas de sac. */}
+      {data.bagList.length > 0 ? (
+        <View style={styles.chips}>
           <Chip
-            key={b.id}
-            label={b.name}
-            selected={bagId === b.id}
-            onPress={() => setScope(b.id)}
+            label="Maison"
+            selected={data.kind === 'home'}
+            onPress={() => setScope('home')}
           />
-        ))}
-      </View>
+          {data.bagList.map(b => (
+            <Chip
+              key={b.id}
+              label={b.name}
+              selected={bagId === b.id}
+              onPress={() => setScope(b.id)}
+            />
+          ))}
+        </View>
+      ) : null}
 
       {data.kind === 'bag' ? (
         <BagKit
