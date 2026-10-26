@@ -83,7 +83,8 @@ class ScanActivity : AppCompatActivity() {
                             BarcodeFormat.DATA_MATRIX,
                             // Étiquettes des boîtes de rangement Fenrir.
                             BarcodeFormat.QR_CODE),
-                DecodeHintType.TRY_HARDER to true))
+                DecodeHintType.TRY_HARDER to true,
+                DecodeHintType.ALSO_INVERTED to true))
       }
   }
 
@@ -109,6 +110,9 @@ class ScanActivity : AppCompatActivity() {
               options.tryHarder = true
               options.tryRotate = true
               options.tryDownscale = true
+              // Codes imprimés en blanc sur fond noir (fréquent sur les
+              // médicaments) : désactivé par défaut dans zxing-cpp.
+              options.tryInvert = true
               // Texte brut : les séparateurs GS1 (GS) restent dans le texte.
               options.textMode = CppReader.TextMode.PLAIN
             }
