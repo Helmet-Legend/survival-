@@ -42,6 +42,40 @@ import {
 const HANDSHAKE_MS = 30_000;
 const TRANSFER_MS = 180_000;
 
+/**
+ * Taille visée d'un paquet de modifications (JSON, en caractères). Une fois
+ * chiffré et encodé, il reste bien sous la limite de 64 Mo par message du
+ * réseau, même avec beaucoup de pages de documents.
+ */
+export const PART_CHARS = 8_000_000;
+/** Garde-fou : nombre de paquets annoncé accepté. */
+const MAX_PARTS = 10_000;
+
+/**
+ * Découpe un envoi en paquets d'environ `budget` caractères, sans couper une
+ * ligne. Chaque paquet garde l'en-tête (format, appareil, horloge).
+ */
+export function splitPayload(
+  payload: SyncPayload,
+  budget: number = PART_CHARS,
+): SyncPayload[] {
+  const parts: SyncPayload[] = [];
+  let rows: SyncPayload['rows'] = [];
+  let size = 0;
+  for (const row of payload.rows) {
+    const length = JSON.stringify(row).length;
+    if (rows.length > 0 && size + length > budget) {
+      parts.push({ ...payload, rows });
+      rows = [];
+      size = 0;
+    }
+    rows.push(row);
+    size += length;
+  }
+  parts.push({ ...payload, rows });
+  return parts;
+}
+
 export interface ExchangeResult {
   peer: Peer;
   /** Première association avec ce téléphone. */
@@ -58,6 +92,8 @@ export interface ExchangeContext {
   db: SqlDatabase;
   random: RandomSource;
   now?: () => number;
+  /** Taille des paquets envoyés (tests). */
+  partChars?: number;
 }
 
 async function receiveJson(channel: Channel, timeoutMs: number) {
@@ -138,6 +174,35 @@ async function saveOptions(
   );
 }
 
+/**
+ * Modifications de l'autre téléphone, en un ou plusieurs paquets, remises
+ * en un seul envoi (validé ensuite comme un tout).
+ */
+async function receiveChanges(
+  channel: Channel,
+  session: SecureSession,
+): Promise<unknown> {
+  const first = await receiveSealed(channel, session, 'changes', TRANSFER_MS);
+  const total = first.parts === undefined ? 1 : Number(first.parts);
+  if (!Number.isInteger(total) || total < 1 || total > MAX_PARTS) {
+    throw new SecureError('INVALID_MESSAGE', 'Envoi découpé invalide');
+  }
+  if (total === 1) {
+    return first.payload;
+  }
+  const head = first.payload as { rows?: unknown } | null;
+  const rows: unknown[] = Array.isArray(head?.rows) ? [...head.rows] : [];
+  for (let i = 1; i < total; i++) {
+    const next = await receiveSealed(channel, session, 'changes', TRANSFER_MS);
+    const part = next.payload as { rows?: unknown } | null;
+    if (next.part !== i || !Array.isArray(part?.rows)) {
+      throw new SecureError('INVALID_MESSAGE', 'Paquet manquant ou désordonné');
+    }
+    rows.push(...part.rows);
+  }
+  return { ...(first.payload as object), rows };
+}
+
 /** Échange chiffré des modifications, une fois les clés établies. */
 async function transfer(
   ctx: ExchangeContext,
@@ -172,16 +237,21 @@ async function transfer(
     const since = typeof want.since === 'string' ? want.since : null;
 
     const sent: SyncPayload = await exportChanges(db, options, since, now());
-    await sendSealed(channel, session, { t: 'changes', payload: sent });
-    const incoming = await receiveSealed(
-      channel,
-      session,
-      'changes',
-      TRANSFER_MS,
-    );
+    // Un seul paquet : message identique à celui des versions précédentes.
+    const parts = splitPayload(sent, ctx.partChars);
+    for (const [i, part] of parts.entries()) {
+      await sendSealed(
+        channel,
+        session,
+        parts.length === 1
+          ? { t: 'changes', payload: part }
+          : { t: 'changes', payload: part, part: i, parts: parts.length },
+      );
+    }
+    const incoming = await receiveChanges(channel, session);
     let received: SyncReport;
     try {
-      received = await applyRemoteChanges(db, incoming.payload, {
+      received = await applyRemoteChanges(db, incoming, {
         ...options,
         sent,
         now: now(),
