@@ -19,7 +19,7 @@ import {
   SearchX,
   Trash2,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Image,
   Modal,
@@ -92,6 +92,7 @@ import {
 } from '../theme';
 import { PROFILES, packageSummary, unitLabel } from '../itemProfiles';
 import { useLoader } from '../useLoader';
+import { ScrollEndContext, useProgressive } from '../useProgressive';
 import { ArmorySection } from './ArmorySection';
 import { BAG_COLOR, BagHeader, BagsSection } from './BagsSection';
 import { BOX_COLOR, BoxesSection } from './BoxesSection';
@@ -367,6 +368,28 @@ export function StockScreen() {
 
   const today = localToday();
   const showCategories = filter === 'all' && query.trim() === '';
+  // Lignes dessinées au fil du défilement ; remis à zéro à chaque liste.
+
+  const rowActions = useRef<RowActions>(null as unknown as RowActions);
+  rowActions.current = {
+    toggle: id => {
+      setExpanded(current => (current === id ? null : id));
+      setFeedback(null);
+    },
+    consume: quickConsume,
+    collapse: () => setExpanded(null),
+    changed: async message => {
+      setFeedback(message);
+      await reload();
+    },
+  };
+  const [scrollTick, setScrollTick] = useState(0);
+  const progressive = useProgressive(
+    data?.items.length ?? 0,
+    [filter, bagId, query].join('|'),
+    scrollTick,
+  );
+  const lastHeight = useRef(0);
 
   // Sans arme ni article d'armement, pas de carte « 0 munition » dans la vue
   // d'ensemble ; la puce Armement reste pour en enregistrer une.
@@ -379,518 +402,453 @@ export function StockScreen() {
   );
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.page}
-      keyboardShouldPersistTaps="handled"
-    >
+    <ScrollEndContext.Provider value={scrollTick}>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-      >
-        <Chip
-          label="Tous"
-          selected={filter === 'all'}
-          onPress={() => showFilter('all')}
-        />
-        <Chip
-          label={
-            data && watchCount(data.all) > 0
-              ? `À surveiller · ${watchCount(data.all)}`
-              : 'À surveiller'
+        contentContainerStyle={styles.page}
+        keyboardShouldPersistTaps="handled"
+        testID="stock-scroll"
+        scrollEventThrottle={100}
+        onScroll={({ nativeEvent: e }) => {
+          // Bas de page proche : la liste affichée s'allonge (une fois par
+          // hauteur de contenu).
+          const height = e.contentSize.height;
+          if (
+            e.layoutMeasurement.height + e.contentOffset.y >= height - 800 &&
+            height !== lastHeight.current
+          ) {
+            lastHeight.current = height;
+            setScrollTick(t => t + 1);
           }
-          selected={isWatch}
-          onPress={() => showFilter('watch')}
-        />
-        {STOCK_ORDER.map(c => (
+        }}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
           <Chip
-            key={c}
-            label={CATEGORY_LABELS[c]}
-            selected={filter === c}
-            onPress={() => showFilter(c)}
+            label="Tous"
+            selected={filter === 'all'}
+            onPress={() => showFilter('all')}
           />
-        ))}
-        <Chip
-          label="Sacs"
-          selected={isBags}
-          onPress={() => showFilter('bags')}
-        />
-        <Chip
-          label="Boîtes"
-          selected={isBoxes}
-          onPress={() => showFilter('boxes')}
-        />
-        <Chip
-          label="Documents"
-          selected={isDocs}
-          onPress={() => showFilter('documents')}
-        />
-      </ScrollView>
-
-      {isDocs && data ? (
-        <>
-          {feedback ? <Notice {...feedback} /> : null}
-          {error ? <Notice tone="error" message={error} /> : null}
-          <DocumentsSection
-            documents={data.docs}
-            onChanged={async message => {
-              setFeedback(message);
-              await reload();
-            }}
+          <Chip
+            label={
+              data && watchCount(data.all) > 0
+                ? `À surveiller · ${watchCount(data.all)}`
+                : 'À surveiller'
+            }
+            selected={isWatch}
+            onPress={() => showFilter('watch')}
           />
-        </>
-      ) : null}
-
-      {isBags && !inBag && data ? (
-        <>
-          {feedback ? <Notice {...feedback} /> : null}
-          {error ? <Notice tone="error" message={error} /> : null}
-          <BagsSection
-            bags={data.bags}
-            onOpen={id => {
-              setExpanded(null);
-              setBagId(id);
-            }}
-            onChanged={async message => {
-              setFeedback(message);
-              await reload();
-            }}
+          {STOCK_ORDER.map(c => (
+            <Chip
+              key={c}
+              label={CATEGORY_LABELS[c]}
+              selected={filter === c}
+              onPress={() => showFilter(c)}
+            />
+          ))}
+          <Chip
+            label="Sacs"
+            selected={isBags}
+            onPress={() => showFilter('bags')}
           />
-        </>
-      ) : null}
-
-      {inBag && data?.bag ? (
-        <BagHeader
-          bag={data.bag}
-          onBack={() => {
-            setFeedback(null);
-            setBagId(null);
-          }}
-          onChanged={async message => {
-            setFeedback(message);
-            await reload();
-          }}
-          onDeleted={async message => {
-            setFeedback(message);
-            setBagId(null);
-            await reload();
-          }}
-        />
-      ) : null}
-
-      {isBoxes ? <BoxesSection /> : null}
-
-      {isDocs || isBoxes || (isBags && !inBag) ? null : (
-        <>
-          <SearchField
-            label="Rechercher un article"
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Rechercher un article…"
+          <Chip
+            label="Boîtes"
+            selected={isBoxes}
+            onPress={() => showFilter('boxes')}
           />
+          <Chip
+            label="Documents"
+            selected={isDocs}
+            onPress={() => showFilter('documents')}
+          />
+        </ScrollView>
 
-          {feedback ? <Notice {...feedback} /> : null}
-          {error ? <Notice tone="error" message={error} /> : null}
-
-          <View style={styles.row}>
-            <Button
-              compact
-              variant="primary"
-              icon={Plus}
-              label={
-                filter === 'all' || isWatch ? 'Ajouter un article' : 'Ajouter'
-              }
-              style={styles.grow}
-              accessibilityLabel={
-                filter === 'all' || isWatch
-                  ? '+ Ajouter un article'
-                  : filter === 'bags'
-                  ? '+ Ajouter dans le sac'
-                  : `+ Ajouter : ${CATEGORY_TITLES[filter]}`
-              }
-              onPress={() => {
-                setFeedback(null);
-                if (filter === 'all' || filter === 'bags' || isWatch) {
-                  setChoosing(true);
-                } else {
-                  addInto(filter);
-                }
+        {isDocs && data ? (
+          <>
+            {feedback ? <Notice {...feedback} /> : null}
+            {error ? <Notice tone="error" message={error} /> : null}
+            <DocumentsSection
+              documents={data.docs}
+              onChanged={async message => {
+                setFeedback(message);
+                await reload();
               }}
             />
-            {inBag ? null : (
+          </>
+        ) : null}
+
+        {isBags && !inBag && data ? (
+          <>
+            {feedback ? <Notice {...feedback} /> : null}
+            {error ? <Notice tone="error" message={error} /> : null}
+            <BagsSection
+              bags={data.bags}
+              onOpen={id => {
+                setExpanded(null);
+                setBagId(id);
+              }}
+              onChanged={async message => {
+                setFeedback(message);
+                await reload();
+              }}
+            />
+          </>
+        ) : null}
+
+        {inBag && data?.bag ? (
+          <BagHeader
+            bag={data.bag}
+            onBack={() => {
+              setFeedback(null);
+              setBagId(null);
+            }}
+            onChanged={async message => {
+              setFeedback(message);
+              await reload();
+            }}
+            onDeleted={async message => {
+              setFeedback(message);
+              setBagId(null);
+              await reload();
+            }}
+          />
+        ) : null}
+
+        {isBoxes ? <BoxesSection /> : null}
+
+        {isDocs || isBoxes || (isBags && !inBag) ? null : (
+          <>
+            <SearchField
+              label="Rechercher un article"
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Rechercher un article…"
+            />
+
+            {feedback ? <Notice {...feedback} /> : null}
+            {error ? <Notice tone="error" message={error} /> : null}
+
+            <View style={styles.row}>
               <Button
                 compact
-                icon={ScanBarcode}
-                label="Scanner"
-                accessibilityLabel="Scanner des codes-barres"
-                onPress={() => navigation.open('scan')}
+                variant="primary"
+                icon={Plus}
+                label={
+                  filter === 'all' || isWatch ? 'Ajouter un article' : 'Ajouter'
+                }
+                style={styles.grow}
+                accessibilityLabel={
+                  filter === 'all' || isWatch
+                    ? '+ Ajouter un article'
+                    : filter === 'bags'
+                    ? '+ Ajouter dans le sac'
+                    : `+ Ajouter : ${CATEGORY_TITLES[filter]}`
+                }
+                onPress={() => {
+                  setFeedback(null);
+                  if (filter === 'all' || filter === 'bags' || isWatch) {
+                    setChoosing(true);
+                  } else {
+                    addInto(filter);
+                  }
+                }}
               />
-            )}
-            <IconButton
-              icon={MoreHorizontal}
-              label="Plus d’actions"
-              color={menuOpen ? colors.primary : colors.text}
-              onPress={() => setMenuOpen(!menuOpen)}
-            />
-          </View>
-          {menuOpen ? (
-            <View style={styles.menu}>
               {inBag ? null : (
                 <Button
-                  variant="ghost"
-                  icon={History}
-                  label="Historique des mouvements"
-                  onPress={() => {
-                    setMenuOpen(false);
-                    navigation.open('history');
-                  }}
+                  compact
+                  icon={ScanBarcode}
+                  label="Scanner"
+                  accessibilityLabel="Scanner des codes-barres"
+                  onPress={() => navigation.open('scan')}
                 />
               )}
-              <Button
-                variant="danger"
-                icon={Trash2}
-                label="Jeter les périmés"
-                disabled={!data?.hasExpired}
-                onPress={() => {
-                  setMenuOpen(false);
-                  setConfirmDiscard(true);
-                }}
+              <IconButton
+                icon={MoreHorizontal}
+                label="Plus d’actions"
+                color={menuOpen ? colors.primary : colors.text}
+                onPress={() => setMenuOpen(!menuOpen)}
               />
             </View>
-          ) : null}
-
-          {confirmDiscard ? (
-            <Panel accent={colors.danger} style={styles.dialog}>
-              <Text style={text.body}>
-                Supprimer définitivement les lots périmés ?
-              </Text>
-              <View style={styles.row}>
+            {menuOpen ? (
+              <View style={styles.menu}>
+                {inBag ? null : (
+                  <Button
+                    variant="ghost"
+                    icon={History}
+                    label="Historique des mouvements"
+                    onPress={() => {
+                      setMenuOpen(false);
+                      navigation.open('history');
+                    }}
+                  />
+                )}
                 <Button
                   variant="danger"
-                  label="Jeter"
+                  icon={Trash2}
+                  label="Jeter les périmés"
+                  disabled={!data?.hasExpired}
                   onPress={() => {
-                    void discard();
+                    setMenuOpen(false);
+                    setConfirmDiscard(true);
                   }}
                 />
-                <Button
-                  variant="ghost"
-                  label="Annuler"
-                  onPress={() => setConfirmDiscard(false)}
-                />
               </View>
-            </Panel>
-          ) : null}
+            ) : null}
 
-          <CategoryChooser
-            open={choosing}
-            onClose={() => setChoosing(false)}
-            onPick={addInto}
-          />
+            {confirmDiscard ? (
+              <Panel accent={colors.danger} style={styles.dialog}>
+                <Text style={text.body}>
+                  Supprimer définitivement les lots périmés ?
+                </Text>
+                <View style={styles.row}>
+                  <Button
+                    variant="danger"
+                    label="Jeter"
+                    onPress={() => {
+                      void discard();
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    label="Annuler"
+                    onPress={() => setConfirmDiscard(false)}
+                  />
+                </View>
+              </Panel>
+            ) : null}
 
-          {showCategories && data
-            ? visibleCategories.map(c => {
-                const inCategory = data.all.filter(i => i.category === c);
-                const amount = categoryAmount(c, inCategory);
-                const alerts = inCategory.filter(
-                  i => itemState(i, today) !== null,
-                ).length;
-                return (
-                  <Pressable
-                    key={c}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${CATEGORY_LABELS[c]} : ${
-                      amount ? `${amount}, ` : ''
-                    }${
-                      c === 'weapon'
-                        ? `${data.weapons.length} arme${
-                            data.weapons.length > 1 ? 's' : ''
-                          }, `
-                        : ''
-                    }${articles(inCategory.length)}${
-                      alerts > 0 ? `, ${alerts} à vérifier` : ''
-                    }`}
-                    onPress={() => setFilter(c)}
-                    style={({ pressed }) => [
-                      styles.category,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <IconTile
-                      icon={CATEGORY_ICONS[c]}
-                      color={CATEGORY_COLORS[c]}
-                    />
-                    <View style={styles.grow}>
-                      <Text style={text.h3}>{CATEGORY_LABELS[c]}</Text>
-                      {amount ? (
-                        <Text style={styles.amount}>{amount}</Text>
-                      ) : null}
-                      <Text style={text.muted}>
-                        {c === 'weapon'
+            <CategoryChooser
+              open={choosing}
+              onClose={() => setChoosing(false)}
+              onPick={addInto}
+            />
+
+            {showCategories && data
+              ? visibleCategories.map(c => {
+                  const inCategory = data.all.filter(i => i.category === c);
+                  const amount = categoryAmount(c, inCategory);
+                  const alerts = inCategory.filter(
+                    i => itemState(i, today) !== null,
+                  ).length;
+                  return (
+                    <Pressable
+                      key={c}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${CATEGORY_LABELS[c]} : ${
+                        amount ? `${amount}, ` : ''
+                      }${
+                        c === 'weapon'
                           ? `${data.weapons.length} arme${
                               data.weapons.length > 1 ? 's' : ''
-                            } · `
-                          : ''}
-                        {articles(inCategory.length)}
-                        {alerts > 0 ? (
-                          <Text style={styles.warn}>
-                            {' '}
-                            · {alerts} à vérifier
-                          </Text>
+                            }, `
+                          : ''
+                      }${articles(inCategory.length)}${
+                        alerts > 0 ? `, ${alerts} à vérifier` : ''
+                      }`}
+                      onPress={() => setFilter(c)}
+                      style={({ pressed }) => [
+                        styles.category,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <IconTile
+                        icon={CATEGORY_ICONS[c]}
+                        color={CATEGORY_COLORS[c]}
+                      />
+                      <View style={styles.grow}>
+                        <Text style={text.h3}>{CATEGORY_LABELS[c]}</Text>
+                        {amount ? (
+                          <Text style={styles.amount}>{amount}</Text>
                         ) : null}
-                      </Text>
-                    </View>
-                    <ChevronRight color={colors.text} size={22} />
-                  </Pressable>
-                );
-              })
-            : null}
-
-          {showCategories && data ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sacs d’évacuation : ${data.bags.length} sac${
-                data.bags.length > 1 ? 's' : ''
-              }${
-                bagAlerts(data.bags) > 0
-                  ? `, ${bagAlerts(data.bags)} à vérifier`
-                  : ''
-              }`}
-              onPress={() => showFilter('bags')}
-              style={({ pressed }) => [
-                styles.category,
-                pressed && styles.pressed,
-              ]}
-            >
-              <IconTile icon={Backpack} color={BAG_COLOR} />
-              <View style={styles.grow}>
-                <Text style={text.h3}>Sacs d’évacuation</Text>
-                <Text style={text.muted}>
-                  {data.bags.length} sac{data.bags.length > 1 ? 's' : ''}
-                  {bagAlerts(data.bags) > 0 ? (
-                    <Text style={styles.warn}>
-                      {' '}
-                      · {bagAlerts(data.bags)} à vérifier
-                    </Text>
-                  ) : null}
-                </Text>
-              </View>
-              <ChevronRight color={colors.text} size={22} />
-            </Pressable>
-          ) : null}
-
-          {showCategories && data ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Boîtes : ${boxCount(data.boxes)}`}
-              onPress={() => showFilter('boxes')}
-              style={({ pressed }) => [
-                styles.category,
-                pressed && styles.pressed,
-              ]}
-            >
-              <IconTile icon={BoxIcon} color={BOX_COLOR} />
-              <View style={styles.grow}>
-                <Text style={text.h3}>Boîtes</Text>
-                <Text style={text.muted}>{boxCount(data.boxes)}</Text>
-              </View>
-              <ChevronRight color={colors.text} size={22} />
-            </Pressable>
-          ) : null}
-
-          {showCategories && data ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Documents : ${data.docs.length} document${
-                data.docs.length > 1 ? 's' : ''
-              }${
-                renewCount(data.docs) > 0
-                  ? `, ${renewCount(data.docs)} à renouveler`
-                  : ''
-              }`}
-              onPress={() => showFilter('documents')}
-              style={({ pressed }) => [
-                styles.category,
-                pressed && styles.pressed,
-              ]}
-            >
-              <IconTile icon={FolderLock} color={colors.cyan} />
-              <View style={styles.grow}>
-                <Text style={text.h3}>Documents</Text>
-                <Text style={text.muted}>
-                  {data.docs.length} document{data.docs.length > 1 ? 's' : ''}
-                  {renewCount(data.docs) > 0 ? (
-                    <Text style={styles.warn}>
-                      {' '}
-                      · {renewCount(data.docs)} à renouveler
-                    </Text>
-                  ) : null}
-                </Text>
-              </View>
-              <ChevronRight color={colors.text} size={22} />
-            </Pressable>
-          ) : null}
-
-          {data &&
-          filter !== 'all' &&
-          filter !== 'watch' &&
-          filter !== 'bags' ? (
-            <CategoryBanner
-              category={filter}
-              detail={[
-                categoryAmount(
-                  filter,
-                  data.all.filter(i => i.category === filter),
-                ),
-                articles(data.all.filter(i => i.category === filter).length),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            />
-          ) : null}
-
-          {filter === 'weapon' && query.trim() === '' && data ? (
-            <>
-              <ArmorySection
-                weapons={data.weapons}
-                ammo={data.items}
-                onOpenItem={id => {
-                  setFeedback(null);
-                  setExpanded(id);
-                }}
-                onChanged={async message => {
-                  setFeedback(message);
-                  await reload();
-                }}
-              />
-              <SectionTitle title="Munitions" />
-            </>
-          ) : null}
-
-          {!showCategories && data?.items.length === 0 ? (
-            <EmptyState
-              icon={query ? SearchX : PackageOpen}
-              title={
-                query
-                  ? 'Aucun article ne correspond.'
-                  : inBag
-                  ? 'Ce sac est vide.'
-                  : isWatch
-                  ? 'Rien à surveiller : aucun lot périmé, bientôt périmé ou sous le minimum.'
-                  : 'Aucun article dans cette catégorie.'
-              }
-              message={
-                query
-                  ? 'Vérifiez l’orthographe ou changez de catégorie.'
-                  : undefined
-              }
-            />
-          ) : null}
-
-          {!showCategories
-            ? data?.items.map(item => {
-                const open = expanded === item.id;
-                const state = itemState(item, today);
-                const stripe = state ? toneColor[state.tone] : colors.border;
-                const Chevron = open ? ChevronDown : ChevronRight;
-                return (
-                  <View
-                    key={item.id}
-                    style={[styles.item, open && styles.itemOpen]}
-                  >
-                    <View
-                      style={[styles.stripe, { backgroundColor: stripe }]}
-                    />
-                    <View style={styles.itemBody}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ expanded: open }}
-                        accessibilityLabel={`${item.name}, ${formatNumber(
-                          item.usableQuantity,
-                        )} ${itemUnitLabel(item)}`}
-                        onPress={() => {
-                          setExpanded(open ? null : item.id);
-                          setFeedback(null);
-                        }}
-                        style={styles.itemHead}
-                      >
-                        <View style={styles.grow}>
-                          <Text style={[styles.itemName, open && styles.open]}>
-                            {item.name}
-                            {item.isCritical ? (
-                              <Text style={styles.critical}> ●</Text>
-                            ) : null}
-                          </Text>
-                          <Text style={text.subtle}>
-                            {itemTypeLabel(item) ??
-                              CATEGORY_LABELS[item.category]}
-                            {item.caliber ? ` · ${item.caliber}` : ''}
-                            {packageSummary(item, item.usableQuantity)
-                              ? ` · ${packageSummary(
-                                  item,
-                                  item.usableQuantity,
-                                )}`
-                              : ''}
-                            {item.location && item.category !== 'weapon'
-                              ? ` · ${item.location}`
-                              : ''}
-                          </Text>
-                        </View>
-                        <View style={styles.itemSide}>
-                          <Text style={styles.qty}>
-                            {formatNumber(item.usableQuantity)}{' '}
-                            <Text style={styles.qtyUnit}>
-                              {itemUnitLabel(item)}
-                            </Text>
-                          </Text>
-                          {state ? (
-                            <StatusChip tone={state.tone} label={state.label} />
-                          ) : item.nextExpiration ? (
-                            <Text style={text.subtle}>
-                              {formatRelativeDays(
-                                daysBetween(today, item.nextExpiration),
-                              )}
+                        <Text style={text.muted}>
+                          {c === 'weapon'
+                            ? `${data.weapons.length} arme${
+                                data.weapons.length > 1 ? 's' : ''
+                              } · `
+                            : ''}
+                          {articles(inCategory.length)}
+                          {alerts > 0 ? (
+                            <Text style={styles.warn}>
+                              {' '}
+                              · {alerts} à vérifier
                             </Text>
                           ) : null}
-                        </View>
-                        {item.usableQuantity >= quickStep(item) ? (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Retirer ${formatNumber(
-                              quickStep(item),
-                            )} ${itemUnitLabel(item)} de ${item.name}`}
-                            hitSlop={6}
-                            onPress={() => {
-                              void quickConsume(item);
-                            }}
-                            style={({ pressed }) => [
-                              styles.quick,
-                              pressed && styles.pressed,
-                            ]}
-                          >
-                            <Minus color={colors.text} size={18} />
-                          </Pressable>
-                        ) : null}
-                        <Chevron color={colors.textMuted} size={20} />
-                      </Pressable>
-                      {open && data.detail ? (
-                        <ItemDetail
-                          item={data.detail.item}
-                          lots={data.detail.lots}
-                          onDeleted={() => setExpanded(null)}
-                          onChanged={async message => {
-                            setFeedback(message);
-                            await reload();
-                          }}
-                        />
-                      ) : null}
-                    </View>
-                  </View>
-                );
-              })
-            : null}
-        </>
-      )}
-    </ScrollView>
+                        </Text>
+                      </View>
+                      <ChevronRight color={colors.text} size={22} />
+                    </Pressable>
+                  );
+                })
+              : null}
+
+            {showCategories && data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Sacs d’évacuation : ${
+                  data.bags.length
+                } sac${data.bags.length > 1 ? 's' : ''}${
+                  bagAlerts(data.bags) > 0
+                    ? `, ${bagAlerts(data.bags)} à vérifier`
+                    : ''
+                }`}
+                onPress={() => showFilter('bags')}
+                style={({ pressed }) => [
+                  styles.category,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <IconTile icon={Backpack} color={BAG_COLOR} />
+                <View style={styles.grow}>
+                  <Text style={text.h3}>Sacs d’évacuation</Text>
+                  <Text style={text.muted}>
+                    {data.bags.length} sac{data.bags.length > 1 ? 's' : ''}
+                    {bagAlerts(data.bags) > 0 ? (
+                      <Text style={styles.warn}>
+                        {' '}
+                        · {bagAlerts(data.bags)} à vérifier
+                      </Text>
+                    ) : null}
+                  </Text>
+                </View>
+                <ChevronRight color={colors.text} size={22} />
+              </Pressable>
+            ) : null}
+
+            {showCategories && data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Boîtes : ${boxCount(data.boxes)}`}
+                onPress={() => showFilter('boxes')}
+                style={({ pressed }) => [
+                  styles.category,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <IconTile icon={BoxIcon} color={BOX_COLOR} />
+                <View style={styles.grow}>
+                  <Text style={text.h3}>Boîtes</Text>
+                  <Text style={text.muted}>{boxCount(data.boxes)}</Text>
+                </View>
+                <ChevronRight color={colors.text} size={22} />
+              </Pressable>
+            ) : null}
+
+            {showCategories && data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Documents : ${data.docs.length} document${
+                  data.docs.length > 1 ? 's' : ''
+                }${
+                  renewCount(data.docs) > 0
+                    ? `, ${renewCount(data.docs)} à renouveler`
+                    : ''
+                }`}
+                onPress={() => showFilter('documents')}
+                style={({ pressed }) => [
+                  styles.category,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <IconTile icon={FolderLock} color={colors.cyan} />
+                <View style={styles.grow}>
+                  <Text style={text.h3}>Documents</Text>
+                  <Text style={text.muted}>
+                    {data.docs.length} document{data.docs.length > 1 ? 's' : ''}
+                    {renewCount(data.docs) > 0 ? (
+                      <Text style={styles.warn}>
+                        {' '}
+                        · {renewCount(data.docs)} à renouveler
+                      </Text>
+                    ) : null}
+                  </Text>
+                </View>
+                <ChevronRight color={colors.text} size={22} />
+              </Pressable>
+            ) : null}
+
+            {data &&
+            filter !== 'all' &&
+            filter !== 'watch' &&
+            filter !== 'bags' ? (
+              <CategoryBanner
+                category={filter}
+                detail={[
+                  categoryAmount(
+                    filter,
+                    data.all.filter(i => i.category === filter),
+                  ),
+                  articles(data.all.filter(i => i.category === filter).length),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              />
+            ) : null}
+
+            {filter === 'weapon' && query.trim() === '' && data ? (
+              <>
+                <ArmorySection
+                  weapons={data.weapons}
+                  ammo={data.items}
+                  onOpenItem={id => {
+                    setFeedback(null);
+                    setExpanded(id);
+                  }}
+                  onChanged={async message => {
+                    setFeedback(message);
+                    await reload();
+                  }}
+                />
+                <SectionTitle title="Munitions" />
+              </>
+            ) : null}
+
+            {!showCategories && data?.items.length === 0 ? (
+              <EmptyState
+                icon={query ? SearchX : PackageOpen}
+                title={
+                  query
+                    ? 'Aucun article ne correspond.'
+                    : inBag
+                    ? 'Ce sac est vide.'
+                    : isWatch
+                    ? 'Rien à surveiller : aucun lot périmé, bientôt périmé ou sous le minimum.'
+                    : 'Aucun article dans cette catégorie.'
+                }
+                message={
+                  query
+                    ? 'Vérifiez l’orthographe ou changez de catégorie.'
+                    : undefined
+                }
+              />
+            ) : null}
+
+            {!showCategories && data ? (
+              <>
+                {data.items.slice(0, progressive.visible).map(item => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    open={expanded === item.id}
+                    detail={expanded === item.id ? data.detail : null}
+                    today={today}
+                    actions={rowActions}
+                  />
+                ))}
+                {progressive.rest > 0 ? (
+                  <Button
+                    variant="ghost"
+                    label={`Afficher la suite (${progressive.rest})`}
+                    onPress={progressive.more}
+                  />
+                ) : null}
+              </>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
+    </ScrollEndContext.Provider>
   );
 }
 
@@ -1002,6 +960,124 @@ function ItemMovements(props: { itemId: string; lots: InventoryLot[] }) {
     </View>
   );
 }
+
+/** Ce dont une ligne d'article a besoin de l'écran, sans la redessiner. */
+interface RowActions {
+  toggle(id: string): void;
+  consume(item: ItemSummary): Promise<void>;
+  collapse(): void;
+  changed(message: Feedback): Promise<void>;
+}
+
+type ItemDetailData = { item: InventoryItem; lots: InventoryLot[] };
+
+/** Clé d'une ligne : elle ne se redessine que si l'article a changé. */
+function rowKey(item: ItemSummary): string {
+  return [
+    item.id,
+    item.updatedAt,
+    item.totalQuantity,
+    item.usableQuantity,
+    item.lotCount,
+    item.nextExpiration,
+  ].join('|');
+}
+
+/** Une ligne de la liste des articles, dépliable. */
+const ItemRow = React.memo(
+  function ItemRow(props: {
+    item: ItemSummary;
+    open: boolean;
+    detail: ItemDetailData | null;
+    today: string;
+    actions: React.MutableRefObject<RowActions>;
+  }) {
+    const { item, open, today } = props;
+    const state = itemState(item, today);
+    const stripe = state ? toneColor[state.tone] : colors.border;
+    const Chevron = open ? ChevronDown : ChevronRight;
+    return (
+      <View key={item.id} style={[styles.item, open && styles.itemOpen]}>
+        <View style={[styles.stripe, { backgroundColor: stripe }]} />
+        <View style={styles.itemBody}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={`${item.name}, ${formatNumber(
+              item.usableQuantity,
+            )} ${itemUnitLabel(item)}`}
+            onPress={() => props.actions.current.toggle(item.id)}
+            style={styles.itemHead}
+          >
+            <View style={styles.grow}>
+              <Text style={[styles.itemName, open && styles.open]}>
+                {item.name}
+                {item.isCritical ? (
+                  <Text style={styles.critical}> ●</Text>
+                ) : null}
+              </Text>
+              <Text style={text.subtle}>
+                {itemTypeLabel(item) ?? CATEGORY_LABELS[item.category]}
+                {item.caliber ? ` · ${item.caliber}` : ''}
+                {packageSummary(item, item.usableQuantity)
+                  ? ` · ${packageSummary(item, item.usableQuantity)}`
+                  : ''}
+                {item.location && item.category !== 'weapon'
+                  ? ` · ${item.location}`
+                  : ''}
+              </Text>
+            </View>
+            <View style={styles.itemSide}>
+              <Text style={styles.qty}>
+                {formatNumber(item.usableQuantity)}{' '}
+                <Text style={styles.qtyUnit}>{itemUnitLabel(item)}</Text>
+              </Text>
+              {state ? (
+                <StatusChip tone={state.tone} label={state.label} />
+              ) : item.nextExpiration ? (
+                <Text style={text.subtle}>
+                  {formatRelativeDays(daysBetween(today, item.nextExpiration))}
+                </Text>
+              ) : null}
+            </View>
+            {item.usableQuantity >= quickStep(item) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Retirer ${formatNumber(
+                  quickStep(item),
+                )} ${itemUnitLabel(item)} de ${item.name}`}
+                hitSlop={6}
+                onPress={() => {
+                  void props.actions.current.consume(item);
+                }}
+                style={({ pressed }) => [
+                  styles.quick,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Minus color={colors.text} size={18} />
+              </Pressable>
+            ) : null}
+            <Chevron color={colors.textMuted} size={20} />
+          </Pressable>
+          {open && props.detail ? (
+            <ItemDetail
+              item={props.detail.item}
+              lots={props.detail.lots}
+              onDeleted={() => props.actions.current.collapse()}
+              onChanged={message => props.actions.current.changed(message)}
+            />
+          ) : null}
+        </View>
+      </View>
+    );
+  },
+  (a, b) =>
+    a.open === b.open &&
+    a.detail === b.detail &&
+    a.today === b.today &&
+    rowKey(a.item) === rowKey(b.item),
+);
 
 function ItemDetail(props: {
   item: InventoryItem;

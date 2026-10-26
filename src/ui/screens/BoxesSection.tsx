@@ -17,7 +17,7 @@ import {
   SquareCheck,
   Trash2,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
@@ -40,6 +40,7 @@ import { formatDate, formatNumber, parseDecimal, UNIT_LABELS } from '../format';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { useProgressive } from '../useProgressive';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
 
@@ -218,6 +219,60 @@ function QuantityField(props: {
   );
 }
 
+/** Une ligne de « Qu'y a-t-il dedans ? » ; redessinée seulement si elle change. */
+const PickRow = React.memo(function PickRow(props: {
+  candidate: BoxCandidate;
+  value: number;
+  onSet: (c: BoxCandidate, value: number) => void;
+}) {
+  const { candidate: c, value, onSet } = props;
+  const max = c.loose + c.inBox;
+  const checked = value > 0;
+  const Icon = checked ? SquareCheck : Square;
+  return (
+    <View style={[styles.pick, checked && styles.pickOn]}>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
+        accessibilityLabel={`${c.name} dans la boîte`}
+        onPress={() => onSet(c, checked ? 0 : max)}
+        style={styles.pickMain}
+      >
+        <Icon color={checked ? BOX_COLOR : colors.textMuted} size={24} />
+        <View style={styles.grow}>
+          <Text style={text.body}>{c.name}</Text>
+          <Text style={text.subtle}>
+            {formatNumber(max - value)} {UNIT_LABELS[c.unit]} hors de cette
+            boîte
+          </Text>
+        </View>
+      </Pressable>
+      {checked ? (
+        <QuantityField
+          name={c.name}
+          value={value}
+          max={max}
+          onChange={v => onSet(c, v)}
+        />
+      ) : null}
+    </View>
+  );
+},
+samePick);
+
+function samePick(
+  a: { candidate: BoxCandidate; value: number },
+  b: { candidate: BoxCandidate; value: number },
+): boolean {
+  return (
+    a.value === b.value &&
+    a.candidate.itemId === b.candidate.itemId &&
+    a.candidate.name === b.candidate.name &&
+    a.candidate.loose === b.candidate.loose &&
+    a.candidate.inBox === b.candidate.inBox
+  );
+}
+
 /**
  * « Qu'y a-t-il dedans ? » : on coche les articles du stock rangés dans la
  * boîte (tout ce qui est disponible par défaut), et on règle la quantité
@@ -238,8 +293,13 @@ function FillPanel(props: {
   );
   const target = (c: BoxCandidate) => targets[c.itemId] ?? c.inBox;
   const changed = (data ?? []).filter(c => target(c) !== c.inBox);
-  const set = (c: BoxCandidate, value: number) =>
-    setTargets(t => ({ ...t, [c.itemId]: value }));
+  // Stable : une case cochée ne redessine que sa ligne.
+  const set = useCallback(
+    (c: BoxCandidate, value: number) =>
+      setTargets(t => ({ ...t, [c.itemId]: value })),
+    [],
+  );
+  const progressive = useProgressive(data?.length ?? 0, query);
 
   const save = async () => {
     setError(null);
@@ -277,40 +337,16 @@ function FillPanel(props: {
       {data?.length === 0 ? (
         <Text style={text.subtle}>Aucun article disponible dans le stock.</Text>
       ) : null}
-      {data?.map(c => {
-        const value = target(c);
-        const max = c.loose + c.inBox;
-        const checked = value > 0;
-        const Icon = checked ? SquareCheck : Square;
-        return (
-          <View key={c.itemId} style={[styles.pick, checked && styles.pickOn]}>
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked }}
-              accessibilityLabel={`${c.name} dans la boîte`}
-              onPress={() => set(c, checked ? 0 : max)}
-              style={styles.pickMain}
-            >
-              <Icon color={checked ? BOX_COLOR : colors.textMuted} size={24} />
-              <View style={styles.grow}>
-                <Text style={text.body}>{c.name}</Text>
-                <Text style={text.subtle}>
-                  {formatNumber(max - value)} {UNIT_LABELS[c.unit]} hors de
-                  cette boîte
-                </Text>
-              </View>
-            </Pressable>
-            {checked ? (
-              <QuantityField
-                name={c.name}
-                value={value}
-                max={max}
-                onChange={v => set(c, v)}
-              />
-            ) : null}
-          </View>
-        );
-      })}
+      {(data ?? []).slice(0, progressive.visible).map(c => (
+        <PickRow key={c.itemId} candidate={c} value={target(c)} onSet={set} />
+      ))}
+      {progressive.rest > 0 ? (
+        <Button
+          variant="ghost"
+          label={`Afficher la suite (${progressive.rest})`}
+          onPress={progressive.more}
+        />
+      ) : null}
       <Button
         variant="primary"
         label="Valider"
