@@ -2351,6 +2351,43 @@ describe('photos et documents', () => {
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
   });
 
+  it('scanne les pages d’un document dès sa création', async () => {
+    const scan = jest.fn(async (max: number) =>
+      max >= 2 ? [JPEG, JPEG] : [JPEG],
+    );
+    await openWithCamera({
+      available: true,
+      take: async () => JPEG,
+      pick: async () => null,
+      scan,
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Documents : 0 document'),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter un document'));
+    expect(screen.getByText('Pages du document (0 / 30)')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Scanner le document'));
+    expect(await screen.findByText('Pages du document (2 / 30)')).toBeTruthy();
+    expect(scan).toHaveBeenLastCalledWith(30);
+    // Une page retirée avant l'ajout.
+    await fireEvent.press(screen.getByLabelText('Retirer la page 2'));
+    expect(await screen.findByText('Pages du document (1 / 30)')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Passeport' }));
+    await fireEvent.press(screen.getByText('Ajouter le document'));
+    expect(
+      await screen.findByText('« Passeport » ajouté avec 1 page.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Pages et photos (1 / 30)')).toBeTruthy();
+    expect(screen.getByLabelText('Page 1 de Passeport')).toBeTruthy();
+
+    // D'autres pages depuis la fiche : le scanner reçoit la place restante.
+    await fireEvent.press(screen.getByText('Scanner d’autres pages'));
+    expect(await screen.findByLabelText('Page 3 de Passeport')).toBeTruthy();
+    expect(scan).toHaveBeenLastCalledWith(29);
+  });
+
   it('enregistre un document et signale son renouvellement', async () => {
     await openWithCamera({
       available: true,
@@ -2393,7 +2430,8 @@ describe('photos et documents', () => {
     ).toBeTruthy();
     expect(screen.getByText('N° : 18AB12345')).toBeTruthy();
     await fireEvent.press(screen.getByText('Photographier'));
-    expect(await screen.findByLabelText('Photo 1 de Passeport')).toBeTruthy();
+    expect(await screen.findByLabelText('Page 1 de Passeport')).toBeTruthy();
+    expect(screen.getByText('Pages et photos (1 / 30)')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
     expect(

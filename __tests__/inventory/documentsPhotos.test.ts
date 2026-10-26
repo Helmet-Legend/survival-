@@ -2,7 +2,9 @@ import { prepareDatabase } from '../../src/db/connection';
 import {
   ArmoryRepository,
   DocumentRepository,
+  DOCUMENT_PAGES_MAX,
   PHOTOS_PER_OWNER_MAX,
+  photoLimit,
   PhotoRepository,
 } from '../../src/inventory';
 import { NodeSqliteDb } from '../db/sqlite';
@@ -128,5 +130,18 @@ describe('PhotoRepository', () => {
     await expect(photos.add('weapon', weapon.id, JPEG)).rejects.toMatchObject({
       field: 'photo',
     });
+  });
+
+  it('accepte jusqu’à 30 pages pour un document', async () => {
+    const { docs, photos } = await setup();
+    const doc = await docs.create({ kind: 'other', title: 'Acte' });
+    expect(photoLimit('document')).toBe(DOCUMENT_PAGES_MAX);
+    expect(photoLimit('weapon')).toBe(PHOTOS_PER_OWNER_MAX);
+    for (let i = 0; i < DOCUMENT_PAGES_MAX; i++) {
+      await photos.add('document', doc.id, JPEG);
+    }
+    await expect(photos.add('document', doc.id, JPEG)).rejects.toThrow(
+      '30 pages au maximum',
+    );
   });
 });

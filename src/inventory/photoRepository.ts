@@ -19,6 +19,13 @@ export interface Photo {
 export const PHOTO_MAX_BASE64_LENGTH = 8_000_000;
 /** Assez pour un recto, un verso et quelques détails. */
 export const PHOTOS_PER_OWNER_MAX = 6;
+/** Pages d'un document scanné (acte, contrat, dossier médical). */
+export const DOCUMENT_PAGES_MAX = 30;
+
+/** Nombre maximal de photos ou de pages pour ce propriétaire. */
+export function photoLimit(owner: PhotoOwner): number {
+  return owner === 'document' ? DOCUMENT_PAGES_MAX : PHOTOS_PER_OWNER_MAX;
+}
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
@@ -96,10 +103,13 @@ export class PhotoRepository {
           : 'Article introuvable',
       );
     }
-    if (Number(rows[0].photo_count) >= PHOTOS_PER_OWNER_MAX) {
+    const limit = photoLimit(owner);
+    if (Number(rows[0].photo_count) >= limit) {
       throw new InventoryError(
         'VALIDATION',
-        `${PHOTOS_PER_OWNER_MAX} photos au maximum`,
+        owner === 'document'
+          ? `${limit} pages au maximum`
+          : `${limit} photos au maximum`,
         { field: 'photo' },
       );
     }

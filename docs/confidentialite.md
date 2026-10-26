@@ -1,6 +1,6 @@
 # Politique de confidentialité de Fenrir
 
-Mise à jour : 2026-10-25
+Mise à jour : 2026-10-26
 
 Fenrir ne collecte aucune donnée personnelle. Il n’y a ni compte, ni serveur Fenrir, ni publicité, ni statistiques d’utilisation, ni traceur. Vos données restent chiffrées sur votre téléphone.
 
@@ -13,6 +13,8 @@ Le développeur de Fenrir n’a accès à aucune de ces données et ne peut pas 
 ## Autorisations demandées
 
 Caméra : lire les codes-barres et prendre des photos d’articles ou de documents. Les images restent dans le coffre chiffré.
+
+Scan de documents (facultatif) : sur Android, Fenrir ouvre le scanner de documents des services Google Play ; sur iPhone, celui d’iOS. Les pages sont traitées sur le téléphone et seules celles que vous validez reviennent dans le coffre chiffré. Sur Android, Google reçoit des statistiques techniques sur l’utilisation de ce scanner (performances, erreurs), jamais les images.
 
 Position : afficher votre position à la demande (écran Urgence, carte, points de repère). Elle n’est jamais suivie en arrière-plan ni envoyée par Fenrir. Si vous choisissez de l’envoyer par SMS, c’est votre application de messagerie qui l’envoie, au destinataire que vous choisissez.
 

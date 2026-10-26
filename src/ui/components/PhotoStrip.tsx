@@ -1,8 +1,10 @@
 /**
  * Photos d'une arme ou d'un document : vignettes, affichage en grand,
- * suppression confirmée, ajout depuis l'appareil photo ou la galerie.
+ * suppression confirmée, ajout depuis l'appareil photo ou la galerie. Pour
+ * un document, le scanner du téléphone ajoute des pages nettes et
+ * redressées.
  */
-import { Camera, ImagePlus, Trash2, X } from 'lucide-react-native';
+import { Camera, ImagePlus, ScanLine, Trash2, X } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Image,
@@ -14,11 +16,7 @@ import {
   View,
 } from 'react-native';
 
-import {
-  PHOTOS_PER_OWNER_MAX,
-  type Photo,
-  type PhotoOwner,
-} from '../../inventory';
+import { photoLimit, type Photo, type PhotoOwner } from '../../inventory';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -44,15 +42,23 @@ export function PhotoStrip(props: {
     [props.owner, props.ownerId],
   );
   const list = data ?? [];
-  const full = list.length >= PHOTOS_PER_OWNER_MAX;
+  const limit = photoLimit(props.owner);
+  const full = list.length >= limit;
+  const isDocument = props.owner === 'document';
+  const scan = isDocument ? photoSource.scan : undefined;
 
-  const add = async (from: 'take' | 'pick') => {
+  const add = async (from: 'take' | 'pick' | 'scan') => {
     setError(null);
     setBusy(true);
     try {
-      const base64 = await photoSource[from]();
-      if (base64 !== null) {
+      const images =
+        from === 'scan'
+          ? (await scan?.(limit - list.length)) ?? []
+          : [await photoSource[from]()].filter((b): b is string => b !== null);
+      for (const base64 of images) {
         await photos.add(props.owner, props.ownerId, base64);
+      }
+      if (images.length > 0) {
         await reload();
       }
     } catch (e) {
@@ -72,7 +78,9 @@ export function PhotoStrip(props: {
   return (
     <View style={styles.wrap}>
       <Text style={text.label}>
-        Photos{list.length > 0 ? ` (${list.length})` : ''}
+        {isDocument
+          ? `Pages et photos (${list.length} / ${limit})`
+          : `Photos${list.length > 0 ? ` (${list.length})` : ''}`}
       </Text>
       {list.length > 0 ? (
         <ScrollView horizontal contentContainerStyle={styles.thumbs}>
@@ -80,7 +88,9 @@ export function PhotoStrip(props: {
             <Pressable
               key={photo.id}
               accessibilityRole="imagebutton"
-              accessibilityLabel={`Photo ${i + 1} de ${props.label}`}
+              accessibilityLabel={`${isDocument ? 'Page' : 'Photo'} ${
+                i + 1
+              } de ${props.label}`}
               onPress={() => {
                 setConfirmDelete(false);
                 setOpen(photo);
@@ -98,6 +108,19 @@ export function PhotoStrip(props: {
         </Text>
       )}
       {error ? <Notice tone="error" message={error} /> : null}
+      {scan ? (
+        <Button
+          variant="primary"
+          icon={ScanLine}
+          label={
+            list.length > 0 ? 'Scanner d’autres pages' : 'Scanner le document'
+          }
+          disabled={busy || full}
+          onPress={() => {
+            void add('scan');
+          }}
+        />
+      ) : null}
       {photoSource.available ? (
         <View style={styles.row}>
           <Button
@@ -124,7 +147,9 @@ export function PhotoStrip(props: {
       ) : null}
       {full ? (
         <Text style={text.subtle}>
-          {PHOTOS_PER_OWNER_MAX} photos au maximum.
+          {isDocument
+            ? `${limit} pages au maximum.`
+            : `${limit} photos au maximum.`}
         </Text>
       ) : null}
 

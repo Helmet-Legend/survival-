@@ -152,6 +152,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     // Lecture des Data Matrix (médicaments) : zxing-cpp, sans service Google.
     implementation("io.github.zxing-cpp:android:2.3.0")
+    // Scan de documents : scanner de Google Play (traitement sur le téléphone).
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

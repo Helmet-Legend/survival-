@@ -2,6 +2,7 @@ import Foundation
 import PhotosUI
 import React
 import UIKit
+import VisionKit
 
 /**
  * Photo d'un article, d'une arme ou d'un document : appareil photo ou
@@ -10,14 +11,73 @@ import UIKit
  */
 @objc(ResiliosPhoto)
 class ResiliosPhoto: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate,
-  PHPickerViewControllerDelegate
+  PHPickerViewControllerDelegate, VNDocumentCameraViewControllerDelegate
 {
   private static let maxSide: CGFloat = 1600
+  /** Pages de documents : assez fines pour être réimprimées en A4. */
+  private static let scanMaxSide: CGFloat = 2500
+  private var scanLimit = 30
   private static let quality: CGFloat = 0.8
   private var resolve: RCTPromiseResolveBlock?
   private var reject: RCTPromiseRejectBlock?
 
   @objc static func requiresMainQueueSetup() -> Bool { true }
+
+  @objc func constantsToExport() -> [AnyHashable: Any]! {
+    ["canScanDocuments": VNDocumentCameraViewController.isSupported]
+  }
+
+  /** Scanner de documents d'Apple (bords, redressement, plusieurs pages). */
+  @objc func scanDocument(
+    _ maxPages: Double, resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      guard VNDocumentCameraViewController.isSupported else {
+        reject("SCAN_UNAVAILABLE", "Scanner de documents indisponible", nil)
+        return
+      }
+      guard let presenter = self.start(resolve, reject) else { return }
+      self.scanLimit = max(1, Int(maxPages))
+      let scanner = VNDocumentCameraViewController()
+      scanner.delegate = self
+      presenter.present(scanner, animated: true)
+    }
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan
+  ) {
+    controller.dismiss(animated: true)
+    let images = (0..<min(scan.pageCount, scanLimit)).map { scan.imageOfPage(at: $0) }
+    let done = resolve
+    let fail = reject
+    resolve = nil
+    reject = nil
+    DispatchQueue.global(qos: .userInitiated).async {
+      let pages = images.compactMap { ResiliosPhoto.encode($0, maxSide: ResiliosPhoto.scanMaxSide) }
+      if pages.count == images.count {
+        done?(pages.isEmpty ? nil : pages)
+      } else {
+        fail?("SCAN_FAILED", "Page illisible", nil)
+      }
+    }
+  }
+
+  func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+    controller.dismiss(animated: true)
+    finish(nil)
+  }
+
+  func documentCameraViewController(
+    _ controller: VNDocumentCameraViewController, didFailWithError error: Error
+  ) {
+    controller.dismiss(animated: true)
+    let fail = reject
+    resolve = nil
+    reject = nil
+    fail?("SCAN_FAILED", error.localizedDescription, error)
+  }
 
   private func start(
     _ resolve: @escaping RCTPromiseResolveBlock, _ reject: @escaping RCTPromiseRejectBlock
@@ -109,7 +169,7 @@ class ResiliosPhoto: NSObject, UIImagePickerControllerDelegate, UINavigationCont
   }
 
   /** Réduit, redresse (orientation EXIF) et encode en JPEG base64. */
-  private static func encode(_ image: UIImage) -> String? {
+  private static func encode(_ image: UIImage, maxSide: CGFloat = ResiliosPhoto.maxSide) -> String? {
     let longest = max(image.size.width, image.size.height)
     let scale = min(1, maxSide / max(longest, 1))
     let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
