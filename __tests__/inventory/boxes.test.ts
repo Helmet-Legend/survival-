@@ -86,6 +86,23 @@ describe('boîtes étiquetées', () => {
     const { lots: after } = await repo.getItem(tuna.id);
     expect(after).toHaveLength(3);
 
+    // La fiche indique la boîte de chaque lot.
+    const perBox = new Map<number, number>();
+    for (const lot of (await repo.getItem(tuna.id)).lots) {
+      if (lot.box) {
+        perBox.set(
+          lot.box.labelNo,
+          (perBox.get(lot.box.labelNo) ?? 0) + lot.quantity,
+        );
+      }
+    }
+    expect(perBox).toEqual(
+      new Map([
+        [1, 6],
+        [2, 10],
+      ]),
+    );
+
     const summary = await boxes.summary(one.id);
     expect(summary).toMatchObject({
       labelNo: 1,

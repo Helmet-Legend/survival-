@@ -24,6 +24,7 @@ import { BUNDLED_GUIDES, GUIDE_FOLDERS } from '../../src/content/guides';
 import { VaultKeyManager } from '../../src/crypto/VaultKeyManager';
 import {
   ArmoryRepository,
+  BoxRepository,
   InventoryRepository,
   seedDecoyInventory,
 } from '../../src/inventory';
@@ -807,6 +808,55 @@ describe('écrans', () => {
     expect(
       await screen.findByLabelText('Nourriture : 36 000 kcal, 1 article'),
     ).toBeTruthy();
+  });
+
+  it('ouvre une boîte depuis le scanner et depuis les lots d’un article', async () => {
+    const ctx = makeManager();
+    const db = await createVault(ctx.manager, content, {
+      masterPin: MASTER,
+      duressPin: DURESS,
+    });
+    const repo = new InventoryRepository(db);
+    const rice = await repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
+      { quantity: 10 },
+    );
+    const boxes = new BoxRepository(db, { newId: () => 'boite-test' });
+    await boxes.create();
+    await boxes.put('boite-test', rice.id, 4);
+    db.close();
+    const scanSource = {
+      available: true,
+      scan: async () => [
+        { code: 'fenrir:boite:boite-test', box: 'boite-test' },
+      ],
+    };
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        scanSource={scanSource}
+      />,
+    );
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner des codes-barres'),
+    );
+    await fireEvent.press(await screen.findByText('Scanner un article'));
+    // L'étiquette ouvre directement la boîte.
+    expect(await screen.findByText('Étiquette lue.')).toBeTruthy();
+    expect(screen.getByText('Boîte N° 1')).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 4 kg')).toBeTruthy();
+
+    // Depuis la fiche du riz : où sont ses lots.
+    await fireEvent.press(screen.getByRole('button', { name: 'Nourriture' }));
+    await fireEvent.press(await screen.findByLabelText('Riz, 10 kg'));
+    expect(await screen.findByText('Dont 4 dans la boîte N° 1.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ouvrir la boîte N° 1'));
+    expect(await screen.findByLabelText('Riz, 4 kg')).toBeTruthy();
+    expect(screen.getByText('Toutes les boîtes')).toBeTruthy();
   });
 
   it('réunit kit 72 h et matériel, coche à la main, exporte et imprime', async () => {

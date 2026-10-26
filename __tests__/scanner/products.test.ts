@@ -276,6 +276,12 @@ describe('Data Matrix des médicaments', () => {
     expect(readFromScanner('3017620422003', 'EAN_13')).toEqual({
       code: '3017620422003',
     });
+    // Étiquette de boîte : reconnue ; autre QR code : ignoré.
+    expect(readFromScanner('fenrir:boite:abc-1', 'QR_CODE')).toEqual({
+      code: 'fenrir:boite:abc-1',
+      box: 'abc-1',
+    });
+    expect(readFromScanner('https://exemple.fr/promo', 'QR_CODE')).toBeNull();
   });
 
   it('garde la péremption la plus proche au panier et reconnaît le médicament', async () => {

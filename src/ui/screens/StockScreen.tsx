@@ -257,6 +257,11 @@ export function StockScreen() {
   const [filter, setFilter] = useState<StockFilter>(focus?.category ?? 'all');
   // Sac d'évacuation ouvert (dossier « Sacs »), sinon null.
   const [bagId, setBagId] = useState<string | null>(focus?.bagId ?? null);
+  // Boîte ouverte d'emblée (scanner, ou lot touché dans une fiche).
+  const [openBox, setOpenBox] = useState<{
+    id: string;
+    scanned: boolean;
+  } | null>(focus?.boxId ? { id: focus.boxId, scanned: true } : null);
   const [choosing, setChoosing] = useState(false);
   const isDocs = filter === 'documents';
   const isBoxes = filter === 'boxes';
@@ -267,6 +272,13 @@ export function StockScreen() {
   const showFilter = (next: StockFilter) => {
     setFilter(next);
     setBagId(null);
+    setOpenBox(null);
+  };
+  const showBox = (id: string) => {
+    setFilter('boxes');
+    setBagId(null);
+    setExpanded(null);
+    setOpenBox({ id, scanned: false });
   };
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -378,6 +390,7 @@ export function StockScreen() {
     },
     consume: quickConsume,
     collapse: () => setExpanded(null),
+    openBox: showBox,
     changed: async message => {
       setFeedback(message);
       await reload();
@@ -516,7 +529,9 @@ export function StockScreen() {
           />
         ) : null}
 
-        {isBoxes ? <BoxesSection /> : null}
+        {isBoxes ? (
+          <BoxesSection key={openBox?.id ?? 'liste'} initial={openBox} />
+        ) : null}
 
         {isDocs || isBoxes || (isBags && !inBag) ? null : (
           <>
@@ -967,6 +982,7 @@ interface RowActions {
   consume(item: ItemSummary): Promise<void>;
   collapse(): void;
   changed(message: Feedback): Promise<void>;
+  openBox(id: string): void;
 }
 
 type ItemDetailData = { item: InventoryItem; lots: InventoryLot[] };
@@ -1066,6 +1082,7 @@ const ItemRow = React.memo(
               lots={props.detail.lots}
               onDeleted={() => props.actions.current.collapse()}
               onChanged={message => props.actions.current.changed(message)}
+              onOpenBox={id => props.actions.current.openBox(id)}
             />
           ) : null}
         </View>
@@ -1085,6 +1102,8 @@ function ItemDetail(props: {
   onChanged: (feedback: Feedback) => Promise<void>;
   /** L'article n'existe plus : refermer sa fiche. */
   onDeleted: () => void;
+  /** Ouvre la boîte de rangement d'un lot. */
+  onOpenBox: (id: string) => void;
 }) {
   const { repo } = useSession();
   const { item } = props;
@@ -1111,6 +1130,22 @@ function ItemDetail(props: {
     .filter(l => !l.isExpired)
     .reduce((sum, l) => sum + l.quantity, 0);
   const summary = packageSummary(item, usable);
+  // Quantité rangée dans chaque boîte, par numéro.
+  const boxed = Object.values(
+    props.lots.reduce<Record<string, { labelNo: number; quantity: number }>>(
+      (acc, lot) => {
+        if (lot.box) {
+          const entry = (acc[lot.box.id] ??= {
+            labelNo: lot.box.labelNo,
+            quantity: 0,
+          });
+          entry.quantity += lot.quantity;
+        }
+        return acc;
+      },
+      {},
+    ),
+  ).sort((a, b) => a.labelNo - b.labelNo);
   const facts = itemFacts(item);
   const color = CATEGORY_COLORS[item.category];
   // Bidons, boîtes… de contenance connue : on compte les contenants.
@@ -1283,6 +1318,18 @@ function ItemDetail(props: {
       ) : null}
       <PhotoStrip owner="item" ownerId={item.id} label={item.name} />
 
+      {boxed.length > 0 ? (
+        <Text style={styles.boxed}>
+          Dont{' '}
+          {boxed
+            .map(
+              b => `${formatNumber(b.quantity)} dans la boîte N° ${b.labelNo}`,
+            )
+            .join(', ')
+            .replace(/, ([^,]*)$/, ' et $1')}
+          .
+        </Text>
+      ) : null}
       <Text style={text.label}>Lots, du premier au dernier consommé</Text>
       {props.lots.length === 0 ? (
         <Text style={text.muted}>Aucun lot.</Text>
@@ -1315,6 +1362,21 @@ function ItemDetail(props: {
                     )}`
                   : 'non périssable'}
               </Text>
+              {lot.box ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ouvrir la boîte N° ${lot.box.labelNo}`}
+                  onPress={() => props.onOpenBox(lot.box!.id)}
+                  style={({ pressed }) => [
+                    styles.boxPill,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.boxPillText}>
+                    Boîte N° {lot.box.labelNo}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Supprimer le lot ${label}`}
@@ -1495,6 +1557,24 @@ function ItemDetail(props: {
 }
 
 const styles = StyleSheet.create({
+  boxed: {
+    color: colors.cyanSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    padding: space.s,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: colors.cyan,
+  },
+  boxPill: {
+    minHeight: 32,
+    paddingHorizontal: space.s,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.cyan,
+    justifyContent: 'center',
+  },
+  boxPillText: { color: colors.cyan, fontSize: 13, fontWeight: '700' },
   movements: { gap: space.xs },
   page: {
     paddingHorizontal: sizes.screenPadding,
