@@ -297,7 +297,11 @@ export function OfflineMap(props: {
             );
           }}
         >
-          {tiles}
+          {/* Les tuiles ne captent pas le doigt : `locationX` est relatif à
+              la vue touchée, il doit l'être à la carte entière. */}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {tiles}
+          </View>
         </Pressable>
         {here && visible(here) ? (
           <View
