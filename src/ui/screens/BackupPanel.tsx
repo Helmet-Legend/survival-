@@ -36,6 +36,24 @@ function errorText(e: unknown): string {
   return e instanceof BackupError || e instanceof Error ? e.message : String(e);
 }
 
+/** « 12 articles, 30 lots, 4 photos, » d'après le recomptage. */
+function restoredCounts(counts: Record<string, number> = {}): string {
+  const parts = (
+    [
+      ['inventory_items', 'article', 'articles'],
+      ['inventory_lots', 'lot', 'lots'],
+      ['documents', 'document', 'documents'],
+      ['photos', 'photo', 'photos'],
+    ] as const
+  )
+    .filter(([table]) => (counts[table] ?? 0) > 0)
+    .map(([table, one, many]) => {
+      const n = counts[table];
+      return `${n} ${n > 1 ? many : one}`;
+    });
+  return parts.length > 0 ? `${parts.join(', ')}, ` : '';
+}
+
 export function BackupPanel(props: { onRestored: () => Promise<void> }) {
   const { db, files, backupCrypto, reminders } = useSession();
   const [mode, setMode] = useState<Mode>('idle');
@@ -136,7 +154,9 @@ export function BackupPanel(props: { onRestored: () => Promise<void> }) {
       setFeedback({
         message: `Sauvegarde du ${formatDate(
           summary.createdAt.slice(0, 10),
-        )} restaurée (${summary.rows} éléments).`,
+        )} restaurée et vérifiée : ${restoredCounts(summary.counts)}${
+          summary.rows
+        } éléments au total.`,
         tone: 'ok',
       });
       await props.onRestored();

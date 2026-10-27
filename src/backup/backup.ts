@@ -49,7 +49,8 @@ export type BackupErrorCode =
   | 'WEAK_PASSWORD'
   | 'WRONG_PASSWORD'
   | 'INVALID_FILE'
-  | 'NEWER_VERSION';
+  | 'NEWER_VERSION'
+  | 'CHECK_FAILED';
 
 export class BackupError extends Error {
   readonly code: BackupErrorCode;
@@ -91,6 +92,8 @@ export interface BackupOptions {
 export interface BackupSummary {
   createdAt: string;
   rows: number;
+  /** Restauration : lignes de chaque table, recomptées après écriture. */
+  counts?: Record<string, number>;
 }
 
 /**
@@ -363,6 +366,7 @@ export async function restoreBackup(
   const payload = await decrypt(text, password, engine);
   const tables = await backedUpTables(db);
   let rows = 0;
+  const counts: Record<string, number> = {};
   await withTransaction(db, async () => {
     // Les clés étrangères sont vérifiées à la validation, pas ligne à ligne.
     await db.execute('PRAGMA defer_foreign_keys = ON');
@@ -375,6 +379,7 @@ export async function restoreBackup(
       await db.execute(`DELETE FROM "${name}"`);
     }
     for (const name of tables) {
+      counts[name] = 0;
       const source = payload.tables[name] ?? [];
       if (source.length === 0) {
         continue;
@@ -392,10 +397,38 @@ export async function restoreBackup(
           columns.map(c => row[c] as SqlValue),
         );
         rows++;
+        counts[name]++;
       }
     }
+    await checkRestored(db, counts);
     await forgetVersionsAfterRestore(db);
     await db.execute("DELETE FROM sync_meta WHERE key = 'applying'");
   });
-  return { createdAt: payload.createdAt, rows };
+  return { createdAt: payload.createdAt, rows, counts };
+}
+
+/**
+ * Contrôle avant validation : chaque table contient exactement les lignes
+ * écrites, et aucun lien ne pointe dans le vide. Sinon tout est annulé.
+ */
+async function checkRestored(
+  db: SqlDatabase,
+  expected: Record<string, number>,
+): Promise<void> {
+  for (const [name, count] of Object.entries(expected)) {
+    const { rows } = await db.execute(`SELECT count(*) AS n FROM "${name}"`);
+    if (Number(rows[0].n) !== count) {
+      throw new BackupError(
+        'CHECK_FAILED',
+        'Contrôle après restauration échoué : rien n’a été modifié.',
+      );
+    }
+  }
+  const { rows: broken } = await db.execute('PRAGMA foreign_key_check');
+  if (broken.length > 0) {
+    throw new BackupError(
+      'CHECK_FAILED',
+      'Sauvegarde incomplète : des éléments y renvoient à des fiches absentes. Rien n’a été modifié.',
+    );
+  }
 }
