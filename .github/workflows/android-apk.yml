@@ -19,11 +19,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Fusion dans `main` : publie directement les APK et IPA de la pull
+  # request s'ils ont été compilés sur le même code (voir le script) ; la
+  # compilation complète ci-dessous n'a lieu que sinon.
+  reprise:
+    name: Reprise de la compilation de la pull request
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    outputs:
+      reprise: ${{ steps.reprise.outputs.reprise }}
+    steps:
+      - uses: actions/checkout@v5
+      # Une erreur ici ne bloque rien : la compilation complète prend le relais.
+      - id: reprise
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/reprise-pr.sh
+
   checks:
     name: Lint, typage et tests
+    needs: reprise
+    if: ${{ !cancelled() && needs.reprise.outputs.reprise != 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # Arbre de fichiers compilé : la reprise après fusion le compare.
+      - name: Empreinte du code compilé
+        run: |
+          mkdir -p build-info
+          git rev-parse "HEAD^{tree}" > build-info/tree.txt
+      - uses: actions/upload-artifact@v5
+        with:
+          name: fenrir-build-info
+          path: build-info/
+          retention-days: 30
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -36,6 +70,7 @@ jobs:
   apk:
     name: Compilation de l'APK
     needs: checks
+    if: ${{ !cancelled() && needs.checks.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -82,11 +117,19 @@ jobs:
           -PreactNativeArchitectures=arm64-v8a
           -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
       - name: Nommage de l'APK
-        run: cp android/app/build/outputs/apk/github/release/app-github-release.apk "Fenrir-$VERSION_NAME.apk"
+        run: |
+          cp android/app/build/outputs/apk/github/release/app-github-release.apk "Fenrir-$VERSION_NAME.apk"
+          echo "${SIGNED:-0}" > build-info-signed.txt
       - uses: actions/upload-artifact@v5
         with:
           name: fenrir-apk
           path: Fenrir-*.apk
+          retention-days: 30
+      # Signature de l'APK (clé GitHub ou débogage), pour la reprise.
+      - uses: actions/upload-artifact@v5
+        with:
+          name: fenrir-build-info-signed
+          path: build-info-signed.txt
           retention-days: 30
       - name: Publication de la version
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1'
@@ -138,6 +181,7 @@ jobs:
   demarrage:
     name: Démarrage sur téléphone virtuel
     needs: apk
+    if: ${{ !cancelled() && needs.apk.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -187,6 +231,7 @@ jobs:
   ipa:
     name: Compilation iPhone (IPA)
     needs: checks
+    if: ${{ !cancelled() && needs.checks.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 90
     permissions:
