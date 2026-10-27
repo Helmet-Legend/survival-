@@ -108,6 +108,17 @@ android {
                 keyPassword System.getenv("FENRIR_UPLOAD_KEY_PASSWORD")
             }
         }
+        // Clé de la version GitHub, elle aussi dans les secrets GitHub. La
+        // clé de débogage est publique : avec elle, n'importe qui pourrait
+        // signer une fausse mise à jour qu'Android accepterait.
+        if (System.getenv("FENRIR_GITHUB_STORE_FILE")) {
+            github {
+                storeFile file(System.getenv("FENRIR_GITHUB_STORE_FILE"))
+                storePassword System.getenv("FENRIR_GITHUB_STORE_PASSWORD")
+                keyAlias System.getenv("FENRIR_GITHUB_KEY_ALIAS")
+                keyPassword System.getenv("FENRIR_GITHUB_KEY_PASSWORD")
+            }
+        }
     }
     // Deux distributions :
     // - github : version actuelle (com.resilios), mise à jour intégrée depuis
@@ -120,7 +131,7 @@ android {
             dimension "distribution"
             applicationId "com.resilios"
             buildConfigField "boolean", "SELF_UPDATE", "true"
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.findByName("github") ?: signingConfigs.debug
         }
         play {
             dimension "distribution"
