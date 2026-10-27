@@ -659,6 +659,83 @@ describe('cycle de vie', () => {
   });
 });
 
+describe('signal SOS lumineux', () => {
+  it('fait clignoter la lampe en SOS, puis l’éteint en quittant l’écran', async () => {
+    const calls: Array<number[] | 'stop'> = [];
+    const torch = {
+      available: true,
+      start: async (pattern: readonly number[]) => {
+        calls.push([...pattern]);
+      },
+      stop: async () => {
+        calls.push('stop');
+      },
+    };
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} torch={torch} />);
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Faire clignoter la lampe en SOS'),
+    );
+    expect(await screen.findByText('Arrêter le signal SOS')).toBeTruthy();
+    expect(calls).toHaveLength(1);
+    expect((calls[0] as number[]).slice(0, 2)).toEqual([250, 250]);
+
+    await fireEvent.press(
+      screen.getByLabelText('Arrêter le signal SOS de la lampe'),
+    );
+    expect(await screen.findByText('Signal SOS lumineux')).toBeTruthy();
+    expect(calls).toEqual([calls[0], 'stop']);
+
+    // Rallumé puis écran quitté : la lampe s'éteint d'elle-même.
+    await fireEvent.press(
+      screen.getByLabelText('Faire clignoter la lampe en SOS'),
+    );
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await screen.findByText('Saisissez votre code');
+    expect(calls[calls.length - 1]).toBe('stop');
+  });
+
+  it('dit pourquoi la lampe ne s’allume pas', async () => {
+    const torch = {
+      available: true,
+      start: async () => {
+        throw new Error(
+          'Lampe indisponible : l’appareil photo est peut-être utilisé.',
+        );
+      },
+      stop: async () => undefined,
+    };
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} torch={torch} />);
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Faire clignoter la lampe en SOS'),
+    );
+    expect(
+      await screen.findByText(/appareil photo est peut-être utilisé/),
+    ).toBeTruthy();
+    expect(screen.getByText('Signal SOS lumineux')).toBeTruthy();
+  });
+
+  it('cache le bouton sans lampe', async () => {
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+    );
+    await screen.findByText('Urgence');
+    expect(screen.queryByText('Signal SOS lumineux')).toBeNull();
+  });
+});
+
 describe('écrans', () => {
   async function openApp(
     extra: Partial<

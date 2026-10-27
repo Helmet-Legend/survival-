@@ -6,6 +6,7 @@
  */
 import {
   Crosshair,
+  Flashlight,
   HeartPulse,
   MessageSquareText,
   Moon,
@@ -14,7 +15,7 @@ import {
   ListChecks,
   TriangleAlert,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Linking,
   Pressable,
@@ -35,6 +36,7 @@ import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
 import { formatNumber } from '../format';
 import { useNavigation } from '../navigation';
 import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
+import { sosPattern } from '../../device/torch';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -70,7 +72,7 @@ export function positionMessage(position: Position): string {
 }
 
 export function EmergencyScreen() {
-  const { db, location } = useSession();
+  const { db, location, torch } = useSession();
   const { data: plan } = useLoader(() => loadFamilyPlan(db));
   const navigation = useNavigation();
   const redLight = useRedLight();
@@ -78,6 +80,38 @@ export function EmergencyScreen() {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reflex, setReflex] = useState<string | null>(null);
+  const [sos, setSos] = useState(false);
+  const [sosError, setSosError] = useState<string | null>(null);
+  const sosOn = useRef(false);
+  // Quitter l'écran (ou verrouiller le coffre) éteint toujours la lampe.
+  useEffect(
+    () => () => {
+      if (sosOn.current) {
+        torch.stop().catch(() => undefined);
+      }
+    },
+    [torch],
+  );
+  const toggleSos = async () => {
+    setSosError(null);
+    try {
+      if (sosOn.current) {
+        sosOn.current = false;
+        setSos(false);
+        await torch.stop();
+      } else {
+        await torch.start(sosPattern());
+        sosOn.current = true;
+        setSos(true);
+      }
+    } catch (e) {
+      sosOn.current = false;
+      setSos(false);
+      setSosError(
+        e instanceof Error ? e.message : 'Impossible d’allumer la lampe.',
+      );
+    }
+  };
 
   if (reflex !== null) {
     return (
@@ -146,6 +180,30 @@ export function EmergencyScreen() {
             void redLight.set(!redLight.on);
           }}
         />
+      ) : null}
+      {torch.available ? (
+        <>
+          <Button
+            variant={sos ? 'danger' : 'ghost'}
+            icon={Flashlight}
+            label={sos ? 'Arrêter le signal SOS' : 'Signal SOS lumineux'}
+            accessibilityLabel={
+              sos
+                ? 'Arrêter le signal SOS de la lampe'
+                : 'Faire clignoter la lampe en SOS'
+            }
+            onPress={() => {
+              void toggleSos();
+            }}
+          />
+          {sosError ? <Notice tone="error" message={sosError} /> : null}
+          {sos ? (
+            <Text style={text.subtle}>
+              La lampe répète · · · – – – · · · (SOS). Tournez le dos du
+              téléphone vers les secours. Elle s’éteint en quittant cet écran.
+            </Text>
+          ) : null}
+        </>
       ) : null}
       <Button
         icon={ListChecks}

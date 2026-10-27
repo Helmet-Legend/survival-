@@ -96,3 +96,11 @@ RCT_EXTERN_METHOD(discover:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(stopDiscovery)
 @end
+
+@interface RCT_EXTERN_MODULE(ResiliosTorch, NSObject)
+RCT_EXTERN_METHOD(blink:(NSArray<NSNumber *> *)pattern
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(stop:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+@end

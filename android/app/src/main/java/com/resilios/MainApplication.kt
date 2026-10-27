@@ -13,6 +13,7 @@ import com.resilios.photo.PhotoPackage
 import com.resilios.reminders.ReminderPackage
 import com.resilios.scanner.ScannerPackage
 import com.resilios.screen.ScreenPackage
+import com.resilios.torch.TorchPackage
 import com.resilios.update.UpdatePackage
 
 class MainApplication : Application(), ReactApplication {
@@ -41,6 +42,8 @@ class MainApplication : Application(), ReactApplication {
           add(ScannerPackage())
           // Partage du foyer : liaison directe entre téléphones sur le Wi-Fi.
           add(NetPackage())
+          // Signal SOS à la lampe du flash (écran Urgence).
+          add(TorchPackage())
         },
     )
   }

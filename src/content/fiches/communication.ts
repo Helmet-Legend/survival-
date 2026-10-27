@@ -40,6 +40,7 @@ export const COMMUNICATION = [
     'Signaux de détresse',
     [
       'SOS en morse : trois brefs, trois longs, trois brefs (··· ––– ···), à répéter.',
+      'Dans Fenrir : écran Urgence, « Signal SOS lumineux » fait clignoter la lampe du téléphone en SOS.',
       'Signal de détresse en montagne : six signaux par minute (lumière, sifflet, geste), une minute de pause, puis recommencer. La réponse est de trois signaux par minute.',
       'Numéro d’urgence européen : 112. En mer : VHF canal 16 (156,800 MHz).',
     ],
