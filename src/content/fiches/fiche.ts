@@ -354,6 +354,12 @@ export const WEB = {
     url: 'https://www.sante.fr/plaies',
     consulted: '2026-10',
   },
+  canicule: {
+    org: 'Gouvernement (info.gouv.fr)',
+    title: 'Canicule et vagues de chaleur : se protéger',
+    url: 'https://www.info.gouv.fr/risques/canicule-et-vagues-de-chaleur',
+    consulted: '2026-10',
+  },
   usda: {
     org: 'Département de l’Agriculture des États-Unis (USDA)',
     title: 'Sécurité des aliments en cas de coupure (en anglais)',
