@@ -48,6 +48,8 @@ export const SHARED_SETTINGS: readonly string[] = [
   'wh_per_person_day',
   'energy_devices',
   'purchase_plan',
+  'pharmacy_plan',
+  'pharmacy_list',
 ];
 
 const SEPARATOR = '\u001f';

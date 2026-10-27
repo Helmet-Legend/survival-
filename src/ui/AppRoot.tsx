@@ -86,6 +86,7 @@ import {
 import { CalculatorsScreen } from './screens/CalculatorsScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HouseholdScreen } from './screens/HouseholdScreen';
+import { PharmacyListScreen } from './screens/PharmacyListScreen';
 import { PrepareScreen } from './screens/PrepareScreen';
 import { PurchasePlanScreen } from './screens/PurchasePlanScreen';
 import { ReadinessScreen } from './screens/ReadinessScreen';
@@ -499,6 +500,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
                 <CrisisScreen />
               ) : overlay === 'household' ? (
                 <HouseholdScreen />
+              ) : overlay === 'pharmacy' ? (
+                <PharmacyListScreen />
               ) : overlay === 'stockForm' && formTarget !== null ? (
                 <StockFormScreen target={formTarget} />
               ) : (

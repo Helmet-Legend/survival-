@@ -22,6 +22,7 @@ export type Overlay =
   | 'purchases'
   | 'crisis'
   | 'household'
+  | 'pharmacy'
   | 'sync'
   | 'privacy';
 
@@ -98,6 +99,7 @@ const OVERLAY_BACK: Record<Overlay, string> = {
   purchases: 'Retour au plan d’achats',
   crisis: 'Retour au simulateur',
   household: 'Retour à Mon foyer',
+  pharmacy: 'Retour à la pharmacie',
   sync: 'Retour au partage',
   privacy: 'Retour à la confidentialité',
 };

@@ -30,6 +30,18 @@ import {
   type SyncRow,
 } from '../../src/sync';
 import { NodeSqliteDb } from '../db/sqlite';
+import {
+  lineFromCatalog,
+  loadPharmacyPlan,
+  newPlan,
+  PHARMACY_CATALOG,
+  savePharmacyPlan,
+} from '../../src/plan/pharmacy';
+import {
+  loadListSettings,
+  newListSettings,
+  saveListSettings,
+} from '../../src/plan/pharmacyList';
 
 const TODAY = '2026-10-21';
 const NONE: SyncOptions = { weapons: false, photos: false };
@@ -504,5 +516,32 @@ describe('composition du foyer partagée', () => {
     await exchange(a.db, b.db);
     const h = await loadHousehold(b.db);
     expect([h.members, h.children, h.babies]).toEqual([4, 2, 1]);
+  });
+});
+
+describe('pharmacie du foyer', () => {
+  it('passe d’un téléphone à l’autre comme le plan d’achats', async () => {
+    const a = await phone('a');
+    const b = await phone('b');
+    const plan = {
+      ...newPlan(3),
+      lines: [
+        {
+          ...lineFromCatalog(PHARMACY_CATALOG[0], 'p'),
+          precautionPacks: 2,
+          lots: [{ id: 'l', packs: 1, expiry: '2027-06-01' }],
+        },
+      ],
+    };
+    const list = {
+      ...newListSettings(2, 1),
+      generated: true,
+      checked: ['thermometre'],
+    };
+    await savePharmacyPlan(a.db, plan);
+    await saveListSettings(a.db, list);
+    await exchange(a.db, b.db);
+    expect(await loadPharmacyPlan(b.db)).toEqual(plan);
+    expect(await loadListSettings(b.db)).toEqual(list);
   });
 });
