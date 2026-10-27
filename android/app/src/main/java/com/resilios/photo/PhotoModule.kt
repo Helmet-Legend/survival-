@@ -65,16 +65,30 @@ class PhotoModule(private val context: ReactApplicationContext) :
   @ReactMethod
   fun scanDocument(maxPages: Double, promise: Promise) {
     val activity = start(promise) ?: return
+    // Le scanner de Google Play se lance depuis le fil de l'interface ; une
+    // erreur à son lancement est rendue à l'écran au lieu de laisser la
+    // demande ouverte (ce qui bloquait ensuite les photos).
+    activity.runOnUiThread {
+      try {
+        launchScanner(activity, promise, maxPages.toInt().coerceIn(1, 100))
+      } catch (e: Throwable) {
+        if (pending === promise) {
+          fail("SCAN_FAILED", scanError(e))
+        }
+      }
+    }
+  }
+
+  private fun launchScanner(activity: Activity, waiting: Promise, maxPages: Int) {
     val options =
         GmsDocumentScannerOptions.Builder()
             .setGalleryImportAllowed(false)
-            .setPageLimit(maxPages.toInt().coerceIn(1, 100))
+            .setPageLimit(maxPages)
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
             .build()
     // Premier usage : Google Play télécharge le scanner, ce qui peut ne jamais
     // aboutir hors connexion. Sans réponse, la demande est abandonnée.
-    val waiting = promise
     val timeout = Runnable {
       if (pending === waiting) {
         fail(
@@ -92,17 +106,21 @@ class PhotoModule(private val context: ReactApplicationContext) :
           }
           try {
             activity.startIntentSenderForResult(sender, REQUEST_SCAN, null, 0, 0, 0)
-          } catch (e: Exception) {
-            fail("SCAN_FAILED", e.message ?: "Scanner indisponible")
+          } catch (e: Throwable) {
+            fail("SCAN_FAILED", scanError(e))
           }
         }
         .addOnFailureListener { e ->
           handler.removeCallbacks(timeout)
           if (pending === waiting) {
-            fail("SCAN_UNAVAILABLE", e.message ?: "Scanner de documents indisponible")
+            fail("SCAN_UNAVAILABLE", scanError(e))
           }
         }
   }
+
+  /** Message lisible, avec le type d'erreur pour pouvoir la diagnostiquer. */
+  private fun scanError(e: Throwable): String =
+      "Scanner indisponible (${e.javaClass.simpleName}${e.message?.let { " : $it" } ?: ""}). Utilisez « Photographier »."
 
   @ReactMethod
   fun takePhoto(promise: Promise) {
@@ -228,7 +246,7 @@ class PhotoModule(private val context: ReactApplicationContext) :
       pending = null
       cameraFile?.delete()
       cameraFile = null
-      it.reject("CANCELLED", "Photo précédente abandonnée")
+      runCatching { it.reject("CANCELLED", "Photo précédente abandonnée") }
     }
     val activity = context.currentActivity
     if (activity == null) {
