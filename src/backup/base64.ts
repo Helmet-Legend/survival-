@@ -2,36 +2,67 @@
 /** Base64 standard (RFC 4648), sans dépendance à `Buffer` ni `atob`. */
 const ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const LOOKUP = new Map([...ALPHABET].map((c, i) => [c, i]));
+/** Valeur de chaque caractère base64 par son code (-1 : hors alphabet). */
+const LOOKUP = new Int16Array(128).fill(-1);
+for (let i = 0; i < ALPHABET.length; i++) {
+  LOOKUP[ALPHABET.charCodeAt(i)] = i;
+}
+const CODES = Array.from(ALPHABET, c => c.charCodeAt(0));
+/**
+ * Octets traités par bloc : le texte est assemblé bloc par bloc, jamais
+ * caractère par caractère (des dizaines de millions de petits morceaux
+ * saturaient la mémoire pour une sauvegarde riche en photos).
+ */
+const CHUNK = 3 * 8192;
 
 export function bytesToBase64(bytes: Uint8Array): string {
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const n =
-      (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
-    out += ALPHABET[(n >> 18) & 63] + ALPHABET[(n >> 12) & 63];
-    out += i + 1 < bytes.length ? ALPHABET[(n >> 6) & 63] : '=';
-    out += i + 2 < bytes.length ? ALPHABET[n & 63] : '=';
+  const parts: string[] = [];
+  const codes = new Array<number>((CHUNK / 3) * 4);
+  for (let start = 0; start < bytes.length; start += CHUNK) {
+    const end = Math.min(start + CHUNK, bytes.length);
+    let o = 0;
+    for (let i = start; i < end; i += 3) {
+      const n =
+        (bytes[i] << 16) |
+        ((i + 1 < end ? bytes[i + 1] : 0) << 8) |
+        (i + 2 < end ? bytes[i + 2] : 0);
+      codes[o++] = CODES[(n >> 18) & 63];
+      codes[o++] = CODES[(n >> 12) & 63];
+      codes[o++] = i + 1 < end ? CODES[(n >> 6) & 63] : 61; // '='
+      codes[o++] = i + 2 < end ? CODES[n & 63] : 61;
+    }
+    parts.push(String.fromCharCode.apply(null, codes.slice(0, o)));
   }
-  return out;
+  return parts.join('');
 }
 
 export function base64ToBytes(text: string): Uint8Array {
-  const clean = text.replace(/[=]+$/, '');
-  if (!/^[A-Za-z0-9+/]*$/.test(clean) || clean.length % 4 === 1) {
+  let length = text.length;
+  while (length > 0 && text.charCodeAt(length - 1) === 61) {
+    length--;
+  }
+  if (length % 4 === 1) {
     throw new Error('Base64 invalide');
   }
-  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  const out = new Uint8Array(Math.floor((length * 3) / 4));
+  const value = (i: number) => {
+    const code = text.charCodeAt(i);
+    const v = code < 128 ? LOOKUP[code] : -1;
+    if (v < 0) {
+      throw new Error('Base64 invalide');
+    }
+    return v;
+  };
   let o = 0;
-  for (let i = 0; i < clean.length; i += 4) {
+  for (let i = 0; i < length; i += 4) {
     const n =
-      ((LOOKUP.get(clean[i]) ?? 0) << 18) |
-      ((LOOKUP.get(clean[i + 1]) ?? 0) << 12) |
-      ((LOOKUP.get(clean[i + 2]) ?? 0) << 6) |
-      (LOOKUP.get(clean[i + 3]) ?? 0);
+      (value(i) << 18) |
+      (value(i + 1) << 12) |
+      (i + 2 < length ? value(i + 2) << 6 : 0) |
+      (i + 3 < length ? value(i + 3) : 0);
     out[o++] = (n >> 16) & 255;
-    if (i + 2 < clean.length) out[o++] = (n >> 8) & 255;
-    if (i + 3 < clean.length) out[o++] = n & 255;
+    if (i + 2 < length) out[o++] = (n >> 8) & 255;
+    if (i + 3 < length) out[o++] = n & 255;
   }
   return out;
 }

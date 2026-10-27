@@ -313,6 +313,16 @@ describe('encodages', () => {
       expect(base64ToBytes(bytesToBase64(bytes))).toEqual(bytes);
       expect(bytesToBase64(bytes)).toBe(Buffer.from(bytes).toString('base64'));
     }
+    // Gros volumes et bords de blocs (encodage par paquets de 24 576 octets).
+    for (const length of [24575, 24576, 24577, 49153, 5_000_000]) {
+      const bytes = new Uint8Array(randomBytes(length));
+      const encoded = bytesToBase64(bytes);
+      expect(encoded).toBe(Buffer.from(bytes).toString('base64'));
+      expect(base64ToBytes(encoded)).toEqual(bytes);
+    }
+    expect(() => base64ToBytes('AB*D')).toThrow('Base64 invalide');
+    expect(() => base64ToBytes('AB=D')).toThrow('Base64 invalide');
+    expect(() => base64ToBytes('ABCDE')).toThrow('Base64 invalide');
     const text = 'Sac de Léa · 🎒 « eau » ½';
     expect(utf8ToText(new Uint8Array(Buffer.from(text, 'utf8')))).toBe(text);
   });
