@@ -83,7 +83,20 @@ describe('sauvegarde chiffrée', () => {
       { name: 'À remplacer', category: 'food', unit: 'kg' },
       { quantity: 1 },
     );
-    await restoreBackup(target, text, PASSWORD, new JsArgon2());
+    const restored = await restoreBackup(
+      target,
+      text,
+      PASSWORD,
+      new JsArgon2(),
+    );
+    // Recomptage après écriture : celui de la source, table par table.
+    expect(restored.counts).toMatchObject({
+      inventory_items: 2,
+      bags: 1,
+      documents: 1,
+      photos: 1,
+    });
+    expect(restored.rows).toBe(summary.rows);
 
     const items = await new InventoryRepository(target).listItems();
     expect(items.map(i => i.name)).toEqual(['Gourde', 'Riz']);
@@ -270,6 +283,26 @@ describe('fichier abîmé ou piégé', () => {
       expect((error as Error).message).toMatch(/Rien n’a été modifié/);
     }
     expect(await names(target)).toEqual(['Intact']);
+  });
+});
+
+describe('contrôle après restauration', () => {
+  it('annule tout si une table ne contient pas ce qui a été écrit', async () => {
+    const { text } = await createBackup(await filledDb(), PASSWORD, options());
+    const target = await freshDb();
+    await new InventoryRepository(target).createItem(
+      { name: 'Intact', category: 'food', unit: 'kg' },
+      { quantity: 1 },
+    );
+    // Un mécanisme imprévu fait disparaître les sacs écrits.
+    await target.execute(
+      'CREATE TRIGGER t_lost AFTER INSERT ON bags BEGIN DELETE FROM bags WHERE id = NEW.id; END',
+    );
+    await expect(
+      restoreBackup(target, text, PASSWORD, new JsArgon2()),
+    ).rejects.toMatchObject({ code: 'CHECK_FAILED' });
+    const items = await new InventoryRepository(target).listItems();
+    expect(items.map(i => i.name)).toEqual(['Intact']);
   });
 });
 
