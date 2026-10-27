@@ -69,6 +69,10 @@ export const RESUMES: Record<string, string> = {
     'Saignement abondant : appuyer fort et sans relâcher directement sur la plaie, puis alerter les secours.',
   'plaie-soin':
     'Nettoyer à l’eau propre, protéger d’un pansement et surveiller les signes d’infection qui imposent de consulter.',
+  'plaies-fermeture':
+    'Comprimer, appeler le 15 si le saignement persiste, faire voir une plaie profonde, souillée ou mal placée ; ne pas la recoudre soi-même.',
+  'medicaments-courants':
+    'Grandes familles de médicaments courants et leurs précautions, sans dose : lire la notice, éviter les cumuls, demander au pharmacien.',
   suture:
     'Ne fermer une plaie qu’en l’absence de soins dans les heures qui viennent, de préférence par strips ; au moindre signe d’infection, rouvrir et consulter.',
   brulures:

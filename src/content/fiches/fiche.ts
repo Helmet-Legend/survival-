@@ -65,7 +65,7 @@ export const RELIABILITY_LABELS: Record<Reliability, string> = {
   sante: 'Santé : non relue par un soignant',
 };
 
-const MARKER = /^(## |# |- |\d+\. |! |= |\| |◇ |↓|☐ |★ |✕ |→ )/;
+const MARKER = /^(## |# |- |\d+\. |! |= |\| |◇ |↓|☐ |★ |✕ |→ |▣ |▸ )/;
 
 /** Premier paragraphe simple de la fiche, raccourci à une ou deux phrases. */
 export function defaultSummary(lines: readonly string[]): string {
@@ -95,7 +95,8 @@ export const META_PREFIX = '§ ';
  * garde, « = » ligne de tableau, « ◇ » étape de schéma, « ↓ » flèche.
  * Repères de mise en page (voir `ficheLayout`) : « ★ » action prioritaire,
  * « ✕ » à ne surtout pas faire, « # Avant » / « # Pendant » / « # Après »
- * onglet, « → » lien vers un autre écran.
+ * onglet, « → » lien vers un autre écran, « ▣ clé  Titre  Texte » carte
+ * illustrée, « ▸ Titre » volet repliable (les puces « - » qui suivent).
  * Les métadonnées (priorité, sources, date) sont ajoutées en fin de corps,
  * en lignes « § Clé : valeur ».
  */
@@ -186,12 +187,14 @@ export type Phase = (typeof PHASES)[number];
 /** Écrans de Fenrir qu'une fiche peut ouvrir (lignes « → »). */
 export type FicheLink =
   | { kind: 'waterStock' }
+  | { kind: 'healthStock' }
   | { kind: 'crisis'; scenario: CrisisId }
   | { kind: 'localRisks' };
 
 /** Lignes « → » à écrire dans une fiche. */
 export const LINK = {
   waterStock: '→ stock-eau',
+  healthStock: '→ trousse',
   crisis: (scenario: CrisisId) => `→ simulateur ${scenario}`,
   localRisks: '→ consignes-locales',
 } as const;
@@ -199,6 +202,9 @@ export const LINK = {
 function parseLink(target: string): FicheLink | null {
   if (target === 'stock-eau') {
     return { kind: 'waterStock' };
+  }
+  if (target === 'trousse') {
+    return { kind: 'healthStock' };
   }
   if (target === 'consignes-locales') {
     return { kind: 'localRisks' };
@@ -336,6 +342,18 @@ export const WEB = {
     url: 'https://www.georisques.gouv.fr',
     consulted: '2026-10',
   },
+  ansm: {
+    org: 'Agence nationale de sécurité du médicament (ANSM)',
+    title: 'Paracétamol, anti-inflammatoires et grossesse : mises en garde',
+    url: 'https://ansm.sante.fr',
+    consulted: '2026-10',
+  },
+  santeFr: {
+    org: 'Santé.fr (service public d’information en santé)',
+    title: 'Plaies : soigner et savoir quand consulter',
+    url: 'https://www.sante.fr/plaies',
+    consulted: '2026-10',
+  },
   usda: {
     org: 'Département de l’Agriculture des États-Unis (USDA)',
     title: 'Sécurité des aliments en cas de coupure (en anglais)',
@@ -343,3 +361,17 @@ export const WEB = {
     consulted: '2026-10',
   },
 } as const satisfies Record<string, SourceLink>;
+
+/** Carte illustrée d'une ligne « ▣ clé  Titre  Texte ». */
+export function imageCard(
+  line: string,
+): { image: string; title: string; text: string } | null {
+  if (!line.startsWith('▣ ')) {
+    return null;
+  }
+  const [image, title, ...rest] = line
+    .slice(2)
+    .trim()
+    .split(/\s{2,}/);
+  return image && title ? { image, title, text: rest.join(' ') } : null;
+}

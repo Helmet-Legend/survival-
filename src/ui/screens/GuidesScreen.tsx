@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   ClipboardList,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -48,6 +50,7 @@ import {
   ficheLayout,
   ficheSources,
   HEADER_KEYS,
+  imageCard,
   needsReview,
   REVIEW_AFTER_MONTHS,
 } from '../../content/fiches/fiche';
@@ -74,6 +77,7 @@ import {
   SearchField,
 } from '../components/controls';
 import { formatNumber } from '../format';
+import { GUIDE_IMAGES } from '../guideImages';
 import { WaterIcon, type Icon as AppIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { useSession } from '../session';
@@ -413,8 +417,14 @@ function FicheBody(props: {
     blocks(list).map((block, i) =>
       typeof block === 'string' ? (
         <GuideLine key={`${key}${i}`} line={block} />
+      ) : block.kind === 'checks' ? (
+        <GuideChecklist
+          key={`${key}${i}`}
+          slug={props.slug}
+          items={block.items}
+        />
       ) : (
-        <GuideChecklist key={`${key}${i}`} slug={props.slug} items={block} />
+        <GuideFold key={`${key}${i}`} title={block.title} items={block.items} />
       ),
     );
   const showLinks =
@@ -535,6 +545,21 @@ function FicheLinks(props: {
             />
           );
         }
+        if (link.kind === 'healthStock') {
+          return (
+            <ModuleLink
+              key="health"
+              icon={HeartPulse}
+              color={colors.health}
+              title="Ma trousse de secours"
+              detail="Médicaments et matériel de soin du stock"
+              onPress={() => {
+                props.onLeave();
+                navigation.goTo('stock', { category: 'medical' });
+              }}
+            />
+          );
+        }
         if (link.kind === 'crisis') {
           return (
             <ModuleLink
@@ -592,23 +617,69 @@ function ModuleLink(props: {
   );
 }
 
-/** Les lignes « ☐ » consécutives forment une liste de contrôle. */
-function blocks(lines: readonly string[]): Array<string | string[]> {
-  const out: Array<string | string[]> = [];
+type Block =
+  | string
+  | { kind: 'checks'; items: string[] }
+  | { kind: 'fold'; title: string; items: string[] };
+
+/**
+ * Les lignes « ☐ » consécutives forment une liste de contrôle ; une ligne
+ * « ▸ Titre » ouvre un volet repliable qui reçoit les puces « - » suivantes.
+ */
+function blocks(lines: readonly string[]): Block[] {
+  const out: Block[] = [];
   for (const line of lines) {
+    const last = out[out.length - 1];
     if (line.startsWith(CHECK_PREFIX)) {
       const label = line.slice(CHECK_PREFIX.length);
-      const last = out[out.length - 1];
-      if (Array.isArray(last)) {
-        last.push(label);
+      if (typeof last === 'object' && last.kind === 'checks') {
+        last.items.push(label);
       } else {
-        out.push([label]);
+        out.push({ kind: 'checks', items: [label] });
       }
+    } else if (line.startsWith('▸ ')) {
+      out.push({ kind: 'fold', title: line.slice(2).trim(), items: [] });
+    } else if (
+      line.startsWith('- ') &&
+      typeof last === 'object' &&
+      last.kind === 'fold'
+    ) {
+      last.items.push(line.slice(2));
     } else {
       out.push(line);
     }
   }
   return out;
+}
+
+/** Volet repliable : fermé à l'ouverture de la fiche, ouvert d'un appui. */
+function GuideFold(props: { title: string; items: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={styles.fold}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(o => !o)}
+        style={({ pressed }) => [styles.foldHead, pressed && styles.pressed]}
+      >
+        <Text style={[styles.title, styles.grow]}>{props.title}</Text>
+        <ChevronDown
+          color={colors.textMuted}
+          size={20}
+          style={open ? styles.foldOpen : undefined}
+        />
+      </Pressable>
+      {open
+        ? props.items.map(item => (
+            <View key={item} style={styles.bullet}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={[text.body, styles.grow]}>{item}</Text>
+            </View>
+          ))
+        : null}
+    </View>
+  );
 }
 
 /** Liste de contrôle cochable ; la date du dernier contrôle est conservée. */
@@ -812,6 +883,26 @@ function GuideLine({ line }: { line: string }) {
       <Text accessibilityRole="header" style={styles.heading}>
         {line.slice(3)}
       </Text>
+    );
+  }
+  const card = imageCard(line);
+  if (card) {
+    const source = GUIDE_IMAGES[card.image];
+    return (
+      <View style={styles.imageCard}>
+        {source ? (
+          <Image
+            source={source}
+            style={styles.cardImage}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+          />
+        ) : null}
+        <View style={[styles.grow, styles.cardText]}>
+          <Text style={styles.title}>{card.title}</Text>
+          {card.text ? <Text style={text.muted}>{card.text}</Text> : null}
+        </View>
+      </View>
     );
   }
   if (line.startsWith('◇ ')) {
@@ -1101,6 +1192,34 @@ const styles = StyleSheet.create({
   },
   sourceOrg: { fontWeight: '600' },
   sourceUrl: { color: colors.cyan, fontSize: 13 },
+  imageCard: {
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  // Proportions des illustrations : l'image n'est ni étirée ni rognée
+  // quand le texte de la carte est long.
+  cardImage: { width: '38%', aspectRatio: 1.2, alignSelf: 'flex-start' },
+  cardText: { gap: 2, padding: space.m, justifyContent: 'center' },
+  fold: {
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    paddingHorizontal: space.m,
+    paddingBottom: space.xs,
+    gap: space.xs,
+  },
+  foldHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    minHeight: 48,
+  },
+  foldOpen: { transform: [{ rotate: '180deg' }] },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridCell: { width: '50%' },
   tableRow: {

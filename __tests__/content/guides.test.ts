@@ -15,9 +15,11 @@ import {
   ficheSources,
   GUIDE_FOLDERS,
   GUIDE_UPDATED,
+  imageCard,
   readMeta,
   WEB,
 } from '../../src/content/fiches/fiche';
+import { GUIDE_IMAGES } from '../../src/ui/guideImages';
 import { CRISES } from '../../src/plan/crisis';
 
 const REFLEXES = [
@@ -182,5 +184,37 @@ describe('lecteur en blocs', () => {
         ficheLayout(guide.body).links.length,
       );
     }
+  });
+});
+
+describe('fiches santé illustrées', () => {
+  it('n’appelle que des illustrations embarquées', () => {
+    const used = new Set<string>();
+    for (const guide of BUNDLED_GUIDES) {
+      for (const line of guide.body.split('\n')) {
+        const card = imageCard(line);
+        if (line.startsWith('▣ ')) {
+          expect([guide.slug, card !== null]).toEqual([guide.slug, true]);
+          expect([card!.image, card!.image in GUIDE_IMAGES]).toEqual([
+            card!.image,
+            true,
+          ]);
+          used.add(card!.image);
+        }
+      }
+    }
+    // Aucune image embarquée pour rien.
+    expect(Object.keys(GUIDE_IMAGES).filter(k => !used.has(k))).toEqual([]);
+  });
+
+  it('garde les deux fiches de fermeture, chacune renvoyant à l’autre', () => {
+    const plaies = BUNDLED_GUIDES.find(g => g.slug === 'plaies-fermeture')!;
+    const suture = BUNDLED_GUIDES.find(g => g.slug === 'suture')!;
+    expect(plaies.body).toMatch(/« Fermer une plaie : strips et suture »/);
+    expect(suture.body).toMatch(/« Plaies : quand et comment les fermer »/);
+    const meds = BUNDLED_GUIDES.find(g => g.slug === 'medicaments-courants')!;
+    // Aucune dose chiffrée dans la fiche médicaments.
+    expect(meds.body).not.toMatch(/\d\s?(mg|g|ml|mL)\b/);
+    expect(ficheLayout(meds.body).links).toEqual([{ kind: 'healthStock' }]);
   });
 });
