@@ -24,6 +24,8 @@ export const RESUMES: Record<string, string> = {
     'Un quart d’heure par mois pour contrôler stocks, eau, énergie, radio, sacs, santé, contacts et documents.',
   'parcours-preparation':
     'Se préparer en huit étapes progressives, des risques du foyer jusqu’aux exercices, chacune utile seule.',
+  'applications-hors-ligne':
+    'Cartes, encyclopédie et outils de terrain qui marchent sans réseau : CoMaps, Kiwix, Trail Sense, à préparer en Wi-Fi avant la crise.',
   'petit-budget':
     'Commencer par ce qui est gratuit, puis acheter dans l’ordre : eau, vivres, lumière, radio, santé, énergie.',
 

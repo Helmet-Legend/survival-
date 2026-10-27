@@ -10,6 +10,7 @@ import type {
 } from '../inventory';
 import type { FileAccess } from '../device/files';
 import type { CompassSource } from '../device/compass';
+import type { TorchSignal } from '../device/torch';
 import type { LocationSource } from '../device/location';
 import type { MapTileStore, TileFetch } from '../geo/tiles';
 import type { WaypointRepository } from '../geo/waypoints';
@@ -44,6 +45,8 @@ export interface Session {
   location: LocationSource;
   /** Boussole du téléphone (indisponible hors Android). */
   compass: CompassSource;
+  /** Lampe du flash, pour le signal SOS (indisponible sans lampe). */
+  torch: TorchSignal;
   /** Points de repère enregistrés. */
   waypoints: WaypointRepository;
   /** Cartes hors ligne gardées dans le coffre. */

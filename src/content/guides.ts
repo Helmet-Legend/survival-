@@ -6,6 +6,7 @@
  * doivent être relues par un professionnel de santé avant toute diffusion.
  */
 import type { BundledGuide } from '../db/guides';
+import { APPLICATIONS } from './fiches/applications';
 import { COMMUNICATION } from './fiches/communication';
 import { COMPLEMENTS } from './fiches/complements';
 import { EAU, ORIENTATION } from './fiches/eau-orientation';
@@ -36,6 +37,7 @@ const ALL: BundledGuide[] = [
   ...ORGANISATION,
   ...PROTECTION,
   ...COMPLEMENTS,
+  ...APPLICATIONS,
 ];
 
 /** Résumé « En bref » rédigé pour chaque fiche, à la place du premier paragraphe. */
