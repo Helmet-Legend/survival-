@@ -57,8 +57,26 @@ jobs:
       - run: npm ci
       - name: Base des médicaments (noms par code CIP, hors ligne)
         run: node scripts/build-medicines.mjs
+      # Clé de signature de la version GitHub, gardée hors du dépôt. Sans
+      # elle (pull request d'un fork), l'APK est signé en débogage et n'est
+      # pas publié.
+      - name: Clé de signature GitHub
+        env:
+          KEYSTORE_B64: ${{ secrets.FENRIR_GITHUB_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/github.jks"
+            echo "FENRIR_GITHUB_STORE_FILE=$RUNNER_TEMP/github.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secrets de la clé GitHub absents : APK signé avec la clé de débogage publique, non publié."
+          fi
       - name: Compilation (arm64-v8a, la quasi-totalité des téléphones récents)
         working-directory: android
+        env:
+          FENRIR_GITHUB_STORE_PASSWORD: ${{ secrets.FENRIR_GITHUB_STORE_PASSWORD }}
+          FENRIR_GITHUB_KEY_ALIAS: ${{ secrets.FENRIR_GITHUB_KEY_ALIAS }}
+          FENRIR_GITHUB_KEY_PASSWORD: ${{ secrets.FENRIR_GITHUB_KEY_PASSWORD }}
         run: >-
           ./gradlew assembleGithubRelease --no-daemon --stacktrace
           -PreactNativeArchitectures=arm64-v8a
@@ -71,7 +89,7 @@ jobs:
           path: Fenrir-*.apk
           retention-days: 30
       - name: Publication de la version
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
@@ -112,7 +130,9 @@ jobs:
 
   # Lance l'application finale (code réduit par R8) sur un téléphone Android
   # virtuel x86_64 : un plantage au démarrage (classe retirée à tort, module
-  # natif absent) fait échouer ce contrôle. L'APK GitHub ne contient que le
+  # natif absent) fait échouer ce contrôle. Puis crée un coffre par
+  # l'interface et vérifie sur le disque que SQLCipher chiffre réellement les
+  # bases, et que l'application reste utilisable avec le texte à 200 %. L'APK GitHub ne contient que le
   # code ARM 64 bits ; on part donc du paquet Play (même code, x86_64
   # compris), converti en APK universel. Ne bloque pas la publication.
   demarrage:
@@ -121,6 +141,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           name: fenrir-play-aab
@@ -158,6 +179,7 @@ jobs:
             if grep -E "FATAL EXCEPTION|AndroidRuntime: Process: app.fenrir|ClassNotFoundException: (com.resilios|com.facebook|com.op|com.poowf|com.oblador|com.horcrux|com.th3rdwave|org.linusu|com.lambdapioneer|zxingcpp|com.google.zxing)|NoSuchMethodError" logcat.txt; then echo "::error::Fenrir plante au démarrage"; grep -A30 "FATAL EXCEPTION" logcat.txt | head -80; exit 1; fi
             adb shell pidof app.fenrir || { echo "::error::Fenrir ne tourne plus après 30 s"; tail -100 logcat.txt; exit 1; }
             echo "Fenrir démarre et tourne après 30 s."
+            bash .github/scripts/coffre-emulateur.sh
 
   # Version iPhone : fichier .ipa NON signé, à installer sans App Store avec
   # SideStore ou AltStore (signature par l'identifiant Apple de l'utilisateur).

@@ -187,7 +187,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [redLightOn, setRedLightOn] = useState(false);
   const sessionRef = useRef<Session | null>(null);
 
-  useEffect(() => {
+  const loadStatus = useCallback(() => {
     manager
       .getStatus()
       .then(status =>
@@ -206,6 +206,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         }),
       );
   }, [manager]);
+  useEffect(loadStatus, [loadStatus]);
 
   const open = (db: VaultDatabase) => {
     const session = {
@@ -375,6 +376,10 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     body = (
       <FatalScreen
         message={phase.message}
+        onRetry={() => {
+          setPhase({ kind: 'loading' });
+          loadStatus();
+        }}
         onReset={async () => {
           await manager.destroy();
           setPhase({ kind: 'setup' });
@@ -537,7 +542,12 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   );
 }
 
-function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
+function FatalScreen(props: {
+  message: string;
+  /** Erreur souvent passagère (trousseau du téléphone) : réessayer d'abord. */
+  onRetry: () => void;
+  onReset: () => Promise<void>;
+}) {
   const [confirming, setConfirming] = useState(false);
   return (
     <View style={styles.fatal}>
@@ -563,10 +573,16 @@ function FatalScreen(props: { message: string; onReset: () => Promise<void> }) {
           />
         </>
       ) : (
-        <Button
-          label="Effacer le coffre…"
-          onPress={() => setConfirming(true)}
-        />
+        <>
+          <Button variant="primary" label="Réessayer" onPress={props.onRetry} />
+          <Text style={text.body}>
+            Si l’erreur persiste après un redémarrage du téléphone :
+          </Text>
+          <Button
+            label="Effacer le coffre…"
+            onPress={() => setConfirming(true)}
+          />
+        </>
       )}
     </View>
   );

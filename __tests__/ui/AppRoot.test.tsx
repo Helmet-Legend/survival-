@@ -629,6 +629,22 @@ describe('cycle de vie', () => {
     ).toBeNull();
   });
 
+  it('réessaie sans rien effacer quand l’état du coffre se relit', async () => {
+    const { manager, store } = await existingVault();
+    const saved = store.value;
+    store.value = '{corrompu';
+    await render(<AppRoot manager={manager} content={content} />);
+    expect(
+      await screen.findByText('Le coffre ne peut pas être ouvert'),
+    ).toBeTruthy();
+    // Trousseau de nouveau lisible (erreur passagère) : le coffre est intact.
+    store.value = saved;
+    await fireEvent.press(screen.getByText('Réessayer'));
+    expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+    await unlockWith(MASTER);
+    expect(await screen.findByText('Autonomie du foyer')).toBeTruthy();
+  });
+
   it('propose d’effacer un coffre illisible', async () => {
     const { manager, store } = await existingVault();
     store.value = '{corrompu';
