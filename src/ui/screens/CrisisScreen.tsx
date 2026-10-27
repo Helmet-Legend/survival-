@@ -54,7 +54,9 @@ const formatWh = (wh: number) => `${formatNumber(wh, 0)} Wh`;
 export function CrisisScreen() {
   const { db, repo, bags, documents, reminders } = useSession();
   const navigation = useNavigation();
-  const [crisisId, setCrisisId] = useState<CrisisId>('blackout');
+  const [crisisId, setCrisisId] = useState<CrisisId>(
+    navigation.crisisScenario ?? 'blackout',
+  );
   const scenario = crisisById(crisisId);
   const [days, setDays] = useState(scenario.defaultDays);
   const [bagId, setBagId] = useState<string | null>(null);

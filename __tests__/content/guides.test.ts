@@ -11,10 +11,14 @@ import { NodeSqliteDb } from '../db/sqlite';
 import { BUNDLED_GUIDES } from '../../src/content/guides';
 import {
   F,
+  ficheLayout,
+  ficheSources,
   GUIDE_FOLDERS,
   GUIDE_UPDATED,
   readMeta,
+  WEB,
 } from '../../src/content/fiches/fiche';
+import { CRISES } from '../../src/plan/crisis';
 
 const REFLEXES = [
   'alerter-secours',
@@ -122,5 +126,61 @@ describe('fiches harmonisées', () => {
     expect(needsReview('2026-10', '2027-09-30')).toBe(false);
     expect(needsReview('2026-10', '2027-10-01')).toBe(true);
     expect(needsReview(null, '2026-10-18')).toBe(true);
+  });
+});
+
+describe('lecteur en blocs', () => {
+  const crisisIds = new Set(CRISES.map(c => c.id));
+
+  it('répartit priorités, onglets, interdits et liens', () => {
+    const guide = BUNDLED_GUIDES.find(g => g.slug === 'coupure-eau')!;
+    const layout = ficheLayout(guide.body);
+    expect(layout.priorities).toHaveLength(3);
+    expect(layout.phases.map(p => p.phase)).toEqual([
+      'Avant',
+      'Pendant',
+      'Après',
+    ]);
+    expect(layout.donts).toHaveLength(3);
+    expect(layout.links).toEqual([
+      { kind: 'waterStock' },
+      { kind: 'crisis', scenario: 'waterCut' },
+      { kind: 'localRisks' },
+    ]);
+    // Aucun repère ni métadonnée ne reste dans le texte affiché.
+    const shown = [...layout.intro, ...layout.phases.flatMap(p => p.lines)];
+    expect(shown.filter(l => /^(★|✕|→|§|# )/.test(l))).toEqual([]);
+    expect(ficheSources(guide.body).map(s => s.url)).toEqual([
+      WEB.ars.url,
+      WEB.tousResponsables.url,
+    ]);
+  });
+
+  it('laisse les fiches sans repères d’un seul tenant', () => {
+    const guide = BUNDLED_GUIDES.find(g => g.slug === 'morse')!;
+    const layout = ficheLayout(guide.body);
+    expect(layout.phases).toEqual([]);
+    expect(layout.priorities).toEqual([]);
+    expect(layout.intro.length).toBeGreaterThan(0);
+  });
+
+  it('ne cite que des scénarios, des adresses et des mois valides', () => {
+    for (const guide of BUNDLED_GUIDES) {
+      for (const link of ficheLayout(guide.body).links) {
+        if (link.kind === 'crisis') {
+          expect([guide.slug, crisisIds.has(link.scenario)]).toEqual([
+            guide.slug,
+            true,
+          ]);
+        }
+      }
+      for (const source of ficheSources(guide.body)) {
+        expect(source.url).toMatch(/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}/);
+        expect(source.consulted).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
+      }
+      expect(guide.body.split('\n').filter(l => /^→ /.test(l))).toHaveLength(
+        ficheLayout(guide.body).links.length,
+      );
+    }
   });
 });

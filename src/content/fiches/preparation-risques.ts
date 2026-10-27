@@ -1,5 +1,5 @@
 /** Préparation du foyer et conduite à tenir face aux risques majeurs. */
-import { F, fiche, REF } from './fiche';
+import { F, fiche, LINK, REF, WEB } from './fiche';
 
 export const PREPARATION = [
   fiche(
@@ -71,6 +71,14 @@ export const PREPARATION = [
     F.energie,
     'Coupure d’électricité prolongée',
     [
+      '★ Appareil médical : passer sur sa batterie ou la solution de repli prévue ; appeler le 15 si la vie en dépend.',
+      '★ Lumière : lampes frontales et lampes à piles plutôt que bougies.',
+      '★ Information : radio à piles, téléphone en économie d’énergie.',
+      '# Avant',
+      '- Estimer l’énergie nécessaire avec le calculateur électrique (Plan d’action › Calculateurs).',
+      '- Appareil médical à domicile : convenir à l’avance d’une solution de repli avec le prestataire.',
+      '- Garder lampes, piles, radio à piles et batteries externes chargées.',
+      '# Pendant',
       '## Priorités, dans l’ordre',
       '= 1. Appareils médicaux  Batterie de l’appareil, solution de repli prévue avec le prestataire ; appeler le 15 si la vie en dépend',
       '= 2. Lumière  Lampes frontales et lampes à piles ; bougies en dernier recours, jamais sans surveillance',
@@ -84,10 +92,22 @@ export const PREPARATION = [
       '## Gestes',
       '- Débrancher les appareils sensibles pour éviter la surtension au retour du courant ; laisser une lampe branchée pour savoir quand il revient.',
       '- Se regrouper dans une seule pièce l’hiver, calfeutrer sans boucher les aérations.',
-      '- Estimer l’énergie nécessaire avant une coupure avec le calculateur électrique (Plan d’action › Calculateurs).',
-      '! Groupe électrogène : uniquement dehors, loin des fenêtres et des aérations, jamais dans un garage. Ne jamais le brancher sur une prise du logement ni bricoler un raccordement au tableau électrique : seul un électricien peut installer un inverseur. Jamais de chauffage d’appoint à combustion dans une pièce fermée.',
+      '# Après',
+      '- Vérifier les produits du réfrigérateur et du congélateur avant de les consommer : en cas de doute, jeter.',
+      '- Recharger lampes et batteries externes, remplacer les piles utilisées.',
+      '- Noter ce qui a manqué pour compléter le stock.',
+      '✕ Faire tourner un groupe électrogène ailleurs que dehors, loin des fenêtres et des aérations : jamais dans un garage.',
+      '✕ Brancher un groupe électrogène sur une prise du logement ou bricoler un raccordement au tableau électrique : seul un électricien peut installer un inverseur.',
+      '✕ Utiliser un chauffage d’appoint à combustion dans une pièce fermée.',
+      '✕ Laisser une bougie allumée sans surveillance.',
+      LINK.crisis('blackout'),
     ],
-    { priority: 'importante', sources: [REF.sgdsn, REF.usda] },
+    {
+      priority: 'importante',
+      sources: [REF.sgdsn, REF.usda],
+      links: [WEB.tousResponsables, WEB.usda],
+      checked: '2026-10',
+    },
   ),
   fiche(
     'confinement',

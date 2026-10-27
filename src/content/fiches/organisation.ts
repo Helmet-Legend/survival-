@@ -4,7 +4,7 @@
  * en huit étapes et petit budget. Rédaction originale ; les chiffres
  * cités sont des repères sourcés ou des ordres de grandeur signalés.
  */
-import { F, fiche, REF } from './fiche';
+import { F, fiche, LINK, REF, WEB } from './fiche';
 
 export const ORGANISATION = [
   // --- Alimentation ----------------------------------------------------------
@@ -82,11 +82,16 @@ export const ORGANISATION = [
     'Coupure d’eau courante',
     [
       'Une coupure ou une eau déclarée non potable par la mairie touche la boisson, la cuisine, l’hygiène et les toilettes.',
-      '## Premières actions',
-      '1. Écouter les consignes de la mairie ou du distributeur d’eau : durée, points de distribution, eau du robinet utilisable ou non.',
-      '2. Si l’eau coule encore et qu’une coupure est annoncée : remplir bidons propres, casseroles et baignoire.',
-      '3. Séparer les réserves et les étiqueter : potable, à traiter, non potable.',
-      '4. Réserver l’eau potable à la boisson, à la cuisine et au lavage des mains.',
+      '★ Écouter les consignes de la mairie ou du distributeur d’eau : durée, points de distribution, eau du robinet utilisable ou non.',
+      '★ Si l’eau coule encore et qu’une coupure est annoncée : remplir bidons propres, casseroles et baignoire.',
+      '★ Réserver l’eau potable à la boisson, à la cuisine et au lavage des mains.',
+      '# Avant',
+      '- Garder une réserve d’eau potable datée pour tout le foyer (voir la fiche « Besoins et stockage de l’eau »).',
+      '- Prévoir des bidons propres et vides, à remplir au dernier moment.',
+      '- Savoir comment la mairie et le distributeur d’eau diffusent leurs consignes : site, SMS, radio locale.',
+      '# Pendant',
+      '## Organiser les réserves',
+      '- Séparer les réserves et les étiqueter : potable, à traiter, non potable.',
       '## Quelle eau pour quel usage',
       '= Boisson, cuisine, biberons  Eau potable seulement (bouteilles, réserve datée, eau distribuée)',
       '= Lavage des mains, dents  Eau potable de préférence',
@@ -94,14 +99,28 @@ export const ORGANISATION = [
       '= Chasse d’eau, nettoyage des sols  Eau de baignoire, eau de pluie, eaux grises',
       '## Si la mairie annonce une eau non potable',
       '- Suivre ses consignes : elle seule sait si l’eau peut être bue après ébullition ou si elle ne doit servir à rien.',
-      '- Une contamination chimique ne disparaît pas à l’ébullition : dans ce cas, ne pas faire bouillir pour boire.',
       '- Voir les fiches « Rendre l’eau potable » et « Comparer les traitements de l’eau » pour les méthodes et leurs limites.',
       '## Hygiène sans eau courante',
       '- Gel hydroalcoolique pour les mains, sauf mains visiblement sales (voir la fiche « Se laver les mains avec peu d’eau »).',
       '- Toilettes : verser un seau d’eau non potable dans la cuvette, ou utiliser un sac (voir la fiche « Toilettes de fortune »).',
-      '! Ne jamais présumer qu’une eau claire est potable. L’eau de la baignoire n’est pas potable.',
+      '# Après',
+      '- Quand l’eau revient, elle peut rester impropre à la consommation pendant quelques heures : attendre l’avis de la mairie, du distributeur ou de l’ARS avant de la boire.',
+      '- Des coupures répétées peuvent dégrader la qualité de l’eau du réseau : continuer à suivre les consignes locales.',
+      '- Renouveler et dater la réserve utilisée.',
+      '- Noter ce qui a manqué pour compléter le stock.',
+      '✕ Présumer qu’une eau claire est potable.',
+      '✕ Boire l’eau de la baignoire : elle n’est pas potable.',
+      '✕ Faire bouillir pour la boire une eau à contamination chimique : l’ébullition ne l’enlève pas.',
+      LINK.waterStock,
+      LINK.crisis('waterCut'),
+      LINK.localRisks,
     ],
-    { priority: 'vitale', sources: [REF.ars, REF.sgdsn] },
+    {
+      priority: 'vitale',
+      sources: [REF.ars, REF.sgdsn],
+      links: [WEB.ars, WEB.tousResponsables],
+      checked: '2026-10',
+    },
   ),
 
   // --- Gestion de crise ------------------------------------------------------
