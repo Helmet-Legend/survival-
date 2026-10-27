@@ -73,6 +73,16 @@ export const RESUMES: Record<string, string> = {
     'Comprimer, appeler le 15 si le saignement persiste, faire voir une plaie profonde, souillée ou mal placée ; ne pas la recoudre soi-même.',
   'medicaments-courants':
     'Grandes familles de médicaments courants et leurs précautions, sans dose : lire la notice, éviter les cumuls, demander au pharmacien.',
+  'incendie-logement':
+    'Feu chez soi : sortir en fermant les portes ; fumée dans l’escalier : rester, calfeutrer, se signaler à la fenêtre ; 18 ou 112.',
+  noyade:
+    'Alerter, secourir sans se mettre à l’eau si on nage mal, puis masser si la victime ne respire pas ; la faire examiner dans tous les cas.',
+  hypoglycemie:
+    'Diabétique en malaise : du sucre s’il peut avaler, à renouveler après 15 minutes ; inconscient : sur le côté, 15, rien par la bouche.',
+  'rupture-barrage':
+    'Corne de brume : gagner à pied le point haut le plus proche, sans revenir sur ses pas ; attendre la fin d’alerte pour redescendre.',
+  champignons:
+    'Ne manger que des champignons identifiés avec certitude, photographier la cueillette ; au moindre symptôme, centre antipoison ou 15.',
   suture:
     'Ne fermer une plaie qu’en l’absence de soins dans les heures qui viennent, de préférence par strips ; au moindre signe d’infection, rouvrir et consulter.',
   brulures:

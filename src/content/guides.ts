@@ -16,6 +16,7 @@ import { ORGANISATION } from './fiches/organisation';
 import { PROTECTION } from './fiches/protection';
 import { PREPARATION, RISQUES } from './fiches/preparation-risques';
 import { SURVIE } from './fiches/survie';
+import { URGENCES } from './fiches/urgences-courantes';
 import { ALIMENTATION, HYGIENE } from './fiches/vie-quotidienne';
 
 import { META_PREFIX } from './fiches/fiche';
@@ -38,6 +39,7 @@ const ALL: BundledGuide[] = [
   ...PROTECTION,
   ...COMPLEMENTS,
   ...APPLICATIONS,
+  ...URGENCES,
 ];
 
 /** Résumé « En bref » rédigé pour chaque fiche, à la place du premier paragraphe. */

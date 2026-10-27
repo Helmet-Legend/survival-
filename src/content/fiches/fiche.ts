@@ -360,6 +360,30 @@ export const WEB = {
     url: 'https://www.info.gouv.fr/risques/canicule-et-vagues-de-chaleur',
     consulted: '2026-10',
   },
+  pompiers: {
+    org: 'Sapeurs-pompiers de France',
+    title: 'Incendie domestique : prévenir et réagir',
+    url: 'https://www.pompiers.fr',
+    consulted: '2026-10',
+  },
+  santeFrBaignade: {
+    org: 'Santé.fr (service public d’information en santé)',
+    title: 'Baignade et premiers secours : éviter la noyade',
+    url: 'https://www.sante.fr/node/1093868',
+    consulted: '2026-10',
+  },
+  diabetiques: {
+    org: 'Fédération française des diabétiques',
+    title: 'Hypoglycémie : la reconnaître et la corriger',
+    url: 'https://federationdesdiabetiques.org',
+    consulted: '2026-10',
+  },
+  ansesChampignons: {
+    org: 'ANSES',
+    title: 'Cueillette des champignons : vigilance face aux intoxications',
+    url: 'https://www.anses.fr/fr/content/cueillette-des-champignons-vigilance-face-aux-risques-dintoxications',
+    consulted: '2026-10',
+  },
   usda: {
     org: 'Département de l’Agriculture des États-Unis (USDA)',
     title: 'Sécurité des aliments en cas de coupure (en anglais)',
