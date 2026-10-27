@@ -11,6 +11,10 @@ import {
   bytesToBase64,
   utf8ToText,
 } from '../../src/backup/base64';
+import { xchacha20poly1305 } from '@noble/ciphers/chacha';
+import { utf8ToBytes } from '@noble/hashes/utils';
+
+import { normalizePin } from '../../src/crypto/kdf';
 import { prepareDatabase } from '../../src/db/connection';
 import { MapTileStore } from '../../src/geo/tiles';
 import { WaypointRepository } from '../../src/geo/waypoints';
@@ -163,6 +167,109 @@ describe('sauvegarde chiffrée', () => {
     await expect(createBackup(db, 'court', options())).rejects.toBeInstanceOf(
       BackupError,
     );
+  });
+});
+
+describe('fichier abîmé ou piégé', () => {
+  /** Chiffre un contenu quelconque comme le ferait une vraie sauvegarde. */
+  async function sealed(content: string): Promise<string> {
+    const salt = new Uint8Array(randomBytes(16));
+    const nonce = new Uint8Array(randomBytes(24));
+    const key = await new JsArgon2().argon2id(normalizePin(PASSWORD), salt, {
+      ...TEST_ARGON2_PARAMS,
+      hashLength: 32,
+    });
+    return JSON.stringify({
+      format: 'fenrir-sauvegarde',
+      version: 1,
+      kdf: {
+        alg: 'argon2id',
+        memoryKiB: TEST_ARGON2_PARAMS.memoryKiB,
+        iterations: TEST_ARGON2_PARAMS.iterations,
+        parallelism: TEST_ARGON2_PARAMS.parallelism,
+        salt: bytesToBase64(salt),
+      },
+      cipher: 'xchacha20poly1305',
+      nonce: bytesToBase64(nonce),
+      data: bytesToBase64(
+        xchacha20poly1305(key, nonce).encrypt(utf8ToBytes(content)),
+      ),
+    });
+  }
+
+  async function intactTarget() {
+    const db = await freshDb();
+    await new InventoryRepository(db).createItem(
+      { name: 'Intact', category: 'food', unit: 'kg' },
+      { quantity: 1 },
+    );
+    return db;
+  }
+  const names = async (db: NodeSqliteDb) =>
+    (await new InventoryRepository(db).listItems()).map(i => i.name);
+
+  it('refuse des paramètres de chiffrement aberrants sans lancer le calcul', async () => {
+    const target = await intactTarget();
+    const { text } = await createBackup(await filledDb(), PASSWORD, options());
+    const envelope = JSON.parse(text);
+    const engine = new JsArgon2();
+    for (const kdf of [
+      { memoryKiB: 64 * 1024 * 1024 }, // 64 Gio demandés
+      { iterations: 1_000_000 },
+      { parallelism: 0 },
+      { memoryKiB: 'beaucoup' },
+      { salt: bytesToBase64(new Uint8Array(3)) },
+    ]) {
+      await expect(
+        restoreBackup(
+          target,
+          JSON.stringify({ ...envelope, kdf: { ...envelope.kdf, ...kdf } }),
+          PASSWORD,
+          engine,
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_FILE' });
+    }
+    await expect(
+      restoreBackup(
+        target,
+        JSON.stringify({ ...envelope, nonce: 'AAAA' }),
+        PASSWORD,
+        engine,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_FILE' });
+    expect(engine.calls).toBe(0);
+    expect(await names(target)).toEqual(['Intact']);
+  });
+
+  it('refuse un contenu déchiffré incohérent sans rien modifier', async () => {
+    const target = await intactTarget();
+    for (const content of [
+      'pas du JSON',
+      '[]',
+      JSON.stringify({ schemaVersion: 18, createdAt: 'x' }),
+      JSON.stringify({ schemaVersion: 18, createdAt: 'x', tables: [] }),
+      JSON.stringify({
+        schemaVersion: 18,
+        createdAt: 'x',
+        tables: { inventory_items: {} },
+      }),
+      JSON.stringify({
+        schemaVersion: 18,
+        createdAt: 'x',
+        tables: { inventory_items: [{ id: 'a', name: { piège: 1 } }] },
+      }),
+      JSON.stringify({ schemaVersion: 'dix-huit', createdAt: 'x', tables: {} }),
+    ]) {
+      const error = await restoreBackup(
+        target,
+        await sealed(content),
+        PASSWORD,
+        new JsArgon2(),
+      ).catch((e: unknown) => e);
+      expect(error).toMatchObject({ code: 'INVALID_FILE' });
+      expect((error as Error).message).toMatch(/Rien n’a été modifié/);
+    }
+    expect(await names(target)).toEqual(['Intact']);
   });
 });
 
