@@ -337,11 +337,12 @@ export async function forgetPeer(
   db: SqlDatabase,
   device: string,
 ): Promise<void> {
-  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?, ?, ?)', [
+  await db.execute('DELETE FROM sync_meta WHERE key IN (?, ?, ?, ?, ?)', [
     `peer:${device}`,
     `peer_clock:${device}`,
     `peer_options:${device}`,
     `peer_synced_at:${device}`,
+    `peer_resend:${device}`,
   ]);
 }
 
