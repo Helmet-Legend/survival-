@@ -1,8 +1,10 @@
 package com.resilios.photo
 
+import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -12,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Base64
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Promise
@@ -19,6 +22,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableNativeArray
+import com.facebook.react.modules.core.PermissionAwareActivity
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
@@ -35,8 +39,9 @@ import kotlin.concurrent.thread
  * temporaire de l'appareil photo est aussitôt effacé : aucune copie en
  * clair ne reste sur le téléphone.
  *
- * L'appareil photo du système est utilisé par intention : l'application
- * n'a pas besoin de la permission CAMERA.
+ * L'appareil photo du système est utilisé par intention. L'application
+ * déclare toutefois CAMERA (lecteur de codes-barres) : Android exige alors
+ * qu'elle soit accordée avant d'ouvrir l'appareil photo du système.
  *
  * Scan de document : le scanner de Google Play (bords, redressement,
  * filtres, plusieurs pages), traité sur le téléphone. Absent sans les
@@ -125,6 +130,40 @@ class PhotoModule(private val context: ReactApplicationContext) :
   @ReactMethod
   fun takePhoto(promise: Promise) {
     val activity = start(promise) ?: return
+    // L'autorisation CAMERA est déclarée pour le lecteur de codes-barres :
+    // tant qu'elle n'est pas accordée, Android refuse d'ouvrir même
+    // l'appareil photo du système. Elle est donc demandée d'abord.
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED) {
+      openCamera(activity)
+      return
+    }
+    val aware = activity as? PermissionAwareActivity
+    if (aware == null) {
+      fail("CAMERA_DENIED", CAMERA_DENIED)
+      return
+    }
+    activity.runOnUiThread {
+      aware.requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION) {
+          code,
+          _,
+          results ->
+        if (code != REQUEST_CAMERA_PERMISSION) {
+          return@requestPermissions false
+        }
+        if (pending === promise) {
+          if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            openCamera(activity)
+          } else {
+            fail("CAMERA_DENIED", CAMERA_DENIED)
+          }
+        }
+        true
+      }
+    }
+  }
+
+  private fun openCamera(activity: Activity) {
     try {
       val dir = File(context.cacheDir, "photos").apply { mkdirs() }
       dir.listFiles()?.forEach { it.delete() }
@@ -140,6 +179,8 @@ class PhotoModule(private val context: ReactApplicationContext) :
       activity.startActivityForResult(intent, REQUEST_CAMERA)
     } catch (e: ActivityNotFoundException) {
       fail("NO_CAMERA", "Aucune application d’appareil photo")
+    } catch (e: SecurityException) {
+      fail("CAMERA_DENIED", CAMERA_DENIED)
     } catch (e: Exception) {
       fail("CAMERA_FAILED", e.message ?: "Appareil photo indisponible")
     }
@@ -314,6 +355,9 @@ class PhotoModule(private val context: ReactApplicationContext) :
     private const val REQUEST_PICK = 0x5246
     private const val REQUEST_SCAN = 0x5247
     private const val SCAN_START_TIMEOUT_MS = 20_000L
+    private const val REQUEST_CAMERA_PERMISSION = 0x5248
+    private const val CAMERA_DENIED =
+        "Fenrir n’a pas l’autorisation d’utiliser l’appareil photo. Autorisez-la dans Réglages › Applications › Fenrir › Autorisations, ou choisissez une image dans la Galerie."
     private const val MAX_SIDE = 1600
     /** Pages de documents : assez fines pour être réimprimées en A4. */
     private const val SCAN_MAX_SIDE = 2500
