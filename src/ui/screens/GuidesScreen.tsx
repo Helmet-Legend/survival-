@@ -374,19 +374,13 @@ export function GuideReader(props: {
       {error ? <Notice tone="error" message={error} /> : null}
       {data ? (
         <View style={styles.reader}>
-          <Text
-            style={[
-              text.label,
-              { color: categoryStyle(String(data.category))[1] },
-            ]}
-          >
-            {String(data.category)}
-          </Text>
-          <Text accessibilityRole="header" style={text.h1}>
-            {String(data.title)}
-          </Text>
+          <FicheTitle
+            category={String(data.category)}
+            title={String(data.title)}
+          />
           <FicheBody
             slug={props.slug}
+            category={String(data.category)}
             body={String(data.body)}
             onLeave={props.onLeave}
             onOpenGuide={props.onOpenGuide}
@@ -401,8 +395,35 @@ export function GuideReader(props: {
  * Corps de la fiche : actions prioritaires, texte (en onglets Avant /
  * Pendant / Après s'il y en a), choses à ne pas faire, liens, pied.
  */
+/**
+ * Catégorie et titre, avec l'icône de la famille : la même icône et la même
+ * couleur que son dossier dans la liste des fiches.
+ */
+function FicheTitle(props: { category: string; title: string }) {
+  const [Icon, color] = categoryStyle(props.category);
+  return (
+    <>
+      <Text style={[text.label, { color }]}>{props.category}</Text>
+      <View style={styles.titleRow}>
+        <View
+          style={[
+            styles.familyIcon,
+            { borderColor: tint(color, '88'), backgroundColor: tint(color) },
+          ]}
+        >
+          <Icon color={color} size={22} />
+        </View>
+        <Text accessibilityRole="header" style={[text.h1, styles.grow]}>
+          {props.title}
+        </Text>
+      </View>
+    </>
+  );
+}
+
 function FicheBody(props: {
   slug: string;
+  category: string;
   body: string;
   onLeave?: () => void;
   onOpenGuide?: (slug: string) => void;
@@ -413,10 +434,13 @@ function FicheBody(props: {
     phases.includes('Pendant') ? 'Pendant' : phases[0] ?? null,
   );
   const current = layout.phases.find(p => p.phase === phase);
+  // Couleur de la famille : « En bref », numéros d'étapes, libellés des
+  // tableaux. Le rouge (danger) et l'orange (actions prioritaires) restent.
+  const accent = categoryStyle(props.category)[1];
   const lines = (list: string[], key: string) =>
     blocks(list).map((block, i) =>
       typeof block === 'string' ? (
-        <GuideLine key={`${key}${i}`} line={block} />
+        <GuideLine key={`${key}${i}`} line={block} accent={accent} />
       ) : block.kind === 'checks' ? (
         <GuideChecklist
           key={`${key}${i}`}
@@ -433,7 +457,7 @@ function FicheBody(props: {
     layout.links.length > 0;
   return (
     <>
-      <FicheHeader body={props.body} />
+      <FicheHeader body={props.body} accent={accent} />
       {layout.priorities.length > 0 ? (
         <View style={styles.priorities}>
           <Text accessibilityRole="header" style={styles.prioritiesTitle}>
@@ -741,7 +765,7 @@ function GuideChecklist(props: { slug: string; items: string[] }) {
 }
 
 /** Tête de fiche : priorité, temps de lecture, fiabilité, résumé, révision. */
-function FicheHeader({ body }: { body: string }) {
+function FicheHeader({ body, accent }: { body: string; accent: string }) {
   const { priority } = readMeta(body);
   const info = ficheInfo(body);
   const stale = needsReview(info.checked, localToday());
@@ -770,8 +794,8 @@ function FicheHeader({ body }: { body: string }) {
         </View>
       ) : null}
       {info.summary ? (
-        <View style={styles.brief}>
-          <Text style={styles.briefLabel}>En bref</Text>
+        <View style={[styles.brief, { borderLeftColor: accent }]}>
+          <Text style={[styles.briefLabel, { color: accent }]}>En bref</Text>
           <Text style={text.body}>{info.summary}</Text>
         </View>
       ) : null}
@@ -874,7 +898,7 @@ function cells(line: string): string[] {
     .split(/\s{2,}/);
 }
 
-function GuideLine({ line }: { line: string }) {
+function GuideLine({ line, accent }: { line: string; accent: string }) {
   if (line.trim() === '') {
     return null;
   }
@@ -941,7 +965,7 @@ function GuideLine({ line }: { line: string }) {
     const [label, ...rest] = cells(line);
     return (
       <View style={styles.tableRow}>
-        <Text style={styles.tableLabel}>{label}</Text>
+        <Text style={[styles.tableLabel, { color: accent }]}>{label}</Text>
         {rest.length > 0 ? (
           <Text style={[text.body, styles.grow]}>{rest.join(' ')}</Text>
         ) : null}
@@ -951,8 +975,10 @@ function GuideLine({ line }: { line: string }) {
   const step = /^(\d+)\. (.*)$/.exec(line);
   if (step) {
     return (
-      <View style={styles.bullet}>
-        <Text style={styles.stepMark}>{step[1]}</Text>
+      <View style={styles.step}>
+        <Text style={[styles.stepPill, { backgroundColor: accent }]}>
+          {step[1]}
+        </Text>
         <Text style={[text.body, styles.grow]}>{step[2]}</Text>
       </View>
     );
@@ -1017,12 +1043,26 @@ const styles = StyleSheet.create({
   },
   bullet: { flexDirection: 'row', gap: space.s },
   bulletMark: { color: colors.primary, fontSize: 16, lineHeight: 22 },
-  stepMark: {
-    minWidth: 22,
-    color: colors.primary,
-    fontSize: 16,
-    lineHeight: 22,
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  familyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m },
+  stepPill: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    overflow: 'hidden',
+    textAlign: 'center',
+    lineHeight: 28,
+    fontSize: 15,
     fontWeight: '800',
+    color: colors.onPrimary,
   },
   heading: {
     ...text.h3,
