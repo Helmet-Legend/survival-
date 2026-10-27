@@ -82,9 +82,12 @@ class ResiliosPhoto: NSObject, UIImagePickerControllerDelegate, UINavigationCont
   private func start(
     _ resolve: @escaping RCTPromiseResolveBlock, _ reject: @escaping RCTPromiseRejectBlock
   ) -> UIViewController? {
-    if self.resolve != nil {
-      reject("BUSY", "Une photo est déjà en cours", nil)
-      return nil
+    // Une demande restée sans réponse (fenêtre fermée d'un glissement)
+    // bloquerait les suivantes : un nouvel appui l'abandonne.
+    if let stale = self.reject {
+      self.resolve = nil
+      self.reject = nil
+      stale("CANCELLED", "Photo précédente abandonnée", nil)
     }
     guard let presenter = RCTPresentedViewController() else {
       reject("NO_ACTIVITY", "Application au second plan", nil)

@@ -8,6 +8,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Base64
 import androidx.core.content.FileProvider
@@ -45,6 +47,7 @@ class PhotoModule(private val context: ReactApplicationContext) :
 
   private var pending: Promise? = null
   private var cameraFile: File? = null
+  private val handler = Handler(Looper.getMainLooper())
 
   init {
     context.addActivityEventListener(this)
@@ -69,9 +72,24 @@ class PhotoModule(private val context: ReactApplicationContext) :
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
             .build()
+    // Premier usage : Google Play télécharge le scanner, ce qui peut ne jamais
+    // aboutir hors connexion. Sans réponse, la demande est abandonnée.
+    val waiting = promise
+    val timeout = Runnable {
+      if (pending === waiting) {
+        fail(
+            "SCAN_UNAVAILABLE",
+            "Scanner indisponible pour l’instant (il s’installe au premier usage, avec une connexion). Utilisez « Photographier ».")
+      }
+    }
+    handler.postDelayed(timeout, SCAN_START_TIMEOUT_MS)
     GmsDocumentScanning.getClient(options)
         .getStartScanIntent(activity)
         .addOnSuccessListener { sender ->
+          handler.removeCallbacks(timeout)
+          if (pending !== waiting) {
+            return@addOnSuccessListener
+          }
           try {
             activity.startIntentSenderForResult(sender, REQUEST_SCAN, null, 0, 0, 0)
           } catch (e: Exception) {
@@ -79,7 +97,10 @@ class PhotoModule(private val context: ReactApplicationContext) :
           }
         }
         .addOnFailureListener { e ->
-          fail("SCAN_UNAVAILABLE", e.message ?: "Scanner de documents indisponible")
+          handler.removeCallbacks(timeout)
+          if (pending === waiting) {
+            fail("SCAN_UNAVAILABLE", e.message ?: "Scanner de documents indisponible")
+          }
         }
   }
 
@@ -200,9 +221,14 @@ class PhotoModule(private val context: ReactApplicationContext) :
   override fun onNewIntent(intent: Intent) {}
 
   private fun start(promise: Promise): Activity? {
-    if (pending != null) {
-      promise.reject("BUSY", "Une photo est déjà en cours")
-      return null
+    // Une demande précédente restée sans réponse (scan interrompu, écran
+    // quitté pendant la prise) bloquerait toutes les suivantes : un nouvel
+    // appui de l'utilisateur l'abandonne.
+    pending?.let {
+      pending = null
+      cameraFile?.delete()
+      cameraFile = null
+      it.reject("CANCELLED", "Photo précédente abandonnée")
     }
     val activity = context.currentActivity
     if (activity == null) {
@@ -269,6 +295,7 @@ class PhotoModule(private val context: ReactApplicationContext) :
     private const val REQUEST_CAMERA = 0x5245
     private const val REQUEST_PICK = 0x5246
     private const val REQUEST_SCAN = 0x5247
+    private const val SCAN_START_TIMEOUT_MS = 20_000L
     private const val MAX_SIDE = 1600
     /** Pages de documents : assez fines pour être réimprimées en A4. */
     private const val SCAN_MAX_SIDE = 2500

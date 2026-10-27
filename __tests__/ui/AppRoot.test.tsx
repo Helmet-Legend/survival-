@@ -2439,6 +2439,34 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('affiche les étapes illustrées du garrot et les volets des médicaments', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    await fireEvent.press(await screen.findByLabelText(/^Santé, /));
+    await fireEvent.press(
+      await screen.findByText('Hémorragie : poser un garrot'),
+    );
+    expect(await screen.findByText('Les 3 actions prioritaires')).toBeTruthy();
+    expect(screen.getByText('Repérer la plaie')).toBeTruthy();
+    expect(screen.getByText('Noter l’heure')).toBeTruthy();
+    expect(screen.getByText('0 sur 3 vérifiés')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText(/^Ma trousse de secours\./));
+    expect((await screen.findAllByText('Médical')).length).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    expect(await screen.findByText('Les 3 actions prioritaires')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Retour : Santé'));
+    await fireEvent.press(
+      await screen.findByText('Médicaments courants : usages et précautions'),
+    );
+    const fold = await screen.findByRole('button', { name: 'Paracétamol' });
+    expect(screen.queryByText(/Un surdosage peut détruire le foie/)).toBeNull();
+    await fireEvent.press(fold);
+    expect(
+      await screen.findByText(/Un surdosage peut détruire le foie/),
+    ).toBeTruthy();
+  });
+
   it('range les fiches par dossier et met en forme le morse', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
