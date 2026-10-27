@@ -7,6 +7,7 @@
  * Les requêtes travaillent par paquets pour rester rapides sur des bases de
  * plusieurs milliers de lignes.
  */
+import { SYNC_RESEED } from '../db/schema';
 import { withTransaction } from '../db/transaction';
 import type { SqlDatabase, SqlValue } from '../db/types';
 import { GEAR_SCOPE, GEAR_SECTIONS, SHOW_WEAPONS_MARK } from '../plan/baseGear';
@@ -194,6 +195,70 @@ export async function stampLocalChanges(
   now: number = Date.now(),
 ): Promise<number> {
   return withTransaction(db, () => stamp(db, now));
+}
+
+/**
+ * Après la restauration d'une sauvegarde (dans sa transaction) : le contenu
+ * restauré ne doit pas passer pour des modifications récentes, sinon il
+ * écraserait, et effacerait, ce que les téléphones associés ont de plus
+ * récent. Chaque ligne restaurée prend la version la plus ancienne possible
+ * et, au prochain échange avec chaque téléphone associé, les deux côtés
+ * s'envoient tout : leurs versions l'emportent, et ce que seule la
+ * sauvegarde contient leur est ajouté.
+ */
+export async function forgetVersionsAfterRestore(
+  db: SqlDatabase,
+): Promise<void> {
+  const oldest = encodeHlc({
+    wall: 0,
+    counter: 0,
+    node: await getDeviceId(db),
+  });
+  await db.execute('DELETE FROM sync_rows');
+  for (const sql of SYNC_RESEED) {
+    await db.execute(sql, [oldest]);
+  }
+  const { rows: marks } = await db.execute(
+    "SELECT key FROM sync_rows WHERE tbl = 'preparation_marks'",
+  );
+  const weaponMarks = marks.map(r => String(r.key)).filter(isWeaponMark);
+  for (const part of chunks(weaponMarks, KEY_CHUNK)) {
+    await db.execute(
+      `UPDATE sync_rows SET is_weapon = 1
+        WHERE tbl = 'preparation_marks' AND key IN (${placeholders(
+          part.length,
+        )})`,
+      part,
+    );
+  }
+  const { rows: peers } = await db.execute(
+    "SELECT substr(key, 6) AS device FROM sync_meta WHERE key LIKE 'peer:%'",
+  );
+  await db.execute(
+    "DELETE FROM sync_meta WHERE key LIKE 'peer\\_clock:%' ESCAPE '\\'",
+  );
+  for (const peer of peers) {
+    await setMeta(db, `${RESEND_PREFIX}${String(peer.device)}`, '1');
+  }
+}
+
+const RESEND_PREFIX = 'peer_resend:';
+
+/** Tout renvoyer à ce téléphone au prochain échange (après restauration). */
+export async function mustResendAll(
+  db: SqlDatabase,
+  device: string,
+): Promise<boolean> {
+  return (await getMeta(db, `${RESEND_PREFIX}${device}`)) !== null;
+}
+
+export async function clearResendAll(
+  db: SqlDatabase,
+  device: string,
+): Promise<void> {
+  await db.execute('DELETE FROM sync_meta WHERE key = ?', [
+    `${RESEND_PREFIX}${device}`,
+  ]);
 }
 
 // --- Lecture des lignes ---------------------------------------------------

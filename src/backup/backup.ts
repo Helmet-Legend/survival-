@@ -22,6 +22,7 @@ import type { Argon2Engine, RandomSource } from '../crypto/types';
 import { SCHEMA_VERSION } from '../db/schema';
 import { withTransaction } from '../db/transaction';
 import type { SqlDatabase, SqlRow, SqlValue } from '../db/types';
+import { forgetVersionsAfterRestore } from '../sync/store';
 import { base64ToBytes, bytesToBase64, utf8ToText } from './base64';
 
 export const BACKUP_FORMAT = 'fenrir-sauvegarde';
@@ -280,6 +281,11 @@ export async function restoreBackup(
   await withTransaction(db, async () => {
     // Les clés étrangères sont vérifiées à la validation, pas ligne à ligne.
     await db.execute('PRAGMA defer_foreign_keys = ON');
+    // Le remplacement n'est pas une suite de modifications à partager : le
+    // suivi de synchronisation est recréé à la fin.
+    await db.execute(
+      "INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('applying', '1')",
+    );
     for (const name of [...tables].reverse()) {
       await db.execute(`DELETE FROM "${name}"`);
     }
@@ -303,6 +309,8 @@ export async function restoreBackup(
         rows++;
       }
     }
+    await forgetVersionsAfterRestore(db);
+    await db.execute("DELETE FROM sync_meta WHERE key = 'applying'");
   });
   return { createdAt: payload.createdAt, rows };
 }

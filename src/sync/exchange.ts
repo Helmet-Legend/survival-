@@ -30,9 +30,11 @@ import {
 } from './secure';
 import {
   applyRemoteChanges,
+  clearResendAll,
   exportChanges,
   getDeviceId,
   getPeerClock,
+  mustResendAll,
   type SyncOptions,
   type SyncPayload,
   type SyncReport,
@@ -234,7 +236,9 @@ async function transfer(
       since: widened ? null : await getPeerClock(db, peer.device),
     });
     const want = await receiveSealed(channel, session, 'want', HANDSHAKE_MS);
-    const since = typeof want.since === 'string' ? want.since : null;
+    // Après une restauration de sauvegarde ici : tout renvoyer.
+    const resend = await mustResendAll(db, peer.device);
+    const since = !resend && typeof want.since === 'string' ? want.since : null;
 
     const sent: SyncPayload = await exportChanges(db, options, since, now());
     // Un seul paquet : message identique à celui des versions précédentes.
@@ -266,6 +270,9 @@ async function transfer(
     await sendSealed(channel, session, { t: 'ack', written: received.written });
     await receiveSealed(channel, session, 'ack', TRANSFER_MS);
     await saveOptions(db, peer.device, options);
+    if (resend) {
+      await clearResendAll(db, peer.device);
+    }
     await db.execute(
       `INSERT INTO sync_meta (key, value) VALUES (?, ?)
        ON CONFLICT (key) DO UPDATE SET value = excluded.value`,

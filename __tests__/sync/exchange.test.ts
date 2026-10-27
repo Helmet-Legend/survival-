@@ -1,5 +1,7 @@
 import { randomBytes } from 'crypto';
 
+import { createBackup, restoreBackup } from '../../src/backup/backup';
+
 import type { RandomSource } from '../../src/crypto/types';
 import { prepareDatabase } from '../../src/db/connection';
 import { ArmoryRepository, InventoryRepository } from '../../src/inventory';
@@ -12,11 +14,13 @@ import {
   getPeer,
   joinWithInvite,
   memoryChannelPair,
+  mustResendAll,
   splitPayload,
   updatePeerOptions,
   type Channel,
   type ExchangeContext,
 } from '../../src/sync';
+import { JsArgon2, TEST_ARGON2_PARAMS } from '../crypto/fakes';
 import { NodeSqliteDb } from '../db/sqlite';
 
 const random: RandomSource = { bytes: n => new Uint8Array(randomBytes(n)) };
@@ -238,5 +242,78 @@ describe('échange entre deux téléphones', () => {
       joinWithInvite(stranger.ctx, ch, forged),
     );
     expect(noInvite.code).toBe('NO_INVITE');
+  });
+});
+
+describe('restauration d’une sauvegarde sur un téléphone associé', () => {
+  const PASSWORD = 'sauvegarde du foyer';
+  const backup = (p: Phone) =>
+    createBackup(p.db, PASSWORD, {
+      engine: new JsArgon2(),
+      random,
+      params: TEST_ARGON2_PARAMS,
+    });
+  const restore = (p: Phone, text: string) =>
+    restoreBackup(p.db, text, PASSWORD, new JsArgon2());
+  const quantities = async (p: Phone) =>
+    Object.fromEntries(
+      (await p.repo.listItems()).map(i => [i.name, i.totalQuantity]),
+    );
+
+  it('n’efface ni ne remplace ce que l’autre téléphone a de plus récent', async () => {
+    const a = await phone('a');
+    const b = await phone('b');
+    const riz = await a.repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
+      { quantity: 5 },
+    );
+    await pair(a, b);
+    const { text } = await backup(a);
+
+    // Après la sauvegarde, B ajoute du thon et mange 2 kg de riz ; A le
+    // reçoit, puis restaure l'ancienne sauvegarde.
+    await b.repo.createItem(
+      { name: 'Thon', category: 'food', unit: 'unit', caloriesPerUnit: 200 },
+      { quantity: 4 },
+    );
+    await b.repo.consume(riz.id, 2);
+    await sync(a, b);
+    await restore(a, text);
+    expect(await quantities(a)).toEqual({ Riz: 5 });
+
+    await sync(a, b);
+    const expected = { Riz: 3, Thon: 4 };
+    expect(await quantities(b)).toEqual(expected);
+    expect(await quantities(a)).toEqual(expected);
+
+    // L'envoi complet n'a lieu qu'une fois ; ensuite, échanges habituels.
+    expect(await mustResendAll(a.db, await getDeviceId(b.db))).toBe(false);
+    await b.repo.consume(riz.id, 1);
+    await sync(a, b);
+    expect(await quantities(a)).toEqual({ Riz: 2, Thon: 4 });
+  });
+
+  it('partage ce que seule la sauvegarde contient', async () => {
+    const a = await phone('a');
+    const b = await phone('b');
+    await a.repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg', caloriesPerUnit: 3600 },
+      { quantity: 5 },
+    );
+    await pair(a, b);
+    // Les bougies, jamais partagées, sont perdues sur A puis retrouvées
+    // par la restauration.
+    const bougies = await a.repo.createItem(
+      { name: 'Bougies', category: 'tool', unit: 'unit' },
+      { quantity: 10 },
+    );
+    const { text } = await backup(a);
+    await a.repo.deleteItem(bougies.id);
+    await restore(a, text);
+
+    await sync(a, b);
+    const expected = { Riz: 5, Bougies: 10 };
+    expect(await quantities(b)).toEqual(expected);
+    expect(await quantities(a)).toEqual(expected);
   });
 });

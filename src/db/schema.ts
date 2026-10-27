@@ -864,6 +864,21 @@ const migration17: Migration = {
 };
 
 /**
+ * Suivi de synchronisation recréé d'après les données présentes, une ligne
+ * par ligne partagée, toutes à la version passée en paramètre (restauration
+ * d'une sauvegarde : voir `forgetVersionsAfterRestore`).
+ */
+export const SYNC_RESEED: readonly string[] = [
+  SYNC_SETTINGS_17,
+  ...SYNC_SHARED.slice(1),
+].map(
+  t =>
+    `INSERT INTO sync_rows (tbl, key, hlc, is_weapon)
+     SELECT '${t.table}', ${t.key(t.table)}, ?, ${t.weapon(t.table)}
+       FROM ${t.table}${t.when ? ` WHERE ${t.when(t.table)}` : ''}`,
+);
+
+/**
  * Boîtes de rangement étiquetées (QR + numéro, rien d'autre). Une boîte contient des lots :
  * une partie d'un article peut être dans une boîte, le reste ailleurs, sans
  * changer la fiche ni le total du stock.
