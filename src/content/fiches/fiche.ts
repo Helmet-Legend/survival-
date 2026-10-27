@@ -1,4 +1,5 @@
 import type { BundledGuide } from '../../db/guides';
+import type { CrisisId } from '../../plan/crisis';
 
 /** Familles du guide, dans l'ordre d'affichage. */
 export const F = {
@@ -32,6 +33,18 @@ export interface FicheMeta {
   keywords?: readonly string[];
   /** Résumé « En bref » ; par défaut, le premier paragraphe de la fiche. */
   summary?: string;
+  /** Pages en ligne consultées, avec leur adresse et le mois de consultation. */
+  links?: readonly SourceLink[];
+  /** Mois (`AAAA-MM`) où cette fiche a été vérifiée ; par défaut `GUIDE_CHECKED`. */
+  checked?: string;
+}
+
+export interface SourceLink {
+  org: string;
+  title: string;
+  url: string;
+  /** Mois de consultation, `AAAA-MM`. */
+  consulted: string;
 }
 
 /** Mois de rédaction ou de dernière révision du guide embarqué. */
@@ -52,7 +65,7 @@ export const RELIABILITY_LABELS: Record<Reliability, string> = {
   sante: 'Santé : non relue par un soignant',
 };
 
-const MARKER = /^(## |- |\d+\. |! |= |\| |◇ |↓|☐ )/;
+const MARKER = /^(## |# |- |\d+\. |! |= |\| |◇ |↓|☐ |★ |✕ |→ )/;
 
 /** Premier paragraphe simple de la fiche, raccourci à une ou deux phrases. */
 export function defaultSummary(lines: readonly string[]): string {
@@ -80,6 +93,9 @@ export const META_PREFIX = '§ ';
  * Une fiche : chaque ligne est un paragraphe. Marqueurs reconnus par le
  * lecteur : « ## » intertitre, « - » puce, « 1. » étape, « ! » mise en
  * garde, « = » ligne de tableau, « ◇ » étape de schéma, « ↓ » flèche.
+ * Repères de mise en page (voir `ficheLayout`) : « ★ » action prioritaire,
+ * « ✕ » à ne surtout pas faire, « # Avant » / « # Pendant » / « # Après »
+ * onglet, « → » lien vers un autre écran.
  * Les métadonnées (priorité, sources, date) sont ajoutées en fin de corps,
  * en lignes « § Clé : valeur ».
  */
@@ -99,11 +115,17 @@ export function fiche(
     `${META_PREFIX}En bref : ${meta.summary ?? defaultSummary(lines)}`,
     `${META_PREFIX}Lecture : ${readingMinutes(lines)} min`,
     `${META_PREFIX}Fiabilité : ${RELIABILITY_LABELS[reliability]}`,
-    `${META_PREFIX}Vérifiée : ${GUIDE_CHECKED}`,
+    `${META_PREFIX}Vérifiée : ${meta.checked ?? GUIDE_CHECKED}`,
     `${META_PREFIX}Priorité : ${meta.priority ?? 'importante'}`,
     ...(meta.sources && meta.sources.length > 0
       ? [`${META_PREFIX}Références : ${meta.sources.join(' ; ')}`]
       : []),
+    ...(meta.links ?? []).map(
+      l =>
+        `${META_PREFIX}Source : ${[l.org, l.title, l.consulted, l.url].join(
+          SOURCE_SEP,
+        )}`,
+    ),
     `${META_PREFIX}Mise à jour : ${GUIDE_UPDATED}`,
     ...(meta.keywords && meta.keywords.length > 0
       ? [`${META_PREFIX}Mots-clés : ${meta.keywords.join(', ')}`]
@@ -143,6 +165,93 @@ export function readMeta(body: string): {
       priority === 'vitale' || priority === 'utile' ? priority : 'importante',
     entries,
   };
+}
+
+const SOURCE_SEP = ' | ';
+
+/** Pages en ligne citées par une fiche (lignes « § Source »). */
+export function ficheSources(body: string): SourceLink[] {
+  return readMeta(body)
+    .entries.filter(([key]) => key === 'Source')
+    .map(([, value]) => value.split(SOURCE_SEP))
+    .filter(parts => parts.length === 4)
+    .map(([org, title, consulted, url]) => ({ org, title, consulted, url }));
+}
+
+// --- Mise en page du lecteur ------------------------------------------------
+
+export const PHASES = ['Avant', 'Pendant', 'Après'] as const;
+export type Phase = (typeof PHASES)[number];
+
+/** Écrans de Fenrir qu'une fiche peut ouvrir (lignes « → »). */
+export type FicheLink =
+  | { kind: 'waterStock' }
+  | { kind: 'crisis'; scenario: CrisisId }
+  | { kind: 'localRisks' };
+
+/** Lignes « → » à écrire dans une fiche. */
+export const LINK = {
+  waterStock: '→ stock-eau',
+  crisis: (scenario: CrisisId) => `→ simulateur ${scenario}`,
+  localRisks: '→ consignes-locales',
+} as const;
+
+function parseLink(target: string): FicheLink | null {
+  if (target === 'stock-eau') {
+    return { kind: 'waterStock' };
+  }
+  if (target === 'consignes-locales') {
+    return { kind: 'localRisks' };
+  }
+  const crisis = /^simulateur (\w+)$/.exec(target);
+  return crisis ? { kind: 'crisis', scenario: crisis[1] as CrisisId } : null;
+}
+
+export interface FicheLayout {
+  /** Lignes « ★ » : l'encadré en tête de fiche. */
+  priorities: string[];
+  /** Lignes « ✕ » : le bloc rouge, visible quel que soit l'onglet. */
+  donts: string[];
+  links: FicheLink[];
+  /** Corps avant le premier onglet (toute la fiche s'il n'y en a pas). */
+  intro: string[];
+  /** Onglets « # Avant », « # Pendant », « # Après », dans l'ordre de la fiche. */
+  phases: Array<{ phase: Phase; lines: string[] }>;
+}
+
+/** Répartit le corps d'une fiche (métadonnées retirées) entre les blocs du lecteur. */
+export function ficheLayout(body: string): FicheLayout {
+  const layout: FicheLayout = {
+    priorities: [],
+    donts: [],
+    links: [],
+    intro: [],
+    phases: [],
+  };
+  for (const line of body.split('\n')) {
+    if (line.startsWith(META_PREFIX)) {
+      continue;
+    }
+    if (line.startsWith('★ ')) {
+      layout.priorities.push(line.slice(2));
+    } else if (line.startsWith('✕ ')) {
+      layout.donts.push(line.slice(2));
+    } else if (line.startsWith('→ ')) {
+      const link = parseLink(line.slice(2).trim());
+      if (link !== null) {
+        layout.links.push(link);
+      }
+    } else if (
+      line.startsWith('# ') &&
+      (PHASES as readonly string[]).includes(line.slice(2).trim())
+    ) {
+      layout.phases.push({ phase: line.slice(2).trim() as Phase, lines: [] });
+    } else {
+      const current = layout.phases[layout.phases.length - 1];
+      (current ? current.lines : layout.intro).push(line);
+    }
+  }
+  return layout;
 }
 
 /** Clés rendues en tête de fiche plutôt que dans le pied. */
@@ -206,3 +315,31 @@ export const REF = {
   nij: 'National Institute of Justice (NIJ) : normes 0101.06, 0101.07 et 0123.00, liste des produits conformes',
   usda: 'Département de l’Agriculture des États-Unis (USDA, sécurité des aliments en cas de coupure)',
 } as const;
+
+// Pages en ligne citées, vérifiées au mois indiqué.
+export const WEB = {
+  ars: {
+    org: 'Agences régionales de santé (ARS)',
+    title: 'Portail des ARS : consignes locales sur l’eau du robinet',
+    url: 'https://www.ars.sante.fr',
+    consulted: '2026-10',
+  },
+  tousResponsables: {
+    org: 'Ministère de l’Intérieur et SGDSN',
+    title: '« Tous responsables : face aux risques, agissons » (2025)',
+    url: 'https://www.interieur.gouv.fr/actualites/actualites-du-ministere/tous-responsables-face-aux-risques-agissons',
+    consulted: '2026-10',
+  },
+  georisques: {
+    org: 'Géorisques',
+    title: 'Risques de son adresse, DICRIM et plans communaux',
+    url: 'https://www.georisques.gouv.fr',
+    consulted: '2026-10',
+  },
+  usda: {
+    org: 'Département de l’Agriculture des États-Unis (USDA)',
+    title: 'Sécurité des aliments en cas de coupure (en anglais)',
+    url: 'https://www.usda.gov',
+    consulted: '2026-10',
+  },
+} as const satisfies Record<string, SourceLink>;

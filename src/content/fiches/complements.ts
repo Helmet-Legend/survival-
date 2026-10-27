@@ -6,7 +6,7 @@
  * partir, épidémie, stockage, évaluation des risques. Rédaction originale ;
  * les consignes réglementaires et médicales renvoient aux sources officielles.
  */
-import { F, fiche, REF } from './fiche';
+import { F, fiche, REF, WEB } from './fiche';
 
 export const COMPLEMENTS = [
   // --- Équipement et protection ---------------------------------------------
@@ -190,6 +190,7 @@ export const COMPLEMENTS = [
       '- Géorisques : saisir son adresse pour voir inondation, séisme, feu de forêt, sites industriels proches.',
       '- La mairie : le document d’information communal sur les risques majeurs (DICRIM) et le plan communal de sauvegarde.',
       '- La préfecture et Météo-France pour les alertes en cours.',
+      '- Le plan familial de mise en sûreté (PFMS), modèle proposé par les pouvoirs publics pour préparer son foyer à un risque majeur : souvent disponible auprès de la mairie ou de la préfecture.',
       '## Ce qu’il faut noter',
       '= Risques  Les 2 ou 3 plus probables et ce qu’ils imposent (évacuer, se mettre à l’abri)',
       '= Dépendances  Eau, électricité, chauffage, téléphone, transport, traitements',
@@ -200,7 +201,12 @@ export const COMPLEMENTS = [
       '2. Compléter le plan familial et la préparation par paliers.',
       '3. Revoir cette évaluation après un déménagement ou une naissance.',
     ],
-    { priority: 'importante', sources: [REF.georisques] },
+    {
+      priority: 'importante',
+      sources: [REF.georisques],
+      links: [WEB.georisques],
+      checked: '2026-10',
+    },
   ),
 
   // --- Gestion de crise -------------------------------------------------------

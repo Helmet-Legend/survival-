@@ -2390,6 +2390,55 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('ouvre une fiche en blocs et ses liens vers le stock et le simulateur', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    await fireEvent.press(await screen.findByLabelText(/^Eau potable, /));
+    await fireEvent.press(await screen.findByText('Coupure d’eau courante'));
+    expect(await screen.findByText('Les 3 actions prioritaires')).toBeTruthy();
+    expect(screen.getByText('À ne surtout pas faire')).toBeTruthy();
+    // « Pendant » est ouvert d'abord ; « Après » remplace son contenu.
+    expect(
+      screen.getByRole('tab', { name: 'Pendant', selected: true }),
+    ).toBeTruthy();
+    expect(screen.getByText('Quelle eau pour quel usage')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Après' }));
+    expect(
+      await screen.findByText('Renouveler et dater la réserve utilisée.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Quelle eau pour quel usage')).toBeNull();
+    // Références cliquables et date de vérification propre à la fiche.
+    expect(screen.getByText('Sources en ligne')).toBeTruthy();
+    expect(screen.getByText('Vérifiée : octobre 2026')).toBeTruthy();
+    // Stock réel du coffre, puis simulateur sur le bon scénario.
+    expect(
+      await screen.findByLabelText(
+        /^Mon stock d’eau\. \d+ L · \d+ j pour \d+ personnes?$/,
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText(/^Simuler : Coupure d’eau\./));
+    expect(
+      await screen.findByText(
+        'Plus d’eau au robinet : boire et cuisiner sur vos réserves.',
+      ),
+    ).toBeTruthy();
+    // Retour : la fiche est rouverte.
+    await act(async () => {
+      pressBack();
+    });
+    expect(await screen.findByText('Les 3 actions prioritaires')).toBeTruthy();
+    // Consignes locales : la fiche qui renvoie au DICRIM et au PFMS.
+    await fireEvent.press(
+      screen.getByLabelText(/^Consignes officielles locales\./),
+    );
+    expect(
+      await screen.findByText('Évaluer les risques de son logement'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/plan familial de mise en sûreté \(PFMS\)/),
+    ).toBeTruthy();
+  });
+
   it('range les fiches par dossier et met en forme le morse', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));

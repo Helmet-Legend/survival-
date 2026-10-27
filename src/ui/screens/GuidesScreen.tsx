@@ -11,6 +11,9 @@ import {
   ClipboardList,
   Compass,
   DoorOpen,
+  ExternalLink,
+  Landmark,
+  Timer,
   Droplet,
   HeartPulse,
   House,
@@ -20,19 +23,30 @@ import {
   Siren,
   Trees,
   Utensils,
+  X,
   Zap,
   type LucideIcon,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {
   F,
   GUIDE_FOLDERS,
-  META_PREFIX,
   readMeta,
+  type FicheLink,
+  type Phase,
   type Priority,
   ficheInfo,
+  ficheLayout,
+  ficheSources,
   HEADER_KEYS,
   needsReview,
   REVIEW_AFTER_MONTHS,
@@ -46,6 +60,12 @@ import {
 } from '../../content/guideChecks';
 import { searchGuides } from '../../db/guides';
 import { isoToFr, localToday } from '../../lib/dates';
+import { crisisById } from '../../plan/crisis';
+import {
+  computeResilience,
+  loadConsumableLots,
+  loadHousehold,
+} from '../../resilience/resilienceCalculator';
 import {
   Button,
   EmptyState,
@@ -53,8 +73,11 @@ import {
   Notice,
   SearchField,
 } from '../components/controls';
+import { formatNumber } from '../format';
+import { WaterIcon, type Icon as AppIcon } from '../icons';
+import { useNavigation } from '../navigation';
 import { useSession } from '../session';
-import { colors, radius, sizes, space, text } from '../theme';
+import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 
@@ -105,11 +128,25 @@ function fiches(count: number): string {
   return `${count} fiche${count > 1 ? 's' : ''}`;
 }
 
+/**
+ * Fiche à rouvrir au retour dans les Fiches, après un lien « Dans Fenrir »
+ * (stock d'eau, simulateur) : l'écran des fiches est refermé entre-temps.
+ */
+let resume: { slug: string; category: string | null; query: string } | null =
+  null;
+
 export function GuidesScreen() {
   const { db } = useSession();
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
-  const [slug, setSlug] = useState<string | null>(null);
+  const [initial] = useState(() => {
+    const value = resume;
+    resume = null;
+    return value;
+  });
+  const [query, setQuery] = useState(initial?.query ?? '');
+  const [category, setCategory] = useState<string | null>(
+    initial?.category ?? null,
+  );
+  const [slug, setSlug] = useState<string | null>(initial?.slug ?? null);
   // « Retour » : de la recherche ou d'une catégorie à toutes les catégories
   // (la fiche ouverte se referme d'elle-même).
   useBack(category !== null || query !== '', () =>
@@ -147,6 +184,10 @@ export function GuidesScreen() {
       <GuideReader
         slug={slug}
         onBack={() => setSlug(null)}
+        onLeave={() => {
+          resume = { slug, category, query };
+        }}
+        onOpenGuide={setSlug}
         backLabel={
           query.trim() !== ''
             ? 'Retour aux résultats'
@@ -298,6 +339,12 @@ export function GuideReader(props: {
   onBack: () => void;
   /** Libellé du retour, si l'on ne revient pas à la liste des fiches. */
   backLabel?: string;
+  /**
+   * Avec ces deux rappels, la fiche affiche ses liens « Dans Fenrir » :
+   * `onLeave` avant d'ouvrir un autre écran, `onOpenGuide` pour une fiche.
+   */
+  onLeave?: () => void;
+  onOpenGuide?: (slug: string) => void;
 }) {
   const { db } = useSession();
   useBack(true, props.onBack);
@@ -334,15 +381,12 @@ export function GuideReader(props: {
           <Text accessibilityRole="header" style={text.h1}>
             {String(data.title)}
           </Text>
-          <FicheHeader body={String(data.body)} />
-          {blocks(String(data.body)).map((block, i) =>
-            typeof block === 'string' ? (
-              <GuideLine key={i} line={block} />
-            ) : (
-              <GuideChecklist key={i} slug={props.slug} items={block} />
-            ),
-          )}
-          <MetaFooter body={String(data.body)} />
+          <FicheBody
+            slug={props.slug}
+            body={String(data.body)}
+            onLeave={props.onLeave}
+            onOpenGuide={props.onOpenGuide}
+          />
         </View>
       ) : null}
     </ScrollView>
@@ -350,15 +394,208 @@ export function GuideReader(props: {
 }
 
 /**
- * Lignes affichables d'une fiche, métadonnées retirées ; les lignes « ☐ »
- * consécutives forment une liste de contrôle.
+ * Corps de la fiche : actions prioritaires, texte (en onglets Avant /
+ * Pendant / Après s'il y en a), choses à ne pas faire, liens, pied.
  */
-function blocks(body: string): Array<string | string[]> {
-  const out: Array<string | string[]> = [];
-  for (const line of body.split('\n')) {
-    if (line.startsWith(META_PREFIX)) {
-      continue;
+function FicheBody(props: {
+  slug: string;
+  body: string;
+  onLeave?: () => void;
+  onOpenGuide?: (slug: string) => void;
+}) {
+  const layout = ficheLayout(props.body);
+  const phases = layout.phases.map(p => p.phase);
+  const [phase, setPhase] = useState<Phase | null>(
+    phases.includes('Pendant') ? 'Pendant' : phases[0] ?? null,
+  );
+  const current = layout.phases.find(p => p.phase === phase);
+  const lines = (list: string[], key: string) =>
+    blocks(list).map((block, i) =>
+      typeof block === 'string' ? (
+        <GuideLine key={`${key}${i}`} line={block} />
+      ) : (
+        <GuideChecklist key={`${key}${i}`} slug={props.slug} items={block} />
+      ),
+    );
+  const showLinks =
+    props.onLeave !== undefined &&
+    props.onOpenGuide !== undefined &&
+    layout.links.length > 0;
+  return (
+    <>
+      <FicheHeader body={props.body} />
+      {layout.priorities.length > 0 ? (
+        <View style={styles.priorities}>
+          <Text accessibilityRole="header" style={styles.prioritiesTitle}>
+            {layout.priorities.length === 3
+              ? 'Les 3 actions prioritaires'
+              : 'Actions prioritaires'}
+          </Text>
+          {layout.priorities.map((action, i) => (
+            <View key={action} style={styles.priority}>
+              <Text style={styles.priorityMark}>{i + 1}</Text>
+              <Text style={[text.body, styles.grow]}>{action}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {lines(layout.intro, 'i')}
+      {phases.length > 0 ? (
+        <View style={styles.tabs} accessibilityRole="tablist">
+          {phases.map(p => (
+            <Pressable
+              key={p}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: p === phase }}
+              onPress={() => setPhase(p)}
+              style={[styles.tab, p === phase && styles.tabOn]}
+            >
+              <Text style={[styles.tabText, p === phase && styles.tabTextOn]}>
+                {p}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {current ? lines(current.lines, current.phase) : null}
+      {layout.donts.length > 0 ? (
+        <View style={styles.donts}>
+          <Text accessibilityRole="header" style={styles.dontsTitle}>
+            À ne surtout pas faire
+          </Text>
+          {layout.donts.map(item => (
+            <View key={item} style={styles.priority}>
+              <X color={colors.danger} size={18} strokeWidth={3} />
+              <Text style={[text.body, styles.grow]}>{item}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {showLinks ? (
+        <FicheLinks
+          links={layout.links}
+          onLeave={props.onLeave!}
+          onOpenGuide={props.onOpenGuide!}
+        />
+      ) : null}
+      <MetaFooter body={props.body} />
+    </>
+  );
+}
+
+/** Fiche qui renvoie aux consignes officielles de sa commune. */
+const LOCAL_RISKS_SLUG = 'evaluer-risques-foyer';
+
+/** Liens « Dans Fenrir » : stock d'eau réel, simulateur, consignes locales. */
+function FicheLinks(props: {
+  links: FicheLink[];
+  onLeave: () => void;
+  onOpenGuide: (slug: string) => void;
+}) {
+  const { db } = useSession();
+  const navigation = useNavigation();
+  const wantsWater = props.links.some(l => l.kind === 'waterStock');
+  const { data: water } = useLoader(async () => {
+    if (!wantsWater) {
+      return null;
     }
+    const [household, lots] = await Promise.all([
+      loadHousehold(db),
+      loadConsumableLots(db),
+    ]);
+    const report = computeResilience(lots, household, localToday());
+    return {
+      liters: report.water.available,
+      days: report.water.days,
+      members: household.members,
+    };
+  }, [wantsWater]);
+  return (
+    <View style={styles.links}>
+      <Text style={text.label}>Dans Fenrir</Text>
+      {props.links.map(link => {
+        if (link.kind === 'waterStock') {
+          return (
+            <ModuleLink
+              key="water"
+              icon={WaterIcon}
+              color={colors.water}
+              title="Mon stock d’eau"
+              detail={
+                water
+                  ? `${formatNumber(water.liters)} L · ${water.days} j pour ${
+                      water.members
+                    } personne${water.members > 1 ? 's' : ''}`
+                  : 'Réserves d’eau du foyer'
+              }
+              onPress={() => {
+                props.onLeave();
+                navigation.goTo('stock', { category: 'water' });
+              }}
+            />
+          );
+        }
+        if (link.kind === 'crisis') {
+          return (
+            <ModuleLink
+              key={`crisis-${link.scenario}`}
+              icon={Timer}
+              color={colors.cyan}
+              title={`Simuler : ${crisisById(link.scenario).label}`}
+              detail="Jour par jour, sur votre stock réel"
+              onPress={() => {
+                props.onLeave();
+                navigation.openCrisis(link.scenario);
+              }}
+            />
+          );
+        }
+        return (
+          <ModuleLink
+            key="local"
+            icon={Landmark}
+            color={colors.purple}
+            title="Consignes officielles locales"
+            detail="DICRIM de la mairie, PFMS, Géorisques"
+            onPress={() => props.onOpenGuide(LOCAL_RISKS_SLUG)}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function ModuleLink(props: {
+  icon: AppIcon;
+  color: string;
+  title: string;
+  detail: string;
+  onPress: () => void;
+}) {
+  const Icon = props.icon;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${props.title}. ${props.detail}`}
+      onPress={props.onPress}
+      style={({ pressed }) => [styles.moduleLink, pressed && styles.pressed]}
+    >
+      <View style={[styles.moduleIcon, { backgroundColor: tint(props.color) }]}>
+        <Icon color={props.color} size={20} />
+      </View>
+      <View style={styles.grow}>
+        <Text style={styles.title}>{props.title}</Text>
+        <Text style={text.subtle}>{props.detail}</Text>
+      </View>
+      <ChevronRight color={colors.textMuted} size={20} />
+    </Pressable>
+  );
+}
+
+/** Les lignes « ☐ » consécutives forment une liste de contrôle. */
+function blocks(lines: readonly string[]): Array<string | string[]> {
+  const out: Array<string | string[]> = [];
+  for (const line of lines) {
     if (line.startsWith(CHECK_PREFIX)) {
       const label = line.slice(CHECK_PREFIX.length);
       const last = out[out.length - 1];
@@ -477,16 +714,72 @@ const PRIORITY_LABELS: Record<Priority, string> = {
   utile: 'Utile',
 };
 
-/** Pied de fiche : priorité, références, date et statut de relecture. */
+const MONTHS = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
+
+/** `2026-10` → « octobre 2026 ». */
+function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return MONTHS[m - 1] ? `${MONTHS[m - 1]} ${y}` : month;
+}
+
+/** Pied de fiche : priorité, références, pages en ligne, dates, relecture. */
 function MetaFooter({ body }: { body: string }) {
   const entries = readMeta(body).entries.filter(
-    ([key]) => !HEADER_KEYS.has(key),
+    ([key]) => !HEADER_KEYS.has(key) && key !== 'Source',
   );
-  if (entries.length === 0) {
-    return null;
-  }
+  const sources = ficheSources(body);
+  const checked = ficheInfo(body).checked;
   return (
     <View style={styles.meta}>
+      {sources.length > 0 ? (
+        <View style={styles.sources}>
+          <Text style={styles.metaKey}>Sources en ligne</Text>
+          {sources.map(source => (
+            <Pressable
+              key={source.url}
+              accessibilityRole="link"
+              accessibilityLabel={`${source.org} : ${source.title}, ouvrir ${source.url}`}
+              onPress={() => {
+                Linking.openURL(source.url).catch(() => undefined);
+              }}
+              style={({ pressed }) => [
+                styles.source,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.grow}>
+                <Text style={[text.body, styles.sourceOrg]}>{source.org}</Text>
+                <Text style={text.subtle}>
+                  {source.title} · consulté en {monthLabel(source.consulted)}
+                </Text>
+                <Text style={styles.sourceUrl}>
+                  {source.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                </Text>
+              </View>
+              <ExternalLink color={colors.cyan} size={16} />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {checked !== null ? (
+        <Text style={text.subtle}>
+          <Text style={styles.metaKey}>Vérifiée : </Text>
+          {monthLabel(checked)}
+        </Text>
+      ) : null}
       {entries.map(([key, value]) => (
         <Text key={key} style={text.subtle}>
           <Text style={styles.metaKey}>{key} : </Text>
@@ -727,6 +1020,87 @@ const styles = StyleSheet.create({
     gap: space.m,
     minHeight: 44,
   },
+  priorities: {
+    gap: space.s,
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: tint(colors.primary, '14'),
+  },
+  prioritiesTitle: { ...text.label, color: colors.primary },
+  priority: { flexDirection: 'row', alignItems: 'flex-start', gap: space.s },
+  priorityMark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontWeight: '800',
+    color: colors.onPrimary,
+    backgroundColor: colors.primary,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: space.xs,
+    padding: space.xs,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.s,
+  },
+  tabOn: {
+    backgroundColor: colors.overlay,
+    borderWidth: 1,
+    borderColor: colors.borderActive,
+  },
+  tabText: { color: colors.textMuted, fontSize: 15, fontWeight: '700' },
+  tabTextOn: { color: colors.cyan },
+  donts: {
+    gap: space.s,
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSurface,
+  },
+  dontsTitle: { ...text.label, color: colors.danger },
+  links: { gap: space.s, marginTop: space.s },
+  moduleLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: 56,
+    padding: space.m,
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
+  },
+  moduleIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.s,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sources: { gap: space.s, marginBottom: space.s },
+  source: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    minHeight: 44,
+  },
+  sourceOrg: { fontWeight: '600' },
+  sourceUrl: { color: colors.cyan, fontSize: 13 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridCell: { width: '50%' },
   tableRow: {

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 
 import type { ItemCategory } from '../inventory';
+import type { CrisisId } from '../plan/crisis';
 
 /** Les cinq sections de la barre de navigation basse. */
 export type Tab = 'home' | 'stock' | 'prepare' | 'guides' | 'map';
@@ -52,12 +53,16 @@ export interface Navigation {
   goTo(tab: Tab, focus?: StockFocus): void;
   open(overlay: Overlay): void;
   openStockForm(target: StockFormTarget): void;
+  /** Ouvre le simulateur de crise sur ce scénario. */
+  openCrisis(scenario: CrisisId): void;
   /** Revient à l'écran d'où l'on vient (écran secondaire précédent ou section). */
   close(): void;
   /** Libellé du retour de `close()` (« Retour au plan d'action »…). */
   backLabel: string;
   /** Focus demandé pour l'écran Stocks (après un enregistrement). */
   stockFocus?: StockFocus;
+  /** Scénario demandé à l'ouverture du simulateur de crise. */
+  crisisScenario?: CrisisId;
 }
 
 export const NavigationContext = createContext<Navigation | null>(null);

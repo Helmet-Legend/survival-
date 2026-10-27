@@ -62,6 +62,7 @@ import { nativeScanSource, type ScanSource } from '../scanner/scanSource';
 import { nativeNetwork, type LocalNetwork } from '../device/net';
 import { systemRandom } from '../crypto/native/random';
 import type { Updater } from '../update/updater';
+import type { CrisisId } from '../plan/crisis';
 import {
   createVault,
   openVault,
@@ -187,6 +188,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [overlayStack, setOverlayStack] = useState<Overlay[]>([]);
   const [formTarget, setFormTarget] = useState<StockFormTarget | null>(null);
   const [stockFocus, setStockFocus] = useState<StockFocus | undefined>();
+  const [crisisScenario, setCrisisScenario] = useState<CrisisId | undefined>();
   const [covered, setCovered] = useState(false);
   const [redLightOn, setRedLightOn] = useState(false);
   const sessionRef = useRef<Session | null>(null);
@@ -289,7 +291,21 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         if (overlay !== null && overlay !== 'stockForm' && overlay !== next) {
           setOverlayStack(stack => [...stack, overlay]);
         }
+        if (next === 'crisis') {
+          setCrisisScenario(undefined);
+        }
         setOverlay(next);
+      },
+      openCrisis: scenario => {
+        if (
+          overlay !== null &&
+          overlay !== 'stockForm' &&
+          overlay !== 'crisis'
+        ) {
+          setOverlayStack(stack => [...stack, overlay]);
+        }
+        setCrisisScenario(scenario);
+        setOverlay('crisis');
       },
       openStockForm: target => {
         setFormTarget(target);
@@ -305,8 +321,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       },
       backLabel: backLabelFor(overlayStack[overlayStack.length - 1], tab),
       stockFocus,
+      crisisScenario,
     }),
-    [stockFocus, overlay, overlayStack, tab],
+    [stockFocus, crisisScenario, overlay, overlayStack, tab],
   );
 
   // « Retour » d'Android : fiche d'ajout, écran secondaire, puis section.
