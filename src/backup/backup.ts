@@ -34,6 +34,17 @@ export const BACKUP_EXTENSION = 'fenrir';
 const SALT_LENGTH = 16;
 const NONCE_LENGTH = 24;
 
+/**
+ * Bornes des paramètres Argon2 lus dans un fichier, avant tout calcul : un
+ * fichier piégé ne peut pas réclamer des gigaoctets de mémoire. Elles
+ * laissent une large marge au-dessus des paramètres réels (64 Mio, t = 3).
+ */
+const KDF_LIMITS = {
+  memoryKiB: { min: 8, max: 1024 * 1024 },
+  iterations: { min: 1, max: 16 },
+  parallelism: { min: 1, max: 16 },
+};
+
 export type BackupErrorCode =
   | 'WEAK_PASSWORD'
   | 'WRONG_PASSWORD'
@@ -224,7 +235,81 @@ function parseEnvelope(text: string): Envelope {
       'Sauvegarde faite avec une version plus récente : mettez Fenrir à jour',
     );
   }
+  const kdf = e.kdf as Envelope['kdf'];
+  const inRange = (n: unknown, limit: { min: number; max: number }) =>
+    Number.isInteger(n) &&
+    (n as number) >= limit.min &&
+    (n as number) <= limit.max;
+  if (
+    !inRange(kdf.memoryKiB, KDF_LIMITS.memoryKiB) ||
+    !inRange(kdf.iterations, KDF_LIMITS.iterations) ||
+    !inRange(kdf.parallelism, KDF_LIMITS.parallelism) ||
+    decodedLength(kdf.salt) !== SALT_LENGTH ||
+    decodedLength(e.nonce) !== NONCE_LENGTH
+  ) {
+    throw new BackupError(
+      'INVALID_FILE',
+      'Sauvegarde abîmée : ses paramètres de chiffrement sont invalides',
+    );
+  }
   return e as Envelope;
+}
+
+function decodedLength(text: string): number {
+  try {
+    return base64ToBytes(text).length;
+  } catch {
+    return -1;
+  }
+}
+
+const INCOHERENT = () =>
+  new BackupError(
+    'INVALID_FILE',
+    'Sauvegarde illisible : son contenu est incohérent. Rien n’a été modifié.',
+  );
+
+/** Contenu déchiffré : forme attendue, sinon refus avant toute écriture. */
+function parsePayload(text: string): Payload {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw INCOHERENT();
+  }
+  const p = value as Partial<Payload> | null;
+  if (
+    p === null ||
+    typeof p !== 'object' ||
+    !Number.isInteger(p.schemaVersion) ||
+    (p.schemaVersion as number) < 1 ||
+    typeof p.createdAt !== 'string' ||
+    typeof p.tables !== 'object' ||
+    p.tables === null ||
+    Array.isArray(p.tables)
+  ) {
+    throw INCOHERENT();
+  }
+  for (const rows of Object.values(p.tables)) {
+    if (!Array.isArray(rows)) {
+      throw INCOHERENT();
+    }
+    for (const row of rows) {
+      if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+        throw INCOHERENT();
+      }
+      for (const cell of Object.values(row)) {
+        if (
+          cell !== null &&
+          typeof cell !== 'string' &&
+          !(typeof cell === 'number' && Number.isFinite(cell))
+        ) {
+          throw INCOHERENT();
+        }
+      }
+    }
+  }
+  return p as Payload;
 }
 
 /** Déchiffre une sauvegarde sans rien modifier (mot de passe faux : erreur). */
@@ -254,7 +339,7 @@ async function decrypt(
   } finally {
     key.fill(0);
   }
-  const payload = JSON.parse(utf8ToText(plain)) as Payload;
+  const payload = parsePayload(utf8ToText(plain));
   if (payload.schemaVersion > SCHEMA_VERSION) {
     throw new BackupError(
       'NEWER_VERSION',
