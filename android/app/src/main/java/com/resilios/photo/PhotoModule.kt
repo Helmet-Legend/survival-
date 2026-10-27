@@ -124,8 +124,11 @@ class PhotoModule(private val context: ReactApplicationContext) :
   }
 
   /** Message lisible, avec le type d'erreur pour pouvoir la diagnostiquer. */
-  private fun scanError(e: Throwable): String =
-      "Scanner indisponible (${e.javaClass.simpleName}${e.message?.let { " : $it" } ?: ""}). Utilisez « Photographier »."
+  private fun scanError(e: Throwable): String {
+    // Première ligne de la pile : indique où l'erreur se produit.
+    val at = e.stackTrace.firstOrNull()?.let { " à ${it.className}.${it.methodName}" } ?: ""
+    return "Scanner indisponible (${e.javaClass.simpleName}${e.message?.let { " : $it" } ?: ""}$at). Utilisez « Photographier »."
+  }
 
   @ReactMethod
   fun takePhoto(promise: Promise) {

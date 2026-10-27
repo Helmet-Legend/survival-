@@ -31,3 +31,13 @@
 
 # Lecteur de codes-barres ZXing (Java).
 -keep class com.google.zxing.** { *; }
+
+# Scanner de documents de Google Play (ML Kit) : en version réduite par R8,
+# son lancement échouait sur NullPointerException. Ses classes et celles
+# des services Google qu'il appelle sont gardées telles quelles.
+-keep class com.google.mlkit.vision.documentscanner.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_documentscanner.** { *; }
+-keep class com.google.mlkit.common.** { *; }
+-keep class com.google.android.gms.common.internal.** { *; }
+-keep class com.google.android.gms.tasks.** { *; }
+-dontwarn com.google.mlkit.**
