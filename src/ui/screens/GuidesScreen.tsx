@@ -28,7 +28,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   Image,
   Linking,
@@ -61,7 +61,7 @@ import {
   loadGuideChecks,
   setGuideCheck,
 } from '../../content/guideChecks';
-import { searchGuides } from '../../db/guides';
+import { searchGuides, type BundledGuide } from '../../db/guides';
 import { isoToFr, localToday } from '../../lib/dates';
 import { crisisById } from '../../plan/crisis';
 import {
@@ -80,7 +80,7 @@ import { formatNumber } from '../format';
 import { GUIDE_IMAGES } from '../guideImages';
 import { WaterIcon, type Icon as AppIcon } from '../icons';
 import { useNavigation } from '../navigation';
-import { useSession } from '../session';
+import { SessionContext, useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
@@ -349,11 +349,17 @@ export function GuideReader(props: {
    */
   onLeave?: () => void;
   onOpenGuide?: (slug: string) => void;
+  /** Fiches embarquées, lues quand le coffre est fermé. */
+  bundled?: readonly BundledGuide[];
 }) {
-  const { db } = useSession();
+  // Sans coffre (Urgence sans code) : la fiche embarquée dans l'application.
+  const session = useContext(SessionContext);
   useBack(true, props.onBack);
   const { data, error } = useLoader(async () => {
-    const { rows } = await db.execute(
+    if (session === null) {
+      return props.bundled?.find(g => g.slug === props.slug) ?? null;
+    }
+    const { rows } = await session.db.execute(
       'SELECT title, category, body FROM survival_guides WHERE slug = ?',
       [props.slug],
     );
@@ -708,16 +714,31 @@ function GuideFold(props: { title: string; items: string[] }) {
 
 /** Liste de contrôle cochable ; la date du dernier contrôle est conservée. */
 function GuideChecklist(props: { slug: string; items: string[] }) {
-  const { db } = useSession();
+  // Sans coffre, les coches ne sont pas enregistrées.
+  const session = useContext(SessionContext);
+  const [unsaved, setUnsaved] = useState(() => new Map<string, string>());
   const { data, reload } = useLoader(
-    () => loadGuideChecks(db, props.slug),
+    async () =>
+      session === null
+        ? new Map<string, string>()
+        : loadGuideChecks(session.db, props.slug),
     [props.slug],
   );
-  const checks = data ?? new Map<string, string>();
+  const checks = session === null ? unsaved : data ?? new Map<string, string>();
   const done = props.items.filter(label => checks.has(checkId(label))).length;
   const last = [...checks.values()].sort().pop();
   const toggle = async (label: string, checked: boolean) => {
-    await setGuideCheck(db, props.slug, checkId(label), checked);
+    if (session === null) {
+      const next = new Map(unsaved);
+      if (checked) {
+        next.set(checkId(label), new Date().toISOString());
+      } else {
+        next.delete(checkId(label));
+      }
+      setUnsaved(next);
+      return;
+    }
+    await setGuideCheck(session.db, props.slug, checkId(label), checked);
     await reload();
   };
   return (
@@ -756,7 +777,11 @@ function GuideChecklist(props: { slug: string; items: string[] }) {
           label="Nouveau contrôle"
           accessibilityLabel="Nouveau contrôle : tout décocher"
           onPress={() => {
-            void clearGuideChecks(db, props.slug).then(reload);
+            if (session === null) {
+              setUnsaved(new Map());
+            } else {
+              void clearGuideChecks(session.db, props.slug).then(reload);
+            }
           }}
         />
       ) : null}
