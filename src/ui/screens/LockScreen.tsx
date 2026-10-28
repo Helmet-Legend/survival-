@@ -1,11 +1,12 @@
 /** Saisie du code. Le même écran sert au code maître et au code de contrainte. */
+import { TriangleAlert } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { isCryptoError } from '../../crypto/errors';
 import { TOPOGRAPHIC_SVG } from '../assets/backgrounds';
 import { AppIcon } from '../components/AppIcon';
-import { Backdrop } from '../components/controls';
+import { Backdrop, Button } from '../components/controls';
 import { PinDots, PinPad } from '../components/PinPad';
 import { colors, space, text } from '../theme';
 
@@ -14,6 +15,8 @@ export function LockScreen(props: {
   /** Blocage déjà en cours au démarrage (ms epoch). */
   lockedUntil?: number;
   initialMessage?: string;
+  /** Urgence sans code : numéros, signal, position, fiches réflexes. */
+  onEmergency?: () => void;
 }) {
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,7 +99,7 @@ export function LockScreen(props: {
     <View style={styles.page}>
       <Backdrop svg={TOPOGRAPHIC_SVG} opacity={0.45} />
       <View style={styles.head}>
-        <AppIcon size={132} />
+        <AppIcon size={112} />
         <Text style={text.muted}>Saisissez votre code</Text>
       </View>
       <PinDots length={pin.length} />
@@ -114,6 +117,20 @@ export function LockScreen(props: {
         }}
         disabled={busy || locked}
       />
+      {props.onEmergency ? (
+        <View style={styles.emergency}>
+          <Button
+            variant="danger"
+            icon={TriangleAlert}
+            label="Urgence sans code"
+            accessibilityLabel="Urgence sans code : numéros, signal lumineux, position et fiches réflexes"
+            onPress={props.onEmergency}
+          />
+          <Text style={styles.emergencyHint}>
+            Aucune donnée du coffre n’est affichée.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -123,7 +140,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 48,
+    paddingVertical: space.xxxl,
     paddingHorizontal: space.xl,
   },
   head: { alignItems: 'center', gap: space.m },
@@ -134,4 +151,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   error: { color: colors.danger },
+  emergency: { alignSelf: 'stretch', gap: space.xs },
+  emergencyHint: {
+    ...text.subtle,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
 });

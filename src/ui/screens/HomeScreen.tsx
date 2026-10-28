@@ -11,9 +11,9 @@ import {
   Save,
   CircleAlert,
   CirclePlus,
-  Hourglass,
-  ListChecks,
+  Pill,
   ScanBarcode,
+  ShieldCheck,
   ShoppingCart,
   Smartphone,
   Target,
@@ -168,6 +168,34 @@ export function HomeScreen() {
         alerts={officialAlerts}
         onPress={() => navigation.open('alerts')}
       />
+
+      {/* Accès rapides : juste sous l'alerte, sans faire défiler. */}
+      <View style={styles.quickGrid}>
+        <QuickLink
+          icon={ShieldCheck}
+          label="Préparer"
+          accessibilityLabel="Ouvrir Préparer"
+          onPress={() => navigation.goTo('prepare')}
+        />
+        <QuickLink
+          icon={Users}
+          label="Plan familial"
+          accessibilityLabel="Ouvrir le plan familial"
+          onPress={() => navigation.open('familyPlan')}
+        />
+        <QuickLink
+          icon={Pill}
+          label="Pharmacie"
+          accessibilityLabel="Ouvrir la pharmacie familiale"
+          onPress={() => navigation.open('pharmacy')}
+        />
+        <QuickLink
+          icon={ScanBarcode}
+          label="Scanner"
+          accessibilityLabel="Scanner des codes-barres"
+          onPress={() => navigation.open('scan')}
+        />
+      </View>
 
       {/* Autonomie : jauge, objectif, ressource limitante, puis les
           ressources en pourcentage de l'objectif. */}
@@ -405,35 +433,6 @@ export function HomeScreen() {
           })
         )}
       </View>
-
-      {/* Accès rapides : quatre écrans, à un geste. */}
-      <Text style={[text.label, styles.section]}>Accès rapides</Text>
-      <View style={styles.quickGrid}>
-        <QuickLink
-          icon={ListChecks}
-          label="Kit et matériel"
-          accessibilityLabel="Ouvrir le kit et matériel"
-          onPress={() => navigation.open('preparation')}
-        />
-        <QuickLink
-          icon={Users}
-          label="Plan familial"
-          accessibilityLabel="Ouvrir le plan familial"
-          onPress={() => navigation.open('familyPlan')}
-        />
-        <QuickLink
-          icon={Hourglass}
-          label="Simulateur"
-          accessibilityLabel="Ouvrir le simulateur de crise"
-          onPress={() => navigation.open('crisis')}
-        />
-        <QuickLink
-          icon={ScanBarcode}
-          label="Scanner"
-          accessibilityLabel="Scanner des codes-barres"
-          onPress={() => navigation.open('scan')}
-        />
-      </View>
     </ScrollView>
   );
 }
@@ -606,7 +605,7 @@ function QuickLink(props: {
       onPress={props.onPress}
       style={({ pressed }) => [styles.quick, pressed && styles.pressed]}
     >
-      <Icon color={colors.cyan} size={26} strokeWidth={2} />
+      <Icon color={colors.primary} size={26} strokeWidth={2} />
       <Text style={styles.quickText} numberOfLines={2}>
         {props.label}
       </Text>

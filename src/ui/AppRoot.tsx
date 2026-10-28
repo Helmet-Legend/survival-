@@ -3,11 +3,15 @@
  *
  * Sécurité et sobriété (cahier des charges §4.6) :
  * - le coffre se verrouille dès que l'application passe en arrière-plan :
- *   la base est fermée, aucun calcul ni minuterie ne continue ;
+ *   la base est fermée, aucun calcul ni minuterie ne continue. Seules
+ *   exceptions : une photo, et un appel ou un SMS lancé depuis l'Urgence
+ *   (le coffre se verrouille alors après 2 minutes hors de l'application) ;
+ * - l'écran de verrouillage ouvre une « Urgence sans code » qui n'affiche
+ *   aucune donnée du coffre ;
  * - pendant la transition (sélecteur d'applications iOS), un écran noir
  *   masque le contenu pour que l'aperçu système ne le capture pas.
  */
-import { Lock, Settings, TriangleAlert } from 'lucide-react-native';
+import { Lock, Settings } from 'lucide-react-native';
 import React, {
   useCallback,
   useEffect,
@@ -21,7 +25,6 @@ import {
   type ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -92,7 +95,8 @@ import { PurchasePlanScreen } from './screens/PurchasePlanScreen';
 import { ReadinessScreen } from './screens/ReadinessScreen';
 import { CrisisScreen } from './screens/CrisisScreen';
 import { ScanScreen } from './screens/ScanScreen';
-import { EmergencyScreen } from './screens/EmergencyScreen';
+import { EmergencyScreen, EmergencyView } from './screens/EmergencyScreen';
+import { CALL_GRACE_MS, takeLeavingForCall } from './callGrace';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
 import { AlertsScreen } from './screens/AlertsScreen';
 import { KitScreen } from './screens/KitScreen';
@@ -115,7 +119,7 @@ import { PrivacyScreen } from './screens/PrivacyScreen';
 import { SyncScreen } from './screens/SyncScreen';
 import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
-import { colors, fonts, radius, sizes, space, text } from './theme';
+import { colors, sizes, space, text } from './theme';
 import { useBackHandler } from './useBackHandler';
 
 type Phase =
@@ -192,7 +196,14 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [crisisScenario, setCrisisScenario] = useState<CrisisId | undefined>();
   const [covered, setCovered] = useState(false);
   const [redLightOn, setRedLightOn] = useState(false);
+  // Écran de verrouillage : « Urgence sans code » ouverte.
+  const [lockedEmergency, setLockedEmergency] = useState(false);
   const sessionRef = useRef<Session | null>(null);
+  // Sortie pour un appel ou un SMS de l'Urgence : heure et minuterie.
+  const callAway = useRef<{
+    since: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const loadStatus = useCallback(() => {
     manager
@@ -250,12 +261,18 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     setTab('home');
     setOverlay(null);
     setOverlayStack([]);
+    setLockedEmergency(false);
     setPhase({ kind: 'open', session });
   };
 
   const lock = useCallback((message?: string) => {
     const session = sessionRef.current;
     sessionRef.current = null;
+    if (callAway.current !== null) {
+      clearTimeout(callAway.current.timer);
+      callAway.current = null;
+    }
+    setLockedEmergency(false);
     setPhase({ kind: 'locked', message });
     if (session !== null) {
       // Dernière mise à jour des rappels avant de refermer la base.
@@ -357,17 +374,47 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       : null,
   );
 
+  // « Retour » d'Android dans l'Urgence sans code : revenir au code.
+  useBackHandler(
+    phase.kind === 'locked' && lockedEmergency
+      ? () => {
+          setLockedEmergency(false);
+          return true;
+        }
+      : null,
+  );
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
       setCovered(next !== 'active');
-      // Sauf pendant une photo : l'appareil photo est une autre application.
-      if (
-        next === 'background' &&
-        sessionRef.current !== null &&
-        !isAwayForPhoto()
-      ) {
-        lock('Coffre verrouillé à la sortie de l’application.');
+      const away = callAway.current;
+      if (next === 'active' && away !== null) {
+        // Retour d'un appel ou d'un SMS : verrouillé si l'absence a duré.
+        clearTimeout(away.timer);
+        callAway.current = null;
+        if (Date.now() - away.since >= CALL_GRACE_MS) {
+          lock(GRACE_MESSAGE);
+        }
+        return;
       }
+      if (
+        next !== 'background' ||
+        sessionRef.current === null ||
+        callAway.current !== null ||
+        // Sauf pendant une photo : l'appareil photo est une autre application.
+        isAwayForPhoto()
+      ) {
+        return;
+      }
+      if (takeLeavingForCall()) {
+        // Appel ou SMS lancé depuis l'Urgence : 2 minutes avant de verrouiller.
+        callAway.current = {
+          since: Date.now(),
+          timer: setTimeout(() => lock(GRACE_MESSAGE), CALL_GRACE_MS),
+        };
+        return;
+      }
+      lock('Coffre verrouillé à la sortie de l’application.');
     });
     return () => subscription.remove();
   }, [lock]);
@@ -387,12 +434,23 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         }}
       />
     );
+  } else if (phase.kind === 'locked' && lockedEmergency) {
+    body = (
+      <EmergencyView
+        location={location}
+        torch={torch}
+        guides={content.guides}
+        onBack={() => setLockedEmergency(false)}
+        backLabel="Retour au code"
+      />
+    );
   } else if (phase.kind === 'locked') {
     body = (
       <LockScreen
         lockedUntil={phase.lockedUntil}
         initialMessage={phase.message}
         onUnlock={async pin => open(await openVault(manager, content, pin))}
+        onEmergency={() => setLockedEmergency(true)}
       />
     );
   } else if (phase.kind === 'fatal') {
@@ -416,21 +474,6 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
           <NavigationContext.Provider value={navigation}>
             {overlay === 'stockForm' ? null : (
               <View style={[styles.bar, overlay !== null && styles.barCompact]}>
-                {/* SOS seul à gauche, loin des autres boutons : moins d'appuis par erreur. */}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Ouvrir l’écran Urgence"
-                  onPress={() => navigation.open('emergency')}
-                  hitSlop={4}
-                  style={({ pressed }) => [
-                    styles.sos,
-                    overlay === 'emergency' && styles.sosOn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <TriangleAlert color={SOS_TEXT} size={18} strokeWidth={2.4} />
-                  <Text style={styles.sosText}>SOS</Text>
-                </Pressable>
                 {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
                 <View style={styles.brandBox}>
                   <Image
@@ -520,6 +563,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
               <BottomNav
                 current={overlay === null ? tab : null}
                 onSelect={navigation.goTo}
+                onSos={() => navigation.open('emergency')}
+                sosActive={overlay === 'emergency'}
                 bottomInset={insets.bottom}
               />
             )}
@@ -619,8 +664,7 @@ const LOGO_FILE: number | string = require('./assets/fenrir-logo.png');
 const LOGO: ImageSourcePropType =
   typeof LOGO_FILE === 'string' ? { uri: LOGO_FILE } : LOGO_FILE;
 
-/** Rouge clair lisible sur le fond rouge sombre du bouton SOS. */
-const SOS_TEXT = '#FF8A96';
+const GRACE_MESSAGE = 'Coffre verrouillé : plus de 2 minutes hors de Fenrir.';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
@@ -629,35 +673,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: space.s,
   },
-  brandText: { alignItems: 'center', gap: 2 },
+  brandText: { alignItems: 'flex-start', gap: 2 },
   logo: { width: 42, height: 42, borderRadius: 21 },
   logoSmall: { width: 32, height: 32, borderRadius: 16 },
   vaultBadge: { color: colors.success, fontSize: 11, fontWeight: '600' },
-  sos: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: sizes.touch - 4,
-    paddingHorizontal: space.m,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: colors.dangerSurface,
-    marginRight: space.m,
-  },
   tools: { flexDirection: 'row', alignItems: 'center', marginLeft: space.m },
-  sosOn: { backgroundColor: '#4A121D' },
-  sosText: {
-    color: SOS_TEXT,
-    fontFamily: fonts.display,
-    fontWeight: '800',
-    fontSize: 16,
-    letterSpacing: 1,
-  },
-  pressed: { opacity: 0.8 },
   bar: {
     flexDirection: 'row',
     justifyContent: 'space-between',

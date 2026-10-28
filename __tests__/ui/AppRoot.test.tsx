@@ -320,6 +320,81 @@ describe('cycle de vie', () => {
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
   });
 
+  it('garde le coffre ouvert 2 minutes pendant un appel lancé depuis l’Urgence', async () => {
+    const emit = captureAppState();
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await unlockWith(MASTER);
+    await fireEvent.press(
+      await screen.findByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
+    expect(
+      screen.getByText(/Il se verrouille après 2 minutes hors de Fenrir/),
+    ).toBeTruthy();
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const now = jest.spyOn(Date, 'now');
+    const start = 1_800_000_000_000;
+
+    // Retour au bout d'une minute : toujours ouvert, sur l'écran Urgence.
+    now.mockReturnValue(start);
+    await fireEvent.press(
+      screen.getByLabelText('Appeler le 112, Urgences (toute l’Europe)'),
+    );
+    await emit('background');
+    now.mockReturnValue(start + 60_000);
+    await emit('active');
+    expect(screen.getByLabelText('Appeler le 15, SAMU')).toBeTruthy();
+    expect(screen.queryByText('Saisissez votre code')).toBeNull();
+
+    // Au-delà de 2 minutes : verrouillé au retour.
+    await fireEvent.press(screen.getByLabelText('Appeler le 15, SAMU'));
+    await emit('background');
+    now.mockReturnValue(start + 60_000 + 121_000);
+    await emit('active');
+    expect(
+      await screen.findByText(
+        'Coffre verrouillé : plus de 2 minutes hors de Fenrir.',
+      ),
+    ).toBeTruthy();
+
+    // Sortie ordinaire, sans appel : verrouillage immédiat.
+    now.mockRestore();
+    open.mockRestore();
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await emit('background');
+    expect(
+      await screen.findByText(
+        'Coffre verrouillé à la sortie de l’application.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('ouvre l’Urgence sans code depuis l’écran de verrouillage', async () => {
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await screen.findByText('Saisissez votre code');
+    await fireEvent.press(screen.getByText('Urgence sans code'));
+    expect(await screen.findByText(/Aucune donnée du coffre/)).toBeTruthy();
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    await fireEvent.press(
+      screen.getByLabelText('Appeler le 112, Urgences (toute l’Europe)'),
+    );
+    expect(open).toHaveBeenCalledWith('tel:112');
+    open.mockRestore();
+    // Rien du coffre : ni plan familial, ni kit, ni alertes.
+    expect(screen.queryByText('Plan familial')).toBeNull();
+    expect(screen.queryByLabelText('Ouvrir le kit et matériel')).toBeNull();
+    // Les fiches réflexes se lisent sans coffre.
+    await fireEvent.press(screen.getByText('Arrêt cardiaque'));
+    expect(
+      await screen.findByText('Arrêt cardiaque : massage et défibrillateur'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Retour à l’urgence'));
+    await fireEvent.press(await screen.findByLabelText('Retour au code'));
+    expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+  });
+
   it('autorise les captures d’écran depuis les réglages', async () => {
     const ctx = await existingVault();
     let allowed = false;
@@ -368,7 +443,7 @@ describe('cycle de vie', () => {
     );
     await unlockWith(MASTER);
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+      await screen.findByLabelText('SOS : ouvrir l’écran Urgence'),
     );
     const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
 
@@ -675,7 +750,7 @@ describe('signal SOS lumineux', () => {
     await render(<AppRoot manager={manager} content={content} torch={torch} />);
     await unlockWith(MASTER);
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+      await screen.findByLabelText('SOS : ouvrir l’écran Urgence'),
     );
     await fireEvent.press(
       await screen.findByLabelText('Faire clignoter la lampe en SOS'),
@@ -713,7 +788,7 @@ describe('signal SOS lumineux', () => {
     await render(<AppRoot manager={manager} content={content} torch={torch} />);
     await unlockWith(MASTER);
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+      await screen.findByLabelText('SOS : ouvrir l’écran Urgence'),
     );
     await fireEvent.press(
       await screen.findByLabelText('Faire clignoter la lampe en SOS'),
@@ -729,7 +804,7 @@ describe('signal SOS lumineux', () => {
     await render(<AppRoot manager={manager} content={content} />);
     await unlockWith(MASTER);
     await fireEvent.press(
-      await screen.findByLabelText('Ouvrir l’écran Urgence'),
+      await screen.findByLabelText('SOS : ouvrir l’écran Urgence'),
     );
     await screen.findByText('Urgence');
     expect(screen.queryByText('Signal SOS lumineux')).toBeNull();
@@ -1029,7 +1104,7 @@ describe('écrans', () => {
         },
       },
     });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
@@ -1084,9 +1159,12 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Boussole')).toBeTruthy();
   });
 
-  it('ouvre le kit depuis l’accueil et ajoute un manque', async () => {
+  it('ouvre le kit depuis Préparer et ajoute un manque', async () => {
     await openApp();
-    await fireEvent.press(screen.getByLabelText('Ouvrir le kit et matériel'));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir le kit et matériel'),
+    );
     await fireEvent.press(
       await screen.findByText('À prévoir', { exact: false }),
     );
@@ -1123,7 +1201,7 @@ describe('écrans', () => {
 
   it('calcule les besoins en eau par usage et les besoins électriques', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir les calculateurs'),
     );
@@ -1301,7 +1379,9 @@ describe('écrans', () => {
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
     expect(screen.getByTestId('red-light')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
     await fireEvent.press(await screen.findByText('Quitter la lumière rouge'));
     expect(screen.queryByTestId('red-light')).toBeNull();
   });
@@ -1332,8 +1412,9 @@ describe('écrans', () => {
 
   it('simule une crise jour par jour sur le stock réel', async () => {
     await openApp();
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
-      screen.getByLabelText('Ouvrir le simulateur de crise'),
+      await screen.findByLabelText('Ouvrir le simulateur de crise'),
     );
     // Coupure de courant de 5 jours : 30 L à 3 L par jour suffisent.
     expect(await screen.findAllByText(/tient les 5 jours/)).toHaveLength(2);
@@ -1364,7 +1445,7 @@ describe('écrans', () => {
 
   it('range la préparation dans son onglet et revient à l’écran d’origine', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     expect(
       await screen.findByLabelText(/^Indice de préparation : \d+ sur 100/),
     ).toBeTruthy();
@@ -1374,7 +1455,9 @@ describe('écrans', () => {
     await screen.findByText('Simulateur de crise');
     await fireEvent.press(screen.getByLabelText('Retour à Préparer'));
     // Urgence puis kit : chaque retour remonte d’un écran.
-    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
@@ -1384,7 +1467,9 @@ describe('écrans', () => {
       await screen.findByLabelText('Ouvrir le plan d’achats'),
     ).toBeTruthy();
     // SOS dans l’en-tête, depuis n’importe quelle section.
-    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
     await fireEvent.press(await screen.findByLabelText('Retour à Préparer'));
     expect(
       await screen.findByLabelText('Ouvrir le plan d’achats'),
@@ -1422,7 +1507,9 @@ describe('écrans', () => {
     expect(
       await screen.findByLabelText('Eau disponible : 30 L, 15 j d’autonomie'),
     ).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Ouvrir l’écran Urgence'));
+    await fireEvent.press(
+      screen.getByLabelText('SOS : ouvrir l’écran Urgence'),
+    );
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir le kit et matériel'),
     );
@@ -1434,7 +1521,7 @@ describe('écrans', () => {
     await openApp();
     // Prochaine action de l’indice : aussi dans « À faire en priorité ».
     expect(screen.getByText('À faire en priorité')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     const card = await screen.findByLabelText(
       /^Indice de préparation : \d+ sur 100, .+\. Voir le détail$/,
     );
@@ -1469,7 +1556,7 @@ describe('écrans', () => {
         printHtml: async () => {},
       },
     });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
@@ -1543,7 +1630,7 @@ describe('écrans', () => {
     await fireEvent.press(screen.getByLabelText('Verrouiller'));
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
@@ -1582,7 +1669,7 @@ describe('écrans', () => {
         printHtml: async () => {},
       },
     });
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
@@ -1660,7 +1747,7 @@ describe('écrans', () => {
     await fireEvent.press(screen.getByLabelText('Verrouiller'));
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
@@ -1677,7 +1764,7 @@ describe('écrans', () => {
 
   it('échelonne les achats et les rappelle sur l’accueil', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
@@ -1710,7 +1797,7 @@ describe('écrans', () => {
 
   it('chiffre les achats, applique un budget et met à jour sans perdre les coches', async () => {
     await openApp();
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir le plan d’achats'),
     );
@@ -1753,8 +1840,9 @@ describe('écrans', () => {
 
   it('ajoute au plan d’achats les manques d’une crise simulée', async () => {
     await openApp();
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
-      screen.getByLabelText('Ouvrir le simulateur de crise'),
+      await screen.findByLabelText('Ouvrir le simulateur de crise'),
     );
     await fireEvent.press(await screen.findByText('Confinement'));
     await fireEvent.press(await screen.findByText('21 jours'));
@@ -1809,7 +1897,7 @@ describe('écrans', () => {
     expect(screen.getByLabelText(/^Foyer : 2 personnes\./)).toBeTruthy();
 
     // Et depuis Mon foyer, dans l’onglet Préparer.
-    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(screen.getByLabelText('Ouvrir Préparer'));
     await fireEvent.press(
       await screen.findByLabelText(
         'Ouvrir Mon foyer : personnes, objectif, eau, calories, énergie',

@@ -3,6 +3,10 @@
  * (MGRS et degrés), envoi de la position par SMS et fiches réflexes. Tout
  * fonctionne sans réseau de données ; l'appel et le SMS passent par les
  * applications du téléphone, l'utilisateur garde la main sur l'envoi.
+ *
+ * Deux usages : coffre ouvert (plan familial, lumière rouge, kit, alertes),
+ * et « Urgence sans code » depuis l'écran de verrouillage, qui n'affiche
+ * aucune donnée du coffre.
  */
 import {
   Crosshair,
@@ -25,7 +29,8 @@ import {
   View,
 } from 'react-native';
 
-import type { Position } from '../../device/location';
+import type { BundledGuide } from '../../db/guides';
+import type { LocationSource, Position } from '../../device/location';
 import {
   isPlanEmpty,
   loadFamilyPlan,
@@ -36,7 +41,8 @@ import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
 import { formatNumber } from '../format';
 import { useNavigation } from '../navigation';
 import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
-import { sosPattern } from '../../device/torch';
+import { sosPattern, type TorchSignal } from '../../device/torch';
+import { markLeavingForCall } from '../callGrace';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -71,10 +77,49 @@ export function positionMessage(position: Position): string {
   );
 }
 
+/** Écran Urgence, coffre ouvert. */
 export function EmergencyScreen() {
   const { db, location, torch } = useSession();
   const { data: plan } = useLoader(() => loadFamilyPlan(db));
   const navigation = useNavigation();
+  return (
+    <EmergencyView
+      location={location}
+      torch={torch}
+      onBack={navigation.close}
+      backLabel={navigation.backLabel}
+      vault={{
+        plan,
+        openKit: () => navigation.open('preparation'),
+        openAlerts: () => navigation.open('alerts'),
+        openFamilyPlan: () => navigation.open('familyPlan'),
+      }}
+    />
+  );
+}
+
+/** Ce que l'écran affiche en plus quand le coffre est ouvert. */
+interface VaultExtras {
+  plan: FamilyPlan | null;
+  openKit: () => void;
+  openAlerts: () => void;
+  openFamilyPlan: () => void;
+}
+
+/**
+ * Corps de l'écran. Sans `vault` (écran de verrouillage), il n'affiche que
+ * ce qui ne vient pas du coffre : numéros, signal, position, fiches.
+ */
+export function EmergencyView(props: {
+  location: LocationSource;
+  torch: TorchSignal;
+  onBack: () => void;
+  backLabel: string;
+  vault?: VaultExtras;
+  /** Fiches embarquées : lues sans coffre. */
+  guides?: readonly BundledGuide[];
+}) {
+  const { location, torch, vault } = props;
   const redLight = useRedLight();
   const [position, setPosition] = useState<Position | null>(null);
   const [locating, setLocating] = useState(false);
@@ -119,6 +164,7 @@ export function EmergencyScreen() {
         slug={reflex}
         onBack={() => setReflex(null)}
         backLabel="Retour à l’urgence"
+        bundled={props.guides}
       />
     );
   }
@@ -136,6 +182,10 @@ export function EmergencyScreen() {
   };
 
   const open = (url: string) => {
+    // Coffre ouvert : il le reste pendant l'appel ou le SMS (2 minutes).
+    if (vault) {
+      markLeavingForCall();
+    }
     Linking.openURL(url).catch(() =>
       setError('Impossible d’ouvrir l’application du téléphone.'),
     );
@@ -144,10 +194,15 @@ export function EmergencyScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <ScreenTitle
-        title="Urgence"
-        onBack={navigation.close}
-        backLabel={navigation.backLabel}
+        title={vault ? 'Urgence' : 'Urgence sans code'}
+        onBack={props.onBack}
+        backLabel={props.backLabel}
       />
+      <Text style={vault ? styles.notice : styles.noticeLimited}>
+        {vault
+          ? 'Le coffre reste ouvert pendant un appel ou un SMS lancé ici. Il se verrouille après 2 minutes hors de Fenrir.'
+          : 'Aucune donnée du coffre n’est affichée : numéros, signal lumineux, position et fiches réflexes.'}
+      </Text>
 
       <View style={styles.numbers}>
         {NUMBERS.map(([number, label]) => (
@@ -169,7 +224,7 @@ export function EmergencyScreen() {
         dangereux). L’appel s’ouvre dans le téléphone : rien n’est composé sans
         vous.
       </Text>
-      {RED_LIGHT_SUPPORTED ? (
+      {vault && RED_LIGHT_SUPPORTED ? (
         <Button
           variant="ghost"
           icon={Moon}
@@ -205,20 +260,24 @@ export function EmergencyScreen() {
           ) : null}
         </>
       ) : null}
-      <Button
-        icon={ListChecks}
-        chevron
-        label="Kit et matériel"
-        accessibilityLabel="Ouvrir le kit et matériel"
-        onPress={() => navigation.open('preparation')}
-      />
-      <Button
-        icon={TriangleAlert}
-        chevron
-        label="Alertes en cours"
-        accessibilityLabel="Ouvrir les alertes : vigilances, rappels, ruptures"
-        onPress={() => navigation.open('alerts')}
-      />
+      {vault ? (
+        <>
+          <Button
+            icon={ListChecks}
+            chevron
+            label="Kit et matériel"
+            accessibilityLabel="Ouvrir le kit et matériel"
+            onPress={vault.openKit}
+          />
+          <Button
+            icon={TriangleAlert}
+            chevron
+            label="Alertes en cours"
+            accessibilityLabel="Ouvrir les alertes : vigilances, rappels, ruptures"
+            onPress={vault.openAlerts}
+          />
+        </>
+      ) : null}
 
       <Panel
         title="Ma position"
@@ -273,19 +332,21 @@ export function EmergencyScreen() {
         {error ? <Notice tone="error" message={error} /> : null}
       </Panel>
 
-      <FamilyPlanPanel
-        plan={plan}
-        position={position}
-        onCall={phone => open(`tel:${phone.replace(/[^+0-9]/g, '')}`)}
-        onSms={(phone, body) =>
-          open(
-            `sms:${phone.replace(/[^+0-9]/g, '')}?body=${encodeURIComponent(
-              body,
-            )}`,
-          )
-        }
-        onEdit={() => navigation.open('familyPlan')}
-      />
+      {vault ? (
+        <FamilyPlanPanel
+          plan={vault.plan}
+          position={position}
+          onCall={phone => open(`tel:${phone.replace(/[^+0-9]/g, '')}`)}
+          onSms={(phone, body) =>
+            open(
+              `sms:${phone.replace(/[^+0-9]/g, '')}?body=${encodeURIComponent(
+                body,
+              )}`,
+            )
+          }
+          onEdit={vault.openFamilyPlan}
+        />
+      ) : null}
 
       <Panel
         title="Fiches réflexes"
@@ -428,9 +489,9 @@ const styles = StyleSheet.create({
   grow: { flex: 1, minWidth: 0 },
   outOfArea: { color: colors.primary, fontSize: 13 },
   round: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: sizes.touch + 8,
+    height: sizes.touch + 8,
+    borderRadius: (sizes.touch + 8) / 2,
     borderWidth: 1,
     borderColor: colors.borderActive,
     alignItems: 'center',
@@ -441,10 +502,27 @@ const styles = StyleSheet.create({
     paddingBottom: space.xl,
     gap: space.m,
   },
+  notice: {
+    ...text.muted,
+    padding: space.m,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: colors.success,
+    color: colors.text,
+  },
+  noticeLimited: {
+    ...text.muted,
+    padding: space.m,
+    borderRadius: radius.m,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    color: colors.text,
+  },
   numbers: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   call: {
     width: '48%',
     flexGrow: 1,
+    minHeight: 76,
     gap: 2,
     padding: space.m,
     borderRadius: radius.card,

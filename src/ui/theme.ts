@@ -4,7 +4,8 @@
  *
  * Sémantique stable : orange = action / sélection, cyan = navigation /
  * mesure, vert = confirmé, jaune = attention, rouge = danger,
- * violet = information secondaire.
+ * violet = information secondaire. Les catégories de stock ont leurs
+ * propres teintes, distinctes de ces couleurs d'état.
  */
 import { Platform, StyleSheet } from 'react-native';
 
@@ -30,14 +31,15 @@ export const colors = {
   danger: '#FB3C4B',
   dangerSurface: '#2A0B12',
   purple: '#D879FF',
-  // Catégories de stock (pack « fiches »)
-  water: '#22D3EE',
-  food: '#FBBF24',
-  weapons: '#FB3C4B',
-  health: '#FF4D61',
+  // Catégories de stock : hors du rouge, de l'orange, du jaune et du vert,
+  // réservés aux états (danger, action, attention, complet).
+  water: '#4FA3FF',
+  food: '#D6B37A',
+  weapons: '#94A3B8',
+  health: '#F0A6CA',
   tools: '#B7CBD7',
-  equipment: '#22D98B',
-  energy: '#FF9D1C',
+  equipment: '#6E8FA3',
+  energy: '#A78BFA',
 } as const;
 
 export type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info';
