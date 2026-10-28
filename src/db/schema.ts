@@ -852,6 +852,17 @@ const SYNC_SETTINGS_17 = {
       'energy_devices', 'purchase_plan')`,
 };
 
+/** La pharmacie du foyer est partagée comme le plan d'achats. */
+const SYNC_SETTINGS_19 = {
+  ...SYNC_SHARED[0],
+  when: (r: string) =>
+    `${r}.key IN ('household_members', 'household_children',
+      'household_babies', 'water_liters_per_person_day',
+      'kcal_per_person_day', 'target_days', 'wh_per_person_day',
+      'energy_devices', 'purchase_plan', 'pharmacy_plan',
+      'pharmacy_list')`,
+};
+
 const migration17: Migration = {
   version: 17,
   name: 'composition du foyer',
@@ -869,7 +880,7 @@ const migration17: Migration = {
  * d'une sauvegarde : voir `forgetVersionsAfterRestore`).
  */
 export const SYNC_RESEED: readonly string[] = [
-  SYNC_SETTINGS_17,
+  SYNC_SETTINGS_19,
   ...SYNC_SHARED.slice(1),
 ].map(
   t =>
@@ -906,6 +917,17 @@ const migration18: Migration = {
   ],
 };
 
+const migration19: Migration = {
+  version: 19,
+  name: 'pharmacie du foyer partagée',
+  statements: [
+    'DROP TRIGGER trg_sync_settings_ai',
+    'DROP TRIGGER trg_sync_settings_au',
+    'DROP TRIGGER trg_sync_settings_ad',
+    ...syncTriggers(SYNC_SETTINGS_19),
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -925,6 +947,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration16,
   migration17,
   migration18,
+  migration19,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

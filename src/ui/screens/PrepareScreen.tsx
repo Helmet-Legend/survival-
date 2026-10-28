@@ -10,6 +10,7 @@ import {
   Hourglass,
   House,
   ListChecks,
+  Pill,
   ShoppingCart,
   Users,
   type LucideIcon,
@@ -144,6 +145,14 @@ export function PrepareScreen() {
         detail={data?.purchases ?? 'Étaler les achats sur plusieurs mois'}
         accessibilityLabel="Ouvrir le plan d’achats"
         onPress={open('purchases')}
+      />
+      <NavRow
+        icon={Pill}
+        color={colors.health}
+        title="Pharmacie familiale"
+        detail="Liste selon le foyer et la durée · stock et péremptions"
+        accessibilityLabel="Ouvrir la pharmacie familiale"
+        onPress={open('pharmacy')}
       />
       <NavRow
         icon={Users}

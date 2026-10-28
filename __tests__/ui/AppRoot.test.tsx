@@ -1455,6 +1455,226 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
+  it('calcule le stock de pharmacie, compare avec ce qu’on a et exporte', async () => {
+    const out: { name?: string; csv?: string } = {};
+    await openApp({
+      files: {
+        available: true,
+        saveText: async (name, _mime, text) => {
+          out.name = name;
+          out.csv = text;
+          return true;
+        },
+        openText: async () => null,
+        printHtml: async () => {},
+      },
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la pharmacie familiale'),
+    );
+    // Foyer repris de Mon foyer : 1 adulte ; un enfant de 20 kg, 15 jours.
+    await fireEvent.press(await screen.findByText('Ajouter un enfant'));
+    await fireEvent.changeText(
+      await screen.findByLabelText('Enfant 1 : poids en kg'),
+      '20',
+    );
+    await fireEvent.press(screen.getByText('15 jours'));
+    expect(screen.queryByText('03 · Mon stock à constituer')).toBeNull();
+    await fireEvent.press(screen.getByText('Calculer mon stock'));
+    expect(await screen.findByText('03 · Mon stock à constituer')).toBeTruthy();
+
+    // Rubriques repliées ; on ouvre la douleur et la fièvre.
+    await fireEvent.press(
+      screen.getByLabelText(/^Douleur, fièvre, inflammation, 0 sur /),
+    );
+    // (8 + 6) × 0,8 = 11,2 comprimés → 2 boîtes de 8.
+    expect(screen.getByText('Paracétamol 1000 mg')).toBeTruthy();
+    // Enfant de moins de 25 kg : 0,8 flacon × 0,8 = 0,64 → 1 flacon.
+    expect(screen.getByText('À stocker : 1 flacon de 100 ml')).toBeTruthy();
+    expect(screen.getAllByText('Il manque 2').length).toBeGreaterThan(0);
+    // J'en ai deux boîtes de paracétamol : complet.
+    for (let i = 0; i < 2; i++) {
+      await fireEvent.press(
+        screen.getByLabelText('Une de plus : Paracétamol 1000 mg'),
+      );
+    }
+    expect(await screen.findByText('Complet')).toBeTruthy();
+    // Détails : repère non sourcé, précautions.
+    await fireEvent.press(
+      screen.getByLabelText('Afficher les détails : Paracétamol 1000 mg'),
+    );
+    expect(
+      await screen.findByText('Repère non sourcé, à valider'),
+    ).toBeTruthy();
+
+    // Toutes les rubriques du moteur sont affichées, garrots compris.
+    await fireEvent.press(screen.getByLabelText(/^Hémorragie, 0 sur /));
+    expect(screen.getByText('Garrot tactique CAT')).toBeTruthy();
+    // Progression selon le nombre d'adultes.
+    await fireEvent.press(screen.getByLabelText(/^Pour 1 à 6 adultes/));
+    await fireEvent.press(screen.getByLabelText('Pour 1 à 6 enfants'));
+    expect(
+      screen.getByText('Enfants de 20 kg (poids moyen saisi), sans adulte.'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Estimation : données à moduler selon vos besoins spécifiques.',
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('checkbox', {
+        name: 'Traitements habituels, 15 jours à prévoir',
+      }),
+    );
+    await fireEvent.press(screen.getByText('Exporter en tableur'));
+    expect(await screen.findByText('Liste exportée en tableur.')).toBeTruthy();
+    expect(out.name).toMatch(/^fenrir-pharmacie-familiale-/);
+    expect(out.csv).toContain('1 adulte(s), 1 enfant(s), 15 jours');
+    expect(out.csv).toMatch(
+      /;Paracétamol 1000 mg;11,2 comprimés;2 boîtes;2;0;/,
+    );
+    expect(out.csv).toMatch(
+      /Traitements habituels;15 jours à prévoir;.*;oui\r\n/,
+    );
+
+    // Retrouvé après verrouillage : stock déclaré et coche.
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la pharmacie familiale'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText(/^Douleur, fièvre, inflammation, 1 sur /),
+    );
+    expect(screen.getByText('Complet')).toBeTruthy();
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Traitements habituels, 15 jours à prévoir',
+      }).props.accessibilityState,
+    ).toEqual({ checked: true });
+
+    // Les lots et péremptions restent à part ; « retour » y ramène.
+    await fireEvent.press(
+      screen.getByLabelText('Ouvrir mon stock de pharmacie'),
+    );
+    expect(await screen.findByText('Stock de pharmacie')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText('Retour à la liste de pharmacie'),
+    );
+    expect(await screen.findByText('Pharmacie familiale')).toBeTruthy();
+  });
+
+  it('gère le stock de pharmacie, garde l’inventaire et l’exporte', async () => {
+    const out: { name?: string; csv?: string } = {};
+    await openApp({
+      files: {
+        available: true,
+        saveText: async (name, _mime, text) => {
+          out.name = name;
+          out.csv = text;
+          return true;
+        },
+        openText: async () => null,
+        printHtml: async () => {},
+      },
+    });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la pharmacie familiale'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir mon stock de pharmacie'),
+    );
+    expect(
+      await screen.findByText(
+        'Aucun produit : ajoutez-en depuis le catalogue.',
+      ),
+    ).toBeTruthy();
+    // Foyer de 2, 3 mois.
+    await fireEvent.press(screen.getByLabelText('Une personne de plus'));
+    await fireEvent.press(screen.getByText('mois'));
+    await fireEvent.press(screen.getByLabelText('Durée plus courte'));
+    await fireEvent.press(screen.getByLabelText('Durée plus courte'));
+    await fireEvent.press(screen.getByLabelText('Durée plus courte'));
+    expect(await screen.findByText(/^Soit 90 jours/)).toBeTruthy();
+
+    // Médicament occasionnel : estimé par épisodes, repères sourcés.
+    await fireEvent.press(screen.getByText('Ajouter un produit'));
+    await fireEvent.press(
+      await screen.findByLabelText('Ajouter Paracétamol 500 mg'),
+    );
+    // 3 épisodes × 2 personnes × 90 j ÷ 365 × 18 × 1,1 = 29,3 → 30 comprimés.
+    expect(await screen.findByText('Soit 30 comprimés au total.')).toBeTruthy();
+    expect(screen.getByText(/^Repère : 2 à 3 rhumes/)).toBeTruthy();
+    // Des boîtes choisies à la main remplacent l'estimation.
+    await fireEvent.changeText(
+      screen.getByLabelText(
+        'Ou nombre de boîtes choisi à la main (facultatif)',
+      ),
+      '3',
+    );
+    await fireEvent.press(screen.getByText('Ajouter un lot'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Péremption (AAAA-MM-JJ, facultative)'),
+      '2020-01-01',
+    );
+    await fireEvent.press(screen.getAllByLabelText('Retour à la pharmacie')[0]);
+
+    // Le lot périmé ne compte pas : 3 à acheter, alerte affichée.
+    const card = await screen.findByLabelText(
+      'Paracétamol 500 mg, Médicament occasionnel',
+    );
+    expect(within(card).getAllByText('3')).toHaveLength(2);
+    expect(screen.getAllByText(/périmé/).length).toBeGreaterThan(0);
+
+    // Consommable : quantité par personne et par mois, arrondie à la boîte.
+    await fireEvent.press(screen.getByText('Ajouter un produit'));
+    await fireEvent.press(
+      await screen.findByLabelText('Ajouter Compresses stériles'),
+    );
+    await fireEvent.changeText(
+      await screen.findByLabelText(/par personne et par mois$/),
+      '5',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText(/par conditionnement$/),
+      '10',
+    );
+    // 5 × 2 × 90 ÷ 30 × 1,1 = 33 → 4 boîtes de 10.
+    expect(await screen.findByText('Soit 33 sachets au total.')).toBeTruthy();
+    await fireEvent.press(screen.getAllByLabelText('Retour à la pharmacie')[0]);
+
+    await fireEvent.press(await screen.findByText('Exporter en tableur'));
+    expect(
+      await screen.findByText('Pharmacie exportée en tableur.'),
+    ).toBeTruthy();
+    expect(out.name).toMatch(/^fenrir-pharmacie-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(out.csv).toContain('2 personne(s), 3 mois (90 j), marge 10 %');
+    expect(out.csv).toContain('Paracétamol 500 mg;');
+
+    // Rechargé depuis le coffre après verrouillage.
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir la pharmacie familiale'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Ouvrir mon stock de pharmacie'),
+    );
+    expect(
+      await screen.findByLabelText(
+        'Paracétamol 500 mg, Médicament occasionnel',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Soit 90 jours/)).toBeTruthy();
+  });
+
   it('échelonne les achats et les rappelle sur l’accueil', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Préparer' }));
