@@ -1,68 +1,46 @@
 /**
- * Liste de pharmacie familiale : adultes, enfants et durée donnent une liste
- * organisée de médicaments et de petit matériel, à cocher et à exporter.
- *
- * Trois bases de quantité, toujours affichées :
- * - estimation : fréquence publiée × quantité au plus par épisode (notice),
- *   pour les adultes seulement, repris du catalogue de la pharmacie ;
- * - présence : un exemplaire pour le foyer, cité par les listes officielles ;
- * - conseil : pas de repère publié, ou dose selon l'âge et le poids (enfants) :
- *   quantité à définir avec le pharmacien. Jamais de posologie.
+ * Pharmacie familiale : le moteur de calcul donne le nombre de boîtes de
+ * chaque médicament et du petit matériel ; l'utilisateur indique ce qu'il a
+ * déjà, Fenrir dit ce qu'il manque. Quelques produits restent à décider avec
+ * le pharmacien (traitements habituels, alternatives, enfants) : ils forment
+ * une courte liste à cocher. Jamais de posologie.
  */
 import type { SqlDatabase } from '../db/types';
 import { GEAR_REFS, type GearRef } from './baseGear';
 import {
-  DAYS_PER_MONTH,
-  DAYS_PER_YEAR,
+  DELIVERY_LABELS,
   PHARMACY_CATALOG,
+  STORAGE_LABELS,
   type CatalogEntry,
 } from './pharmacy';
+import {
+  boxesByAdults,
+  boxesByChildren,
+  CATEGORY_LABELS,
+  computeStock,
+  formatBoxes,
+  formatQuantity,
+  DURATIONS,
+  householdError,
+  type CatalogueMed,
+  type EngineResult,
+  type Household,
+  type MedResult,
+} from './pharmacyEngine';
 
-export const LIST_MONTHS = [1, 3, 6, 12] as const;
-export type ListMonths = (typeof LIST_MONTHS)[number];
 export const LIST_LIMITS = { adults: [0, 10], children: [0, 10] } as const;
+/** Boîtes déjà en stock : au plus ce nombre par produit. */
+export const HAVE_MAX = 999;
 
-export interface ListSettings {
-  version: 1;
-  adults: number;
-  children: number;
-  months: ListMonths;
-  /** La liste a été générée pour ces réglages. */
+/** Réglages du foyer (moteur), stock déclaré et état de la liste. */
+export interface ListSettings extends Household {
+  version: 4;
+  /** Le calcul a été lancé pour ces réglages. */
   generated: boolean;
-  /** Éléments cochés (identifiants). */
+  /** Boîtes déjà en stock, par référence du moteur. */
+  have: Record<string, number>;
+  /** Produits à décider avec le pharmacien, cochés (identifiants). */
   checked: string[];
-}
-
-export type ListSection = 'adults' | 'children' | 'household' | 'gear';
-
-export const SECTION_LABELS: Record<ListSection, string> = {
-  adults: 'Adultes : médicaments courants',
-  children: 'Enfants',
-  household: 'Tout le foyer',
-  gear: 'Petit matériel',
-};
-
-export type Basis = 'estimate' | 'presence' | 'advice';
-
-export const BASIS_LABELS: Record<Basis, string> = {
-  estimate: 'Estimation statistique, pas une prescription',
-  presence: 'Un pour le foyer, d’après les listes officielles',
-  advice: 'Quantité à définir avec le pharmacien',
-};
-
-export interface ListItem {
-  id: string;
-  section: ListSection;
-  name: string;
-  /** Quantité affichée : « 6 boîtes de 16 comprimés », « 1 pour le foyer »… */
-  quantity: string;
-  /** Détail du calcul ou de la raison. */
-  detail: string;
-  basis: Basis;
-  /** Conditionnements estimés (estimation seulement). */
-  packs?: number;
-  sources: string[];
-  caution?: string;
 }
 
 export function newListSettings(
@@ -70,11 +48,14 @@ export function newListSettings(
   children: number,
 ): ListSettings {
   return {
-    version: 1,
+    version: 4,
     adults: clamp(adults, LIST_LIMITS.adults),
-    children: clamp(children, LIST_LIMITS.children),
-    months: 6,
+    childWeights: Array<number | null>(
+      clamp(children, LIST_LIMITS.children),
+    ).fill(null),
+    days: 30,
     generated: false,
+    have: {},
     checked: [],
   };
 }
@@ -83,224 +64,185 @@ function clamp(n: number, [min, max]: readonly [number, number]) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-const plural = (n: number, one: string, many = `${one}s`) =>
-  n > 1 ? many : one;
+// --- Tableau de stock ------------------------------------------------------------
 
-const catalog = (id: string): CatalogEntry => {
+/** Ligne du tableau : calcul du moteur, stock déclaré et manque. */
+export interface StockRow extends MedResult {
+  /** Boîtes déjà en stock (saisie). */
+  have: number;
+  /** Boîtes qui manquent pour atteindre l'objectif. */
+  missing: number;
+}
+
+export function stockTable(settings: ListSettings): {
+  rows: StockRow[];
+  result: EngineResult;
+} {
+  const result = computeStock(settings);
+  const rows = result.meds.map(m => {
+    const have = settings.have[m.ref] ?? 0;
+    return { ...m, have, missing: Math.max(0, m.boxes - have) };
+  });
+  return { rows, result };
+}
+
+/** Bilan : produits complets, boîtes à stocker, déjà là, à acheter. */
+export function stockSummary(rows: StockRow[]) {
+  return {
+    complete: rows.filter(r => r.missing === 0).length,
+    total: rows.length,
+    boxes: rows.reduce((n, r) => n + r.boxes, 0),
+    have: rows.reduce((n, r) => n + Math.min(r.have, r.boxes), 0),
+    missing: rows.reduce((n, r) => n + r.missing, 0),
+  };
+}
+
+/** Précautions, délivrance et conservation d'un produit du moteur. */
+export function medInfo(med: CatalogueMed): {
+  caution?: string;
+  practical?: string;
+  deliverySource?: string;
+} {
+  const entry = med.catalogId
+    ? PHARMACY_CATALOG.find(e => e.id === med.catalogId)
+    : undefined;
+  return entry
+    ? {
+        caution: entry.caution,
+        practical: practical(entry),
+        deliverySource: entry.delivery?.source,
+      }
+    : {};
+}
+
+export { boxesByAdults, CATEGORY_LABELS, formatBoxes, formatQuantity };
+
+// --- À décider avec le pharmacien ----------------------------------------------
+
+export interface ListItem {
+  id: string;
+  name: string;
+  /** « 6 mois à prévoir », « Alternative au racécadotril »… */
+  quantity: string;
+  detail: string;
+  use: string;
+  consult?: string;
+  practical?: string;
+  sources: string[];
+  caution?: string;
+}
+
+const entryOf = (id: string): CatalogEntry => {
   const entry = PHARMACY_CATALOG.find(e => e.id === id);
-  if (!entry?.estimate) {
-    throw new Error(`Repère manquant : ${id}`);
+  if (!entry) {
+    throw new Error(`Produit inconnu : ${id}`);
   }
   return entry;
 };
 
-/**
- * Estimation adulte : épisodes par an × adultes × jours ÷ 365 × unités par
- * épisode, arrondie à l'unité puis à la boîte supérieure.
- */
-function estimated(
+/** Délivrance (si vérifiée) et conservation, tirées du catalogue. */
+function practical(entry: CatalogEntry): string {
+  return [
+    entry.delivery
+      ? DELIVERY_LABELS[entry.delivery.status]
+      : 'Délivrance à confirmer avec le pharmacien',
+    STORAGE_LABELS[entry.storage],
+  ].join(' · ');
+}
+
+const refs = (...ids: GearRef[]) => ids.map(id => GEAR_REFS[id].title);
+
+function fromCatalog(
   id: string,
-  name: string,
-  adults: number,
-  days: number,
-  extra: { note?: string } = {},
+  info: Omit<ListItem, 'id' | 'practical' | 'caution' | 'sources'> & {
+    catalogId?: string;
+    sources?: string[];
+  },
 ): ListItem {
-  const entry = catalog(id);
-  const e = entry.estimate!;
-  const units = Math.ceil(
-    (e.episodesPerYear * adults * days * e.unitsPerEpisode) / DAYS_PER_YEAR -
-      1e-9,
-  );
-  const packSize = e.packSize!;
-  const packs = Math.max(1, Math.ceil(units / packSize));
-  const episodes = (e.episodesPerYear * adults * days) / DAYS_PER_YEAR;
+  const entry = entryOf(info.catalogId ?? id);
   return {
     id,
-    section: 'adults',
-    name,
-    quantity: `${packs} ${plural(packs, 'boîte')} de ${packSize} ${plural(
-      packSize,
-      entry.unit,
-    )}`,
-    detail: `${fmt(episodes)} épisode(s) attendu(s) × ${
-      e.unitsPerEpisode
-    } ${plural(
-      e.unitsPerEpisode,
-      entry.unit,
-    )} au plus par épisode = ${units} ${plural(units, entry.unit)}${
-      extra.note ? `. ${extra.note}` : ''
-    }`,
-    basis: 'estimate',
-    packs,
-    sources: [e.episodesSource, e.unitsSource, e.packSource ?? ''].filter(
+    name: info.name,
+    quantity: info.quantity,
+    detail: info.detail,
+    use: info.use,
+    consult: info.consult,
+    practical: practical(entry),
+    sources: [...(info.sources ?? []), entry.delivery?.source ?? ''].filter(
       Boolean,
     ),
     caution: entry.caution,
   };
 }
 
-const fmt = (n: number) =>
-  (Math.round(n * 10) / 10).toString().replace('.', ',');
-
-const refs = (...ids: GearRef[]) => ids.map(id => GEAR_REFS[id].title);
-
-/** Liste pour un foyer et une durée ; vide sans personne. */
+/** Produits sans quantité calculée : traitements, alternatives, enfants. */
 export function buildPharmacyList(
-  settings: Pick<ListSettings, 'adults' | 'children' | 'months'>,
+  settings: Pick<ListSettings, 'adults' | 'childWeights' | 'days'>,
 ): ListItem[] {
-  const { adults, children, months } = settings;
-  const people = adults + children;
-  if (people === 0) {
+  const { adults, days } = settings;
+  const children = settings.childWeights.length;
+  if (adults + children === 0) {
     return [];
   }
-  const days = months * DAYS_PER_MONTH;
-  const items: ListItem[] = [];
-
-  if (adults > 0) {
-    items.push(
-      estimated('paracetamol', 'Paracétamol 500 mg (adulte)', adults, days),
-      estimated('diosmectite', 'Diosmectite 3 g (diarrhée)', adults, days),
-      estimated(
-        'loperamide',
-        'Lopéramide 2 mg (diarrhée, dès 15 ans)',
-        adults,
-        days,
-        {
-          note: 'Alternative à la diosmectite, selon le conseil du pharmacien',
-        },
-      ),
-      {
-        id: 'antihistaminique',
-        section: 'adults',
-        name: 'Antihistaminique (allergie)',
-        quantity: BASIS_LABELS.advice,
-        detail:
-          'Pas de fréquence publiée : selon les allergies connues du foyer.',
-        basis: 'advice',
-        sources: [],
-        caution: catalogCaution('cetirizine'),
-      },
-    );
-  }
-
-  if (children > 0) {
-    const forKids = `pour ${children} ${plural(children, 'enfant')}`;
-    items.push(
-      {
-        id: 'paracetamol_enfant',
-        section: 'children',
-        name: 'Paracétamol pédiatrique',
-        quantity: BASIS_LABELS.advice,
-        detail: `Forme et dose selon le poids et l’âge de chaque enfant, ${forKids}. Fenrir ne propose pas de posologie.`,
-        basis: 'advice',
-        sources: [],
-        caution:
-          'Seringue ou dosette fournie avec le produit ; ne pas cumuler avec un autre produit contenant du paracétamol.',
-      },
-      {
-        id: 'diosmectite_enfant',
-        section: 'children',
-        name: 'Diosmectite (enfant)',
-        quantity: BASIS_LABELS.advice,
-        detail: `Pas avant 2 ans ; dose selon l’âge, ${forKids}.`,
-        basis: 'advice',
-        sources: [],
-      },
-    );
-  }
-
-  items.push(
-    {
-      id: 'sro',
-      section: 'household',
-      name: 'Solution de réhydratation orale',
-      quantity: BASIS_LABELS.advice,
-      detail:
-        'Traitement de référence de la diarrhée chez l’enfant ; préparer exactement selon la notice.',
-      basis: 'advice',
-      sources: refs('bbk'),
-    },
+  const items: ListItem[] = [
     {
       id: 'traitements',
-      section: 'household',
       name: 'Traitements habituels',
-      quantity: `${months} mois à prévoir`,
+      quantity: `${days} jours à prévoir`,
       detail:
         'Quantité selon l’ordonnance : demander au médecin un renouvellement adapté, garder une copie des ordonnances.',
-      basis: 'advice',
+      use: 'Maladies chroniques (tension, diabète, thyroïde, asthme…), contraception.',
       sources: refs('sgdsn', 'georisques', 'bbk'),
     },
-    {
-      id: 'trousse',
-      section: 'gear',
-      name: 'Trousse de premiers secours',
-      quantity: '1 pour le foyer',
-      detail: 'Compresses stériles, pansements, antiseptique, bande.',
-      basis: 'presence',
-      sources: refs('sgdsn', 'croixrouge', 'bbk'),
-    },
-    {
-      id: 'thermometre',
-      section: 'gear',
-      name: 'Thermomètre médical',
-      quantity: '1 pour le foyer',
-      detail: 'Vérifier la pile.',
-      basis: 'presence',
-      sources: refs('bbk'),
-    },
-    {
-      id: 'gants',
-      section: 'gear',
-      name: 'Gants jetables',
-      quantity: '1 boîte pour le foyer',
-      detail: 'Pour les soins et le nettoyage d’une plaie.',
-      basis: 'presence',
-      sources: refs('croixrouge', 'bbk', 'canada'),
-    },
-    {
-      id: 'pince',
-      section: 'gear',
-      name: 'Pince à épiler et ciseaux',
-      quantity: '1 pour le foyer',
-      detail: 'Échardes, tiques, découpe de pansements.',
-      basis: 'presence',
-      sources: refs('bbk', 'canada', 'luxembourg'),
-    },
-    {
-      id: 'ffp2',
-      section: 'gear',
-      name: 'Masques FFP2',
-      quantity: '1 boîte pour le foyer',
-      detail: 'Poussières, fumées, épidémie.',
-      basis: 'presence',
-      sources: refs('sgdsn', 'croixrouge', 'bbk'),
-    },
+  ];
+  if (children > 0) {
+    items.push({
+      id: 'couches',
+      name: 'Couches et protections enfant',
+      quantity: 'Selon la consommation habituelle',
+      detail:
+        'À calculer selon l’âge et la consommation de chaque enfant sur la durée.',
+      use: 'Bébés et jeunes enfants.',
+      sources: [],
+    });
+  }
+  items.push(
+    fromCatalog('antifongique', {
+      name: 'Antifongique cutané',
+      quantity: 'Selon les besoins du foyer',
+      detail:
+        'Pas de fréquence publiée. Hygiène réduite et humidité favorisent les mycoses.',
+      use: 'Mycoses de la peau et des pieds.',
+    }),
   );
   return items;
 }
 
-function catalogCaution(id: string) {
-  return PHARMACY_CATALOG.find(e => e.id === id)?.caution;
-}
+/** Règles de constitution du stock, affichées repliées. */
+export const STOCK_RULES: readonly string[] = [
+  'Préférer les unidoses et les comprimés sous blister : un flacon ouvert se garde moins longtemps (durée après ouverture sur la notice).',
+  'Renouveler par roulement : utiliser d’abord ce qui périme le plus tôt, vérifier les dates une fois par an.',
+  'Garder les notices et une copie des ordonnances avec la pharmacie.',
+  'Ranger au sec, à l’abri de la chaleur et hors de portée des enfants.',
+];
 
 // --- Enregistrement --------------------------------------------------------------
 
 export const LIST_KEY = 'pharmacy_list';
 
 export function listSettingsError(s: ListSettings): string | null {
-  const inRange = (n: unknown, [min, max]: readonly [number, number]) =>
-    typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max;
-  if (!inRange(s.adults, LIST_LIMITS.adults)) {
-    return 'Le nombre d’adultes doit être compris entre 0 et 10.';
+  const error = householdError(s);
+  if (error) {
+    return error;
   }
-  if (!inRange(s.children, LIST_LIMITS.children)) {
-    return 'Le nombre d’enfants doit être compris entre 0 et 10.';
-  }
-  if (s.adults + s.children === 0) {
-    return 'Ajoutez au moins une personne au foyer.';
-  }
-  if (!(LIST_MONTHS as readonly number[]).includes(s.months)) {
-    return 'Durée inconnue.';
+  if (
+    typeof s.have !== 'object' ||
+    s.have === null ||
+    !Object.values(s.have).every(
+      n => Number.isInteger(n) && n >= 0 && n <= HAVE_MAX,
+    )
+  ) {
+    return 'Stock déclaré illisible.';
   }
   if (
     !Array.isArray(s.checked) ||
@@ -309,6 +251,62 @@ export function listSettingsError(s: ListSettings): string | null {
     return 'Liste cochée illisible.';
   }
   return null;
+}
+
+type StoredV1 = {
+  version: 1;
+  adults: number;
+  children: number;
+  months: number;
+  generated: boolean;
+  checked: string[];
+};
+type StoredV2 = Omit<ListSettings, 'version' | 'have' | 'days'> & {
+  version: 2;
+  months: number;
+};
+type StoredV3 = Omit<ListSettings, 'version' | 'days'> & {
+  version: 3;
+  months: number;
+};
+
+/** Durée en mois des versions précédentes → la durée proposée la plus proche. */
+const toDays = (months: number) =>
+  DURATIONS.reduce((best, d) =>
+    Math.abs(d - months * 30) < Math.abs(best - months * 30) ? d : best,
+  );
+
+/** Reprend les réglages des versions précédentes. */
+function upgrade(
+  raw: StoredV1 | StoredV2 | StoredV3 | ListSettings,
+): ListSettings | null {
+  switch (raw.version) {
+    case 1:
+      return {
+        version: 4,
+        adults: raw.adults,
+        childWeights: Array<number | null>(raw.children).fill(null),
+        days: toDays(raw.months),
+        generated: raw.generated,
+        have: {},
+        checked: raw.checked,
+      };
+    case 2:
+    case 3:
+      return {
+        version: 4,
+        adults: raw.adults,
+        childWeights: raw.childWeights,
+        days: toDays(raw.months),
+        generated: raw.generated,
+        have: raw.version === 3 ? raw.have : {},
+        checked: raw.checked,
+      };
+    case 4:
+      return raw;
+    default:
+      return null;
+  }
 }
 
 export async function loadListSettings(
@@ -322,8 +320,8 @@ export async function loadListSettings(
     return null;
   }
   try {
-    const s = JSON.parse(String(rows[0].value)) as ListSettings;
-    return s.version === 1 && listSettingsError(s) === null ? s : null;
+    const s = upgrade(JSON.parse(String(rows[0].value)));
+    return s !== null && listSettingsError(s) === null ? s : null;
   } catch {
     return null;
   }
@@ -351,26 +349,70 @@ function cell(value: unknown): string {
   return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** Tableur (« ; », BOM UTF-8) : hypothèses en tête, une ligne par élément. */
+/** Tableur (« ; », BOM UTF-8) : stock à constituer, progression, à décider. */
 export function pharmacyListCsv(settings: ListSettings, asOf: string): string {
   const rows: unknown[][] = [
     ['Pharmacie familiale — liste indicative, pas une prescription'],
     [
-      `${settings.adults} adulte(s), ${settings.children} enfant(s), ${settings.months} mois, au ${asOf}`,
+      `${settings.adults} adulte(s), ${settings.childWeights.length} enfant(s), ${settings.days} jours, au ${asOf}`,
     ],
     [],
-    ['Rubrique', 'Élément', 'Quantité', 'Détail', 'Base', 'Sources', 'Coché'],
+    [
+      'Rubrique',
+      'Produit',
+      'Quantité totale (marge comprise)',
+      'À stocker',
+      'J’en ai',
+      'Il manque',
+      'Pour',
+      'Base',
+      'Sources',
+    ],
   ];
-  for (const item of buildPharmacyList(settings)) {
+  for (const r of stockTable(settings).rows) {
     rows.push([
-      SECTION_LABELS[item.section],
-      item.name,
-      item.quantity,
-      item.detail,
-      BASIS_LABELS[item.basis],
-      item.sources.join(' · '),
-      settings.checked.includes(item.id) ? 'oui' : '',
+      CATEGORY_LABELS[r.med.categorie],
+      r.med.nom,
+      formatQuantity(r.withMargin, r.med.format),
+      formatBoxes(r.boxes, r.med),
+      r.have,
+      r.missing,
+      r.from.join(' · '),
+      r.sourced ? 'Fréquence sourcée' : 'Repère non sourcé, à valider',
+      [...r.sources, r.med.boiteSource].join(' · '),
     ]);
   }
+  const byAdults = boxesByAdults(settings);
+  rows.push(
+    [],
+    [`Boîtes selon le nombre d’adultes (${settings.days} jours)`],
+    ['Produit', ...byAdults[0].boxes.map((_, i) => `${i + 1} adulte(s)`)],
+    ...byAdults.map(r => [r.med.nom, ...r.boxes]),
+  );
+  const weights = settings.childWeights.filter((w): w is number => w !== null);
+  if (weights.length > 0) {
+    const weight = weights.reduce((a, b) => a + b, 0) / weights.length;
+    const byChildren = boxesByChildren(settings, weight);
+    rows.push(
+      [],
+      [
+        `Boîtes selon le nombre d’enfants de ${
+          Math.round(weight * 10) / 10
+        } kg (sans adulte)`.replace('.', ','),
+      ],
+      ['Produit', ...byChildren[0].boxes.map((_, i) => `${i + 1} enfant(s)`)],
+      ...byChildren.map(r => [r.med.nom, ...r.boxes]),
+    );
+  }
+  rows.push(
+    [],
+    ['À décider avec le pharmacien', 'Quantité', 'Détail', 'Coché'],
+    ...buildPharmacyList(settings).map(i => [
+      i.name,
+      i.quantity,
+      i.detail,
+      settings.checked.includes(i.id) ? 'oui' : '',
+    ]),
+  );
   return `﻿${rows.map(r => r.map(cell).join(';')).join('\r\n')}\r\n`;
 }

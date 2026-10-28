@@ -4,113 +4,192 @@ import {
   LIST_KEY,
   listSettingsError,
   loadListSettings,
+  medInfo,
   newListSettings,
   pharmacyListCsv,
   saveListSettings,
+  stockSummary,
+  stockTable,
   type ListSettings,
 } from '../../src/plan/pharmacyList';
+import { catalogueMedicaments } from '../../src/plan/pharmacyEngine';
 import { NodeSqliteDb } from '../db/sqlite';
 
 const settings = (patch: Partial<ListSettings> = {}): ListSettings => ({
   ...newListSettings(2, 2),
   ...patch,
 });
-const byId = (s: ListSettings) =>
-  new Map(buildPharmacyList(s).map(i => [i.id, i]));
 
-describe('liste de pharmacie familiale', () => {
-  it('estime les médicaments adultes selon les adultes et la durée', () => {
-    const six = byId(settings({ months: 6 }));
-    // 3 × 2 adultes × 180 j ÷ 365 × 18 = 53,3 → 54 comprimés → 4 boîtes de 16.
-    expect(six.get('paracetamol')?.quantity).toBe('4 boîtes de 16 comprimés');
-    expect(six.get('paracetamol')?.basis).toBe('estimate');
-    expect(six.get('paracetamol')?.detail).toContain('= 54 comprimés');
-    // 0,33 × 2 × 180 ÷ 365 × 21 = 6,8 → 7 sachets → 1 boîte de 18.
-    expect(six.get('diosmectite')?.quantity).toBe('1 boîte de 18 sachets');
-    const year = byId(settings({ months: 12 }));
-    // 3 × 2 × 360 ÷ 365 × 18 = 106,5 → 107 → 7 boîtes.
-    expect(year.get('paracetamol')?.packs).toBe(7);
-    // Les enfants ne changent pas les quantités adultes.
-    expect(byId(settings({ children: 5 })).get('paracetamol')?.packs).toBe(
-      six.get('paracetamol')?.packs,
-    );
+describe('pharmacie familiale', () => {
+  it('crée des réglages avec un poids à indiquer par enfant, 30 jours', () => {
+    expect(newListSettings(2, 3)).toEqual({
+      version: 4,
+      adults: 2,
+      childWeights: [null, null, null],
+      days: 30,
+      generated: false,
+      have: {},
+      checked: [],
+    });
   });
 
-  it('ne calcule aucune quantité pour les enfants', () => {
-    const items = buildPharmacyList(settings());
-    const kids = items.filter(i => i.section === 'children');
-    expect(kids.map(i => i.id)).toEqual([
-      'paracetamol_enfant',
-      'diosmectite_enfant',
+  it('chiffre chaque produit et dit ce qui manque', () => {
+    const s = settings({
+      childWeights: [],
+      have: { para_1000: 1, thermometre: 9 },
+    });
+    const { rows } = stockTable(s);
+    const refs = rows.map(r => r.ref);
+    for (const ref of [
+      'para_1000',
+      'ibuprofene_400',
+      'racecadotril_adulte',
+      'loperamide',
+      'diosmectite',
+      'antiemetique',
+      'cetirizine',
+      'garrot',
+      'pansement_compressif',
+      'compresses',
+      'bandes',
+      'sutures',
+      'serum',
+      'gants',
+      'savon',
+      'thermometre',
+      'trousse',
+      'couverture',
+    ]) {
+      expect(refs).toContain(ref);
+    }
+    // Sans enfant : ni sirop, ni SRO pédiatrique, ni kit nourrisson.
+    for (const ref of ['para_ped', 'sro', 'racecadotril_ped', 'mouche_bebe']) {
+      expect(refs).not.toContain(ref);
+    }
+    const para = rows.find(r => r.ref === 'para_1000')!;
+    // 8 + 6 × 2 = 20 → 3 boîtes ; 1 en stock → 2 à acheter.
+    expect(para.boxes).toBe(3);
+    expect(para.missing).toBe(2);
+    expect(rows.find(r => r.ref === 'thermometre')!.missing).toBe(0);
+    const summary = stockSummary(rows);
+    expect(summary.total).toBe(rows.length);
+    expect(summary.complete).toBe(1);
+    expect(summary.have).toBe(2);
+    expect(summary.missing).toBe(summary.boxes - 2);
+  });
+
+  it('donne précautions et délivrance tirées du catalogue', () => {
+    const info = medInfo(catalogueMedicaments.ibuprofene_400);
+    expect(info.caution).toMatch(/privilégier le paracétamol/);
+    expect(info.practical).toMatch(/^Sans ordonnance/);
+    expect(medInfo(catalogueMedicaments.savon)).toEqual({});
+  });
+
+  it('liste à part ce qui se décide avec le pharmacien', () => {
+    const ids = (s: ListSettings) => buildPharmacyList(s).map(i => i.id);
+    expect(ids(settings())).toEqual(['traitements', 'couches', 'antifongique']);
+    expect(ids(settings({ childWeights: [] }))).toEqual([
+      'traitements',
+      'antifongique',
     ]);
-    expect(kids.every(i => i.basis === 'advice' && i.packs === undefined)).toBe(
-      true,
+    expect(buildPharmacyList(settings())[0].quantity).toBe(
+      '30 jours à prévoir',
     );
     expect(
-      buildPharmacyList(settings({ children: 0 })).some(
-        i => i.section === 'children',
-      ),
-    ).toBe(false);
-  });
-
-  it('sans adulte : pas de médicaments adultes ; sans personne : liste vide', () => {
-    const items = buildPharmacyList(settings({ adults: 0 }));
-    expect(items.some(i => i.section === 'adults')).toBe(false);
-    expect(items.some(i => i.id === 'thermometre')).toBe(true);
-    expect(buildPharmacyList(settings({ adults: 0, children: 0 }))).toEqual([]);
-  });
-
-  it('cite une source pour chaque estimation et chaque matériel', () => {
-    for (const item of buildPharmacyList(settings())) {
-      if (item.basis !== 'advice') {
-        expect(item.sources.length).toBeGreaterThan(0);
-      }
-    }
+      buildPharmacyList(settings({ adults: 0, childWeights: [] })),
+    ).toEqual([]);
   });
 
   it.each([
     [{ adults: -1 }, /adultes/],
-    [{ children: 11 }, /enfants/],
-    [{ adults: 0, children: 0 }, /au moins une personne/],
-    [{ months: 2 as never }, /Durée/],
+    [{ childWeights: [1] }, /poids/],
+    [{ adults: 0, childWeights: [] }, /au moins une personne/],
+    [{ days: 60 }, /Durée/],
+    [{ have: { para_1000: -1 } }, /Stock déclaré/],
+    [{ have: { para_1000: 1.5 } }, /Stock déclaré/],
     [{ checked: [3] as never }, /cochée/],
   ])('refuse des réglages invalides %#', (patch, expected) => {
     expect(listSettingsError(settings(patch))).toMatch(expected);
   });
 
-  it('garde réglages et coches, ignore une valeur abîmée', async () => {
+  it('garde réglages et stock, reprend les versions précédentes, ignore une valeur abîmée', async () => {
     const db = new NodeSqliteDb();
     await prepareDatabase(db);
     expect(await loadListSettings(db)).toBeNull();
-    const s = settings({ generated: true, checked: ['thermometre'] });
+    const s = settings({
+      childWeights: [12.5, null],
+      days: 45,
+      generated: true,
+      have: { sro: 2 },
+      checked: ['traitements'],
+    });
     await saveListSettings(db, s);
     expect(await loadListSettings(db)).toEqual(s);
     await expect(saveListSettings(db, { ...s, adults: 99 })).rejects.toThrow(
       /adultes/,
     );
-    await db.execute('UPDATE settings SET value = ? WHERE key = ?', [
-      '{"version":1}',
-      LIST_KEY,
-    ]);
+    const store = (value: unknown) =>
+      db.execute('UPDATE settings SET value = ? WHERE key = ?', [
+        JSON.stringify(value),
+        LIST_KEY,
+      ]);
+    // Version 1 : nombre d'enfants, durée en mois.
+    await store({
+      version: 1,
+      adults: 2,
+      children: 1,
+      months: 1,
+      generated: true,
+      checked: ['gants'],
+    });
+    expect(await loadListSettings(db)).toEqual({
+      version: 4,
+      adults: 2,
+      childWeights: [null],
+      days: 30,
+      generated: true,
+      have: {},
+      checked: ['gants'],
+    });
+    // Version 3 : mois et marge ; la durée la plus proche est retenue.
+    await store({
+      version: 3,
+      adults: 1,
+      childWeights: [20],
+      months: 6,
+      marginPercent: 25,
+      generated: false,
+      have: { sro: 1 },
+      checked: [],
+    });
+    expect(await loadListSettings(db)).toMatchObject({
+      days: 90,
+      have: { sro: 1 },
+    });
+    await store({ version: 4 });
     expect(await loadListSettings(db)).toBeNull();
   });
 
-  it('exporte la liste avec hypothèses et coches', () => {
+  it('exporte le stock, la progression et la liste à décider', () => {
     const csv = pharmacyListCsv(
-      settings({ generated: true, checked: ['thermometre'] }),
+      settings({
+        childWeights: [10, null],
+        generated: true,
+        have: { para_1000: 1 },
+        checked: ['traitements'],
+      }),
       '2026-10-27',
     );
     const lines = csv.trim().split('\r\n');
-    expect(csv.startsWith('\uFEFF')).toBe(true);
-    expect(lines[0]).toBe(
-      'Pharmacie familiale — liste indicative, pas une prescription',
-    );
-    expect(lines[1]).toBe('2 adulte(s), 2 enfant(s), 6 mois, au 2026-10-27');
+    expect(csv.startsWith('﻿')).toBe(true);
+    expect(lines[1]).toBe('2 adulte(s), 2 enfant(s), 30 jours, au 2026-10-27');
+    // 20 comprimés pour 30 jours → 3 boîtes ; 1 en stock → 2.
     expect(csv).toMatch(
-      /Petit matériel;Thermomètre médical;1 pour le foyer;.*;oui\r\n/,
+      /Douleur, fièvre, inflammation;Paracétamol 1000 mg;20 comprimés;3 boîtes;1;2;/,
     );
-    expect(csv).toMatch(
-      /Enfants;Paracétamol pédiatrique;Quantité à définir avec le pharmacien;/,
-    );
+    expect(csv).toMatch(/Boîtes selon le nombre d’adultes \(30 jours\)/);
+    expect(csv).toMatch(/Paracétamol 1000 mg;2;3;4;4;5;6\r\n/);
+    expect(csv).toMatch(/Boîtes selon le nombre d’enfants de 10 kg/);
+    expect(csv).toMatch(/Traitements habituels;30 jours à prévoir;.*;oui\r\n/);
   });
 });

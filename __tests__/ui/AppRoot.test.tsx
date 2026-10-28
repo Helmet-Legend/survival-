@@ -1455,7 +1455,7 @@ describe('écrans', () => {
     expect(await screen.findByDisplayValue('Radio à piles')).toBeTruthy();
   });
 
-  it('génère la liste de pharmacie familiale, la coche et l’exporte', async () => {
+  it('calcule le stock de pharmacie, compare avec ce qu’on a et exporte', async () => {
     const out: { name?: string; csv?: string } = {};
     await openApp({
       files: {
@@ -1473,46 +1473,73 @@ describe('écrans', () => {
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
-    // Foyer repris de Mon foyer : 1 adulte ; on ajoute un enfant, 3 mois.
-    await fireEvent.press(await screen.findByLabelText('Ajouter un enfant'));
-    await fireEvent.press(screen.getByText('3 mois'));
-    expect(screen.queryByText('03 · Liste de préparation')).toBeNull();
-    await fireEvent.press(screen.getByText('Générer ma liste'));
-
-    // 3 épisodes × 1 adulte × 90 j ÷ 365 × 18 = 13,3 → 14 comprimés → 1 boîte.
-    const para = await screen.findByRole('checkbox', {
-      name: 'Paracétamol 500 mg (adulte), 1 boîte de 16 comprimés',
-    });
-    expect(para.props.accessibilityState).toEqual({ checked: false });
-    // Enfant : jamais de quantité calculée.
-    expect(
-      screen.getByRole('checkbox', {
-        name: 'Paracétamol pédiatrique, Quantité à définir avec le pharmacien',
-      }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('checkbox', {
-        name: 'Thermomètre médical, 1 pour le foyer',
-      }),
-    ).toBeTruthy();
-    await fireEvent.press(para);
-    await waitFor(() =>
-      expect(
-        screen.getByRole('checkbox', {
-          name: 'Paracétamol 500 mg (adulte), 1 boîte de 16 comprimés',
-        }).props.accessibilityState,
-      ).toEqual({ checked: true }),
+    // Foyer repris de Mon foyer : 1 adulte ; un enfant de 20 kg, 15 jours.
+    await fireEvent.press(await screen.findByText('Ajouter un enfant'));
+    await fireEvent.changeText(
+      await screen.findByLabelText('Enfant 1 : poids en kg'),
+      '20',
     );
+    await fireEvent.press(screen.getByText('15 jours'));
+    expect(screen.queryByText('03 · Mon stock à constituer')).toBeNull();
+    await fireEvent.press(screen.getByText('Calculer mon stock'));
+    expect(await screen.findByText('03 · Mon stock à constituer')).toBeTruthy();
 
+    // Rubriques repliées ; on ouvre la douleur et la fièvre.
+    await fireEvent.press(
+      screen.getByLabelText(/^Douleur, fièvre, inflammation, 0 sur /),
+    );
+    // (8 + 6) × 0,8 = 11,2 comprimés → 2 boîtes de 8.
+    expect(screen.getByText('Paracétamol 1000 mg')).toBeTruthy();
+    // Enfant de moins de 25 kg : 0,8 flacon × 0,8 = 0,64 → 1 flacon.
+    expect(screen.getByText('À stocker : 1 flacon de 100 ml')).toBeTruthy();
+    expect(screen.getAllByText('Il manque 2').length).toBeGreaterThan(0);
+    // J'en ai deux boîtes de paracétamol : complet.
+    for (let i = 0; i < 2; i++) {
+      await fireEvent.press(
+        screen.getByLabelText('Une de plus : Paracétamol 1000 mg'),
+      );
+    }
+    expect(await screen.findByText('Complet')).toBeTruthy();
+    // Détails : repère non sourcé, précautions.
+    await fireEvent.press(
+      screen.getByLabelText('Afficher les détails : Paracétamol 1000 mg'),
+    );
+    expect(
+      await screen.findByText('Repère non sourcé, à valider'),
+    ).toBeTruthy();
+
+    // Toutes les rubriques du moteur sont affichées, garrots compris.
+    await fireEvent.press(screen.getByLabelText(/^Hémorragie, 0 sur /));
+    expect(screen.getByText('Garrot tactique CAT')).toBeTruthy();
+    // Progression selon le nombre d'adultes.
+    await fireEvent.press(screen.getByLabelText(/^Pour 1 à 6 adultes/));
+    await fireEvent.press(screen.getByLabelText('Pour 1 à 6 enfants'));
+    expect(
+      screen.getByText('Enfants de 20 kg (poids moyen saisi), sans adulte.'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Estimation : données à moduler selon vos besoins spécifiques.',
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('checkbox', {
+        name: 'Traitements habituels, 15 jours à prévoir',
+      }),
+    );
     await fireEvent.press(screen.getByText('Exporter en tableur'));
     expect(await screen.findByText('Liste exportée en tableur.')).toBeTruthy();
     expect(out.name).toMatch(/^fenrir-pharmacie-familiale-/);
-    expect(out.csv).toContain('1 adulte(s), 1 enfant(s), 3 mois');
+    expect(out.csv).toContain('1 adulte(s), 1 enfant(s), 15 jours');
     expect(out.csv).toMatch(
-      /Paracétamol 500 mg \(adulte\);1 boîte de 16 comprimés;.*;oui\r\n/,
+      /;Paracétamol 1000 mg;11,2 comprimés;2 boîtes;2;0;/,
+    );
+    expect(out.csv).toMatch(
+      /Traitements habituels;15 jours à prévoir;.*;oui\r\n/,
     );
 
-    // Retrouvée, cochée, après verrouillage.
+    // Retrouvé après verrouillage : stock déclaré et coche.
     await fireEvent.press(screen.getByLabelText('Verrouiller'));
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
@@ -1520,15 +1547,17 @@ describe('écrans', () => {
     await fireEvent.press(
       await screen.findByLabelText('Ouvrir la pharmacie familiale'),
     );
+    await fireEvent.press(
+      await screen.findByLabelText(/^Douleur, fièvre, inflammation, 1 sur /),
+    );
+    expect(screen.getByText('Complet')).toBeTruthy();
     expect(
-      (
-        await screen.findByRole('checkbox', {
-          name: 'Paracétamol 500 mg (adulte), 1 boîte de 16 comprimés',
-        })
-      ).props.accessibilityState,
+      screen.getByRole('checkbox', {
+        name: 'Traitements habituels, 15 jours à prévoir',
+      }).props.accessibilityState,
     ).toEqual({ checked: true });
 
-    // La case du stock ouvre l'inventaire ; « retour » y ramène.
+    // Les lots et péremptions restent à part ; « retour » y ramène.
     await fireEvent.press(
       screen.getByLabelText('Ouvrir mon stock de pharmacie'),
     );
