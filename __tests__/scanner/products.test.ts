@@ -17,6 +17,7 @@ import {
   lookupProduct,
   nameKey,
   obfUrl,
+  opfUrl,
   offUrl,
   parseOffProduct,
   prefillFor,
@@ -177,11 +178,12 @@ describe('Open Food Facts', () => {
     expect(fetcher.calls[0]).toBe(offUrl(NUTELLA));
     expect((await getProduct(db, NUTELLA))?.status).toBe('found');
     expect((await getProduct(db, '96385074'))?.status).toBe('not_found');
-    // Inconnu d'Open Food Facts : Open Beauty Facts est interrogé ensuite.
+    // Inconnu d'Open Food Facts : Open Beauty Facts, puis Open Products Facts.
     expect(fetcher.calls[2]).toBe(obfUrl('96385074'));
+    expect(fetcher.calls[3]).toBe(opfUrl('96385074'));
     // Plus rien en attente : aucune nouvelle requête.
     await lookupPending(db, fetcher);
-    expect(fetcher.calls).toHaveLength(3);
+    expect(fetcher.calls).toHaveLength(4);
   });
 
   it('garde les codes en attente sans réseau', async () => {
@@ -329,6 +331,41 @@ describe('Data Matrix des médicaments', () => {
     } finally {
       setMedicineTable(null);
     }
+  });
+
+  it('range le matériel trouvé sur Open Products Facts dans sa catégorie', async () => {
+    const { db } = await setup();
+    const found = (name: string, tags: string[]) => async (url: string) =>
+      url.includes('openproductsfacts')
+        ? {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              status: 1,
+              product: { product_name: name, categories_tags: tags },
+            }),
+          }
+        : { ok: false, status: 404, json: async () => ({}) };
+    await addScans(db, ['96385074', NUTELLA]);
+    expect(
+      await lookupProduct(
+        db,
+        '96385074',
+        found('Piles AA alcalines', ['en:batteries']),
+      ),
+    ).toBe('found');
+    const piles = (await getProduct(db, '96385074'))!;
+    expect(piles.data).toMatchObject({
+      name: 'Piles AA alcalines',
+      category: 'power',
+    });
+    expect(prefillFor(piles).category).toBe('power');
+    expect(
+      await lookupProduct(db, NUTELLA, found('Lampe frontale', ['en:lamps'])),
+    ).toBe('found');
+    const lampe = (await getProduct(db, NUTELLA))!;
+    expect(lampe.data.category).toBe('equipment');
+    expect(prefillFor(lampe).category).toBe('energy');
   });
 
   it('range l’hygiène trouvée sur Open Beauty Facts dans Santé › Hygiène', async () => {

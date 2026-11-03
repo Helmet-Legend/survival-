@@ -2,10 +2,10 @@
  * Racine de l'application : premier lancement, verrouillage, coffre ouvert.
  *
  * Sécurité et sobriété (cahier des charges §4.6) :
- * - le coffre se verrouille dès que l'application passe en arrière-plan :
- *   la base est fermée, aucun calcul ni minuterie ne continue. Seules
- *   exceptions : une photo, et un appel ou un SMS lancé depuis l'Urgence
- *   (le coffre se verrouille alors après 2 minutes hors de l'application) ;
+ * - le coffre se verrouille après 40 secondes en arrière-plan (2 minutes
+ *   pour un appel ou un SMS lancé depuis l'Urgence, pas pendant une
+ *   photo) : la base est alors fermée, aucun calcul ni minuterie ne
+ *   continue ;
  * - l'écran de verrouillage ouvre une « Urgence sans code » qui n'affiche
  *   aucune donnée du coffre ;
  * - pendant la transition (sélecteur d'applications iOS), un écran noir
@@ -96,7 +96,11 @@ import { ReadinessScreen } from './screens/ReadinessScreen';
 import { CrisisScreen } from './screens/CrisisScreen';
 import { ScanScreen } from './screens/ScanScreen';
 import { EmergencyScreen, EmergencyView } from './screens/EmergencyScreen';
-import { CALL_GRACE_MS, takeLeavingForCall } from './callGrace';
+import {
+  BACKGROUND_GRACE_MS,
+  CALL_GRACE_MS,
+  takeLeavingForCall,
+} from './callGrace';
 import { FamilyPlanScreen } from './screens/FamilyPlanScreen';
 import { AlertsScreen } from './screens/AlertsScreen';
 import { KitScreen } from './screens/KitScreen';
@@ -199,9 +203,11 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   // Écran de verrouillage : « Urgence sans code » ouverte.
   const [lockedEmergency, setLockedEmergency] = useState(false);
   const sessionRef = useRef<Session | null>(null);
-  // Sortie pour un appel ou un SMS de l'Urgence : heure et minuterie.
+  // Passage en arrière-plan : heure, délai avant verrouillage, minuterie.
   const callAway = useRef<{
     since: number;
+    grace: number;
+    message: string;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
 
@@ -389,11 +395,11 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       setCovered(next !== 'active');
       const away = callAway.current;
       if (next === 'active' && away !== null) {
-        // Retour d'un appel ou d'un SMS : verrouillé si l'absence a duré.
+        // Retour dans l'application : verrouillé si l'absence a duré.
         clearTimeout(away.timer);
         callAway.current = null;
-        if (Date.now() - away.since >= CALL_GRACE_MS) {
-          lock(GRACE_MESSAGE);
+        if (Date.now() - away.since >= away.grace) {
+          lock(away.message);
         }
         return;
       }
@@ -406,15 +412,16 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       ) {
         return;
       }
-      if (takeLeavingForCall()) {
-        // Appel ou SMS lancé depuis l'Urgence : 2 minutes avant de verrouiller.
-        callAway.current = {
-          since: Date.now(),
-          timer: setTimeout(() => lock(GRACE_MESSAGE), CALL_GRACE_MS),
-        };
-        return;
-      }
-      lock('Coffre verrouillé à la sortie de l’application.');
+      // Appel ou SMS lancé depuis l'Urgence : 2 minutes ; sinon 40 secondes.
+      const forCall = takeLeavingForCall();
+      const grace = forCall ? CALL_GRACE_MS : BACKGROUND_GRACE_MS;
+      const message = forCall ? CALL_MESSAGE : BACKGROUND_MESSAGE;
+      callAway.current = {
+        since: Date.now(),
+        grace,
+        message,
+        timer: setTimeout(() => lock(message), grace),
+      };
     });
     return () => subscription.remove();
   }, [lock]);
@@ -664,7 +671,9 @@ const LOGO_FILE: number | string = require('./assets/fenrir-logo.png');
 const LOGO: ImageSourcePropType =
   typeof LOGO_FILE === 'string' ? { uri: LOGO_FILE } : LOGO_FILE;
 
-const GRACE_MESSAGE = 'Coffre verrouillé : plus de 2 minutes hors de Fenrir.';
+const CALL_MESSAGE = 'Coffre verrouillé : plus de 2 minutes hors de Fenrir.';
+const BACKGROUND_MESSAGE =
+  'Coffre verrouillé : plus de 40 secondes hors de Fenrir.';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
