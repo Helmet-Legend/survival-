@@ -186,8 +186,8 @@ export function SettingsScreen(props: { onLock: () => void }) {
       >
         <Text style={text.muted}>
           Les données sont chiffrées sur ce téléphone et ne sont envoyées à
-          aucun serveur. Le coffre se verrouille dès que l’application passe en
-          arrière-plan.
+          aucun serveur. Le coffre se verrouille après 40 secondes hors de
+          l’application.
         </Text>
         <Button
           icon={FileText}
@@ -212,7 +212,7 @@ export function SettingsScreen(props: { onLock: () => void }) {
         </View>
         <Text style={text.subtle}>
           {data.barcodeOnline === true
-            ? 'Activé : seul le code-barres d’un produit scanné est envoyé à Open Food Facts et Open Beauty Facts pour en trouver le nom et les calories. Les médicaments sont reconnus sans réseau.'
+            ? 'Activé : seul le code-barres d’un produit scanné est envoyé à Open Food Facts, Open Beauty Facts et Open Products Facts pour en trouver le nom et les calories. Les médicaments sont reconnus sans réseau.'
             : 'Désactivé : les codes scannés restent dans le téléphone ; les fiches se complètent à la main.'}
         </Text>
         {screenCapture.available ? (

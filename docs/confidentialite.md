@@ -26,7 +26,7 @@ Réseau local : trouver et joindre le téléphone associé pour le partage du fo
 
 Fenrir fonctionne sans réseau. Les fonctions suivantes se connectent directement à des services publics, uniquement si vous les utilisez, sans envoyer d’identifiant de l’appareil ni de compte. Comme pour toute connexion, ces services voient l’adresse IP de votre connexion.
 
-Reconnaissance des codes-barres (au choix dans les Réglages) : seul le code-barres du produit scanné est envoyé à Open Food Facts et Open Beauty Facts pour en trouver le nom. Les médicaments sont reconnus sans réseau.
+Reconnaissance des codes-barres (au choix dans les Réglages) : seul le code-barres du produit scanné est envoyé à Open Food Facts, Open Beauty Facts et Open Products Facts pour en trouver le nom. Les médicaments sont reconnus sans réseau.
 
 Cartes hors ligne : quand vous téléchargez une zone, les images de carte sont demandées à l’IGN (Géoplateforme), qui voit donc la zone demandée.
 

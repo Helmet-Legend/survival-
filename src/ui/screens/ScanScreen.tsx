@@ -298,7 +298,8 @@ export function ScanScreen() {
         <Panel title="Reconnaître les produits en ligne ?">
           <Text style={text.body}>
             Fenrir peut chercher le nom, la contenance et les calories sur Open
-            Food Facts, et les produits d’hygiène sur Open Beauty Facts : deux
+            Food Facts, les produits d’hygiène sur Open Beauty Facts et le
+            matériel (piles, lampes, outils) sur Open Products Facts : trois
             bases libres et collaboratives. Les médicaments sont reconnus sans
             réseau.
           </Text>

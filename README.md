@@ -256,8 +256,9 @@ effacer, après une seconde confirmation.
 
 Protections :
 
-- Verrouillage automatique dès que l'application passe en arrière-plan :
-  la base est fermée et aucune minuterie ne tourne.
+- Verrouillage automatique après 40 secondes en arrière-plan (2 minutes
+  pour un appel ou un SMS lancé depuis l'Urgence) : la base est alors
+  fermée et aucune minuterie ne tourne.
 - Écran noir pendant la transition, pour que l'aperçu du sélecteur
   d'applications iOS ne capture rien.
 - `FLAG_SECURE` sur Android : captures et enregistrements d'écran
@@ -290,7 +291,7 @@ Rien de natif n'a encore été exécuté. À vérifier en priorité sur appareil
 3. Écriture dans le Keychain / Keystore, y compris sur un appareil sans
    module matériel sécurisé.
 4. Recherche FTS5 (activée par `"op-sqlite": { "fts5": true }`).
-5. Verrouillage à la mise en arrière-plan et écran masqué dans le
+5. Verrouillage après 40 secondes en arrière-plan et écran masqué dans le
    sélecteur d'applications.
 6. Capture d'écran bloquée sur Android.
 

@@ -7,6 +7,9 @@
 
 export const CALL_GRACE_MS = 2 * 60 * 1000;
 
+/** Toute autre sortie de l'application : verrouillage après 40 secondes. */
+export const BACKGROUND_GRACE_MS = 40 * 1000;
+
 /** Délai pour que l'application du téléphone s'ouvre après l'appui. */
 const LEAVE_WINDOW_MS = 10 * 1000;
 

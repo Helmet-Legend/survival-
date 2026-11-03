@@ -42,7 +42,7 @@ Textes prêts à coller. Langue principale : français (France).
 > **VIE PRIVÉE ET SÉCURITÉ**
 > • Base de données chiffrée (AES-256), ouverte par votre code maître.
 > • Code de contrainte : un second code ouvre un coffre factice, si l'on vous force à ouvrir l'application.
-> • Verrouillage dès que l'application passe en arrière-plan, captures d'écran bloquées.
+> • Verrouillage après 40 secondes hors de l'application, captures d'écran bloquées.
 > • Sauvegarde chiffrée dans le fichier de votre choix.
 > • Partage du foyer : deux téléphones se synchronisent directement sur le Wi-Fi, chiffré de bout en bout, sans internet ni serveur.
 >

@@ -1,9 +1,11 @@
 /**
  * Produits scannés : base locale (code → fiche du stock, données en cache),
  * panier des articles scannés en attente de confirmation, et recherche en
- * ligne sur Open Food Facts quand l'utilisateur l'a autorisée.
+ * ligne quand l'utilisateur l'a autorisée : Open Food Facts, puis ses bases
+ * sœurs Open Beauty Facts (hygiène) et Open Products Facts (piles, lampes,
+ * outils, matériel).
  *
- * Seul le code-barres est envoyé à Open Food Facts : ni le stock, ni les
+ * Seul le code-barres est envoyé à ces bases : ni le stock, ni les
  * quantités, ni l'identité. Hors ligne, les codes inconnus restent « en
  * attente » et sont recherchés au retour du réseau.
  */
@@ -25,8 +27,18 @@ export interface ProductData {
   netValue?: number;
   netUnit?: 'g' | 'kg' | 'mL' | 'L';
   kcalPer100g?: number;
-  /** Nourriture, eau, médicament (base des médicaments) ou hygiène (Open Beauty Facts). */
-  category?: 'food' | 'water' | 'medicine' | 'hygiene';
+  /**
+   * Nourriture, eau, médicament (base des médicaments), hygiène (Open Beauty
+   * Facts), ou énergie, outil, matériel (Open Products Facts).
+   */
+  category?:
+    | 'food'
+    | 'water'
+    | 'medicine'
+    | 'hygiene'
+    | 'power'
+    | 'tool'
+    | 'equipment';
 }
 
 export interface BarcodeProduct {
@@ -268,6 +280,26 @@ export function obfUrl(code: string): string {
   return `https://world.openbeautyfacts.org/api/v2/product/${code}.json?fields=${OFF_FIELDS}`;
 }
 
+/** Base sœur pour les autres produits : piles, lampes, outils, matériel. */
+export function opfUrl(code: string): string {
+  return `https://world.openproductsfacts.org/api/v2/product/${code}.json?fields=${OFF_FIELDS}`;
+}
+
+/** Catégorie Fenrir d'un produit d'Open Products Facts, d'après ses étiquettes. */
+function productCategory(
+  tags: readonly string[],
+): 'power' | 'tool' | 'equipment' {
+  const has = (...words: string[]) =>
+    tags.some(t => words.some(w => t.includes(w)));
+  if (has('batter', 'power-bank', 'charger', 'solar', 'generator')) {
+    return 'power';
+  }
+  if (has('tool', 'knife', 'knives', 'saw', 'axe', 'multitool')) {
+    return 'tool';
+  }
+  return 'equipment';
+}
+
 const WATER_TAGS = ['en:waters', 'en:mineral-waters', 'en:spring-waters'];
 
 function positive(value: unknown): number | undefined {
@@ -339,7 +371,12 @@ export type LookupOutcome = 'found' | 'not_found' | 'offline';
 
 type Answer = ProductData | 'not_found' | 'offline';
 
-async function ask(url: string, fetcher: ProductFetch): Promise<Answer> {
+async function ask(
+  url: string,
+  fetcher: ProductFetch,
+  /** Réponse d'Open Products Facts : catégorie d'après les étiquettes. */
+  products = false,
+): Promise<Answer> {
   let response: Awaited<ReturnType<ProductFetch>>;
   try {
     response = await fetcher(url, {
@@ -358,7 +395,19 @@ async function ask(url: string, fetcher: ProductFetch): Promise<Answer> {
     return 'offline';
   }
   try {
-    return parseOffProduct(await response.json()) ?? 'not_found';
+    const body = await response.json();
+    const data = parseOffProduct(body);
+    if (data === null) {
+      return 'not_found';
+    }
+    if (products) {
+      const p = (body as { product: Record<string, unknown> }).product;
+      const tags = Array.isArray(p.categories_tags)
+        ? p.categories_tags.map(String)
+        : [];
+      data.category = productCategory(tags);
+    }
+    return data;
   } catch {
     return 'offline';
   }
@@ -366,8 +415,8 @@ async function ask(url: string, fetcher: ProductFetch): Promise<Answer> {
 
 /**
  * Recherche un code sur Open Food Facts, puis sur Open Beauty Facts pour
- * l'hygiène, et met le résultat en cache. Une erreur réseau laisse le code
- * en attente.
+ * l'hygiène et sur Open Products Facts pour le matériel, et met le résultat
+ * en cache. Une erreur réseau laisse le code en attente.
  */
 export async function lookupProduct(
   db: SqlDatabase,
@@ -386,15 +435,23 @@ export async function lookupProduct(
   if (beauty === 'offline') {
     return 'offline';
   }
-  if (beauty === 'not_found') {
+  if (beauty !== 'not_found') {
+    await saveLookup(db, code, {
+      ...beauty,
+      category: 'hygiene',
+      kcalPer100g: undefined,
+    });
+    return 'found';
+  }
+  const other = await ask(opfUrl(code), fetcher, true);
+  if (other === 'offline') {
+    return 'offline';
+  }
+  if (other === 'not_found') {
     await saveLookup(db, code, null);
     return 'not_found';
   }
-  await saveLookup(db, code, {
-    ...beauty,
-    category: 'hygiene',
-    kcalPer100g: undefined,
-  });
+  await saveLookup(db, code, { ...other, kcalPer100g: undefined });
   return 'found';
 }
 
@@ -447,6 +504,13 @@ export function defaultChoice(product: BarcodeProduct): CategoryChoice {
   const c = product.data.category;
   if (c === 'water' || c === 'medicine' || c === 'hygiene') {
     return c;
+  }
+  if (c === 'power' || c === 'tool') {
+    return c;
+  }
+  if (c === 'equipment') {
+    // « Matériel » dans les choix proposés.
+    return 'energy';
   }
   // Code CIP (3400…) : une boîte de médicament.
   return product.code.startsWith('340') ? 'medicine' : 'food';

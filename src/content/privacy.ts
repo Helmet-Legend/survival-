@@ -40,7 +40,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     title: 'Connexions à internet (facultatives)',
     paragraphs: [
       'Fenrir fonctionne sans réseau. Les fonctions suivantes se connectent directement à des services publics, uniquement si vous les utilisez, sans envoyer d’identifiant de l’appareil ni de compte. Comme pour toute connexion, ces services voient l’adresse IP de votre connexion.',
-      'Reconnaissance des codes-barres (au choix dans les Réglages) : seul le code-barres du produit scanné est envoyé à Open Food Facts et Open Beauty Facts pour en trouver le nom. Les médicaments sont reconnus sans réseau.',
+      'Reconnaissance des codes-barres (au choix dans les Réglages) : seul le code-barres du produit scanné est envoyé à Open Food Facts, Open Beauty Facts et Open Products Facts pour en trouver le nom. Les médicaments sont reconnus sans réseau.',
       'Cartes hors ligne : quand vous téléchargez une zone, les images de carte sont demandées à l’IGN (Géoplateforme), qui voit donc la zone demandée.',
       'Alertes (désactivées par défaut) : Fenrir télécharge des listes publiques complètes (vigilance météo, rappels de produits, ruptures de médicaments, séismes, restrictions d’eau, signal gaz) et les compare à vos stocks sur le téléphone. Pour les carburants, le numéro du département que vous suivez est envoyé à data.economie.gouv.fr.',
       'Version installée depuis GitHub uniquement (hors Google Play) : au démarrage, Fenrir demande à GitHub le numéro de la dernière version pour proposer la mise à jour.',

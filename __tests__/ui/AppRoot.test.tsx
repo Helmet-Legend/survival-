@@ -292,24 +292,55 @@ describe('déverrouillage', () => {
 });
 
 describe('cycle de vie', () => {
-  it('verrouille quand l’application passe en arrière-plan', async () => {
+  it('verrouille après 40 secondes en arrière-plan', async () => {
     const emit = captureAppState();
     const { manager } = await existingVault();
     await render(<AppRoot manager={manager} content={content} />);
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
+    const now = jest.spyOn(Date, 'now');
+    const start = 1_800_000_000_000;
 
     await emit('inactive');
     expect(screen.getByTestId('privacy-cover')).toBeTruthy();
 
+    // Retour au bout de 30 secondes : toujours ouvert.
+    now.mockReturnValue(start);
     await emit('background');
+    now.mockReturnValue(start + 30_000);
+    await emit('active');
+    expect(screen.getByText('Autonomie du foyer')).toBeTruthy();
+    expect(screen.queryByTestId('privacy-cover')).toBeNull();
+
+    // Au-delà de 40 secondes : verrouillé au retour.
+    await emit('background');
+    now.mockReturnValue(start + 30_000 + 41_000);
     await emit('active');
     expect(
       await screen.findByText(
-        'Coffre verrouillé à la sortie de l’application.',
+        'Coffre verrouillé : plus de 40 secondes hors de Fenrir.',
       ),
     ).toBeTruthy();
     expect(screen.queryByTestId('privacy-cover')).toBeNull();
+    now.mockRestore();
+  });
+
+  it('verrouille seul après 40 secondes, même sans retour', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    try {
+      const emit = captureAppState();
+      const { manager } = await existingVault();
+      await render(<AppRoot manager={manager} content={content} />);
+      await unlockWith(MASTER);
+      await screen.findByText('Autonomie du foyer');
+      await emit('background');
+      await act(() => jest.advanceTimersByTime(39_000));
+      expect(screen.queryByText('Saisissez votre code')).toBeNull();
+      await act(() => jest.advanceTimersByTime(2_000));
+      expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('verrouille sur demande', async () => {
@@ -357,17 +388,20 @@ describe('cycle de vie', () => {
       ),
     ).toBeTruthy();
 
-    // Sortie ordinaire, sans appel : verrouillage immédiat.
-    now.mockRestore();
+    // Sortie ordinaire, sans appel : 40 secondes seulement.
     open.mockRestore();
     await unlockWith(MASTER);
     await screen.findByText('Autonomie du foyer');
+    now.mockReturnValue(start + 400_000);
     await emit('background');
+    now.mockReturnValue(start + 400_000 + 60_000);
+    await emit('active');
     expect(
       await screen.findByText(
-        'Coffre verrouillé à la sortie de l’application.',
+        'Coffre verrouillé : plus de 40 secondes hors de Fenrir.',
       ),
     ).toBeTruthy();
+    now.mockRestore();
   });
 
   it('ouvre l’Urgence sans code depuis l’écran de verrouillage', async () => {
@@ -2870,10 +2904,14 @@ describe('photos et documents', () => {
     expect(await screen.findByLabelText('Photo 1 de Glock 17')).toBeTruthy();
     expect(screen.queryByText('Saisissez votre code')).toBeNull();
 
-    // Hors photo, le verrouillage reste immédiat.
+    // Hors photo, le délai de 40 secondes s'applique.
+    const now = jest.spyOn(Date, 'now');
+    now.mockReturnValue(1_800_000_000_000);
     await emit('background');
+    now.mockReturnValue(1_800_000_000_000 + 41_000);
     await emit('active');
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
+    now.mockRestore();
   });
 
   it('scanne les pages d’un document dès sa création', async () => {
