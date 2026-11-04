@@ -110,6 +110,9 @@ adb shell settings put system font_scale 2.0
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
 type_pin
+# Bulle d'aide de l'accueil (coffre neuf) : à 200 %, elle occupe l'écran ;
+# son bouton « Compris » doit rester atteignable.
+tap "Compris : fermer l’aide"
 wait_for "Autonomie du foyer"
 adb shell settings put system font_scale 1.0
 echo "Déverrouillage et accueil utilisables avec le texte à 200 %."
