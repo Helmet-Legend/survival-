@@ -134,17 +134,24 @@ export function HelpBubble({ id }: { id: HelpId }) {
         <View style={styles.icon}>
           <Info color={colors.bg} size={18} strokeWidth={2.6} />
         </View>
-        <Text style={styles.title}>À quoi sert cet écran ?</Text>
+        <Text style={styles.title} maxFontSizeMultiplier={1.5}>
+          À quoi sert cet écran ?
+        </Text>
+        {/* En haut : visible même avec un très grand texte du système. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Compris : fermer l’aide"
+          onPress={() => help.dismiss(id)}
+          style={({ pressed }) => [styles.ok, pressed && styles.pressed]}
+        >
+          <Text style={styles.okText} maxFontSizeMultiplier={1.5}>
+            Compris
+          </Text>
+        </Pressable>
       </View>
-      <Text style={styles.body}>{HELP_TIPS[id]}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Compris : fermer l’aide"
-        onPress={() => help.dismiss(id)}
-        style={({ pressed }) => [styles.ok, pressed && styles.pressed]}
-      >
-        <Text style={styles.okText}>Compris</Text>
-      </Pressable>
+      <Text style={styles.body} maxFontSizeMultiplier={1.5}>
+        {HELP_TIPS[id]}
+      </Text>
     </View>
   );
 }
@@ -170,9 +177,8 @@ const styles = StyleSheet.create({
   title: { ...text.body, fontWeight: '800', flex: 1 },
   body: { ...text.body, fontSize: 15, lineHeight: 21, color: '#E3EDF2' },
   ok: {
-    alignSelf: 'flex-end',
     minHeight: 44,
-    paddingHorizontal: space.xl,
+    paddingHorizontal: space.l,
     justifyContent: 'center',
     borderRadius: radius.button,
     backgroundColor: colors.cyan,

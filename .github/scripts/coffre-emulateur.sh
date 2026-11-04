@@ -38,6 +38,8 @@ tap() {
   done
   if [ -z "$pos" ]; then
     echo "::error::Élément introuvable à l'écran : « $1 »"
+    # Ce qui est affiché, pour comprendre l'échec.
+    python3 -c "import xml.etree.ElementTree as E; [print(t) for n in E.parse('ui.xml').iter('node') for t in [(n.get('text') or n.get('content-desc') or '').strip()] if t]" 2>/dev/null | head -40 || true
     exit 1
   fi
   # shellcheck disable=SC2086
