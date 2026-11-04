@@ -70,6 +70,7 @@ import { colors, radius, space, text, tint } from '../theme';
 import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 import { PharmacyInventory } from './PharmacyScreen';
+import { HelpBubble } from '../help';
 
 /** Toutes les rubriques du moteur, dans l'ordre d'affichage. */
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as MedCategory[];
@@ -174,6 +175,7 @@ export function PharmacyListScreen() {
         onBack={navigation.close}
         backLabel={navigation.backLabel}
       />
+      <HelpBubble id="pharmacy" />
       <View style={styles.banner}>
         <AlertTriangle color={colors.warning} size={20} />
         <Text style={[text.body, styles.grow]}>

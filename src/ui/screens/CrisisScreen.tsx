@@ -44,6 +44,7 @@ import { useSession } from '../session';
 import { colors, fonts, space, sizes, text } from '../theme';
 import { useLoader } from '../useLoader';
 import { GuideReader } from './GuidesScreen';
+import { HelpBubble } from '../help';
 
 const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
@@ -206,6 +207,7 @@ export function CrisisScreen() {
         onBack={navigation.close}
         backLabel={navigation.backLabel}
       />
+      <HelpBubble id="crisis" />
       <Panel title="Scénario">
         <View style={styles.chips}>
           {CRISES.map(c => (

@@ -69,6 +69,7 @@ import {
 import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
 import { backupAge, getBackupStatus } from '../../backup/lastBackup';
+import { HelpBubble } from '../help';
 
 export function HomeScreen() {
   const { db, repo, documents, bags } = useSession();
@@ -163,6 +164,7 @@ export function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <HelpBubble id="home" />
       {/* Alerte en cours : en premier, rouge ou orange. */}
       <AlertBanner
         alerts={officialAlerts}
