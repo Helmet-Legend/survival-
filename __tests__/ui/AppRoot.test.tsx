@@ -448,6 +448,42 @@ describe('cycle de vie', () => {
     expect(await screen.findByText(/^Votre tableau de bord/)).toBeTruthy();
   });
 
+  it('affiche la batterie du téléphone sur l’accueil et ses conseils', async () => {
+    const { manager } = await existingVault();
+    await render(
+      <AppRoot
+        manager={manager}
+        content={content}
+        battery={{
+          available: true,
+          read: async () => ({ level: 15, charging: false }),
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    expect(await screen.findByText('Téléphone · 15 %')).toBeTruthy();
+    expect(screen.getByText('Faible : économisez la batterie')).toBeTruthy();
+    await fireEvent.press(
+      screen.getByLabelText(
+        'Batterie du téléphone : 15 %, Faible : économisez la batterie. Voir les conseils',
+      ),
+    );
+    expect(await screen.findByText('Pour économiser')).toBeTruthy();
+    expect(screen.getByText('Pour recharger · dans vos stocks')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Fermer'));
+    await waitFor(() =>
+      expect(screen.queryByText('Pour économiser')).toBeNull(),
+    );
+  });
+
+  it('masque la batterie quand le téléphone ne la donne pas', async () => {
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    expect(screen.queryByText(/^Téléphone · /)).toBeNull();
+  });
+
   it('ouvre l’Urgence sans code depuis l’écran de verrouillage', async () => {
     const { manager } = await existingVault();
     await render(<AppRoot manager={manager} content={content} />);

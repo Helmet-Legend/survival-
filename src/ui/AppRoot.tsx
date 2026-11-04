@@ -43,6 +43,7 @@ import {
 import { nativeFiles, type FileAccess } from '../device/files';
 import { nativeCompass, type CompassSource } from '../device/compass';
 import { nativeTorch, type TorchSignal } from '../device/torch';
+import { nativeBattery, type BatterySource } from '../device/battery';
 import { nativeLocation, type LocationSource } from '../device/location';
 import { nativeTileFetch } from '../device/tileFetch';
 import { MapTileStore, type TileFetch } from '../geo/tiles';
@@ -158,6 +159,8 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   compass?: CompassSource;
   /** Lampe du flash (signal SOS) ; le module natif par défaut. */
   torch?: TorchSignal;
+  /** Batterie du téléphone ; le module natif par défaut. */
+  battery?: BatterySource;
   /** Téléchargement des tuiles de carte ; `fetch` par défaut. */
   tileFetch?: TileFetch;
   /** Fichiers (sauvegarde, export) ; le module natif Android par défaut. */
@@ -185,6 +188,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [location] = useState(() => props.location ?? nativeLocation());
   const [compass] = useState(() => props.compass ?? nativeCompass());
   const [torch] = useState(() => props.torch ?? nativeTorch());
+  const [battery] = useState(() => props.battery ?? nativeBattery());
   const [tileFetch] = useState<TileFetch>(
     () => props.tileFetch ?? nativeTileFetch(),
   );
@@ -259,6 +263,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       location,
       compass,
       torch,
+      battery,
       waypoints: new WaypointRepository(db),
       tiles: new MapTileStore(db),
       tileFetch,

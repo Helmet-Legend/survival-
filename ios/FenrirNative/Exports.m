@@ -104,3 +104,8 @@ RCT_EXTERN_METHOD(blink:(NSArray<NSNumber *> *)pattern
 RCT_EXTERN_METHOD(stop:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 @end
+
+@interface RCT_EXTERN_MODULE(ResiliosBattery, NSObject)
+RCT_EXTERN_METHOD(getStatus:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+@end
