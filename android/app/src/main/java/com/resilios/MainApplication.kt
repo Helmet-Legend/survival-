@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.resilios.battery.BatteryPackage
 import com.resilios.files.FilesPackage
 import com.resilios.location.LocationPackage
 import com.resilios.net.NetPackage
@@ -44,6 +45,8 @@ class MainApplication : Application(), ReactApplication {
           add(NetPackage())
           // Signal SOS à la lampe du flash (écran Urgence).
           add(TorchPackage())
+          // Niveau de la batterie du téléphone (accueil).
+          add(BatteryPackage())
         },
     )
   }

@@ -10,6 +10,7 @@ import type {
 } from '../inventory';
 import type { FileAccess } from '../device/files';
 import type { CompassSource } from '../device/compass';
+import type { BatterySource } from '../device/battery';
 import type { TorchSignal } from '../device/torch';
 import type { LocationSource } from '../device/location';
 import type { MapTileStore, TileFetch } from '../geo/tiles';
@@ -47,6 +48,8 @@ export interface Session {
   compass: CompassSource;
   /** Lampe du flash, pour le signal SOS (indisponible sans lampe). */
   torch: TorchSignal;
+  /** Batterie du téléphone (accueil). */
+  battery: BatterySource;
   /** Points de repère enregistrés. */
   waypoints: WaypointRepository;
   /** Cartes hors ligne gardées dans le coffre. */

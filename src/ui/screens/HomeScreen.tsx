@@ -19,8 +19,16 @@ import {
   Target,
   Users,
 } from 'lucide-react-native';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  AppState,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { addDays, localToday } from '../../lib/dates';
 import {
@@ -70,9 +78,19 @@ import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
 import { backupAge, getBackupStatus } from '../../backup/lastBackup';
 import { HelpBubble } from '../help';
+import {
+  BATTERY_STATE,
+  batteryTone,
+  type BatterySource,
+  type BatteryStatus,
+  type BatteryTone,
+} from '../../device/battery';
+import type { ItemSummary } from '../../inventory';
 
 export function HomeScreen() {
-  const { db, repo, documents, bags } = useSession();
+  const { db, repo, documents, bags, battery } = useSession();
+  const phone = useBattery(battery);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const navigation = useNavigation();
   const { alerts: officialAlerts } = useAlerts();
   const { data, error } = useLoader(async () => {
@@ -126,6 +144,7 @@ export function HomeScreen() {
       plan,
       share,
       backup,
+      chargers: items.filter(isCharger),
     };
   });
 
@@ -339,6 +358,36 @@ export function HomeScreen() {
             onPress={() => navigation.goTo('stock', { category: 'power' })}
           />
         </View>
+        {phone ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Batterie du téléphone : ${phone.level} %, ${
+              BATTERY_STATE[batteryTone(phone)]
+            }. Voir les conseils`}
+            onPress={() => setPhoneOpen(true)}
+            style={({ pressed }) => [
+              styles.phone,
+              PHONE_STYLE[batteryTone(phone)],
+              pressed && styles.pressed,
+            ]}
+          >
+            <Smartphone color={PHONE_COLOR[batteryTone(phone)]} size={20} />
+            <View style={styles.grow}>
+              <Text style={styles.backupText}>Téléphone · {phone.level} %</Text>
+              <Text
+                style={[
+                  text.subtle,
+                  batteryTone(phone) !== 'ok' && {
+                    color: PHONE_COLOR[batteryTone(phone)],
+                  },
+                ]}
+              >
+                {BATTERY_STATE[batteryTone(phone)]}
+              </Text>
+            </View>
+            <ChevronRight color={colors.text} size={20} />
+          </Pressable>
+        ) : null}
         <Text style={[text.subtle, styles.calc]}>
           % de l’objectif · {formatNumber(household.waterLitersPerPersonDay)} L
           et {formatNumber(household.kcalPerPersonDay, 0)} kcal par{' '}
@@ -365,6 +414,15 @@ export function HomeScreen() {
           </Pressable>
         ) : null}
       </View>
+
+      {phone ? (
+        <PhoneSheet
+          visible={phoneOpen}
+          status={phone}
+          chargers={data.chargers}
+          onClose={() => setPhoneOpen(false)}
+        />
+      ) : null}
 
       {/* À faire en priorité : gravité en couleur, une action par ligne. */}
       <View style={styles.panel}>
@@ -562,6 +620,141 @@ function compact(n: number): string {
 }
 
 /** Une ressource dans la carte Autonomie : valeur et part de l'objectif. */
+/** Ce qui recharge un téléphone : batteries externes, panneaux, groupes. */
+const CHARGERS = new Set(['powerbank', 'solar', 'generator']);
+
+function isCharger(item: ItemSummary): boolean {
+  return (
+    item.category === 'power' &&
+    item.subtype !== null &&
+    CHARGERS.has(item.subtype) &&
+    item.usableQuantity > 0 &&
+    item.bagId === null
+  );
+}
+
+/** Lit la batterie à l'ouverture, chaque minute et au retour dans Fenrir. */
+function useBattery(source: BatterySource): BatteryStatus | null {
+  const [status, setStatus] = useState<BatteryStatus | null>(null);
+  useEffect(() => {
+    if (!source.available) {
+      return;
+    }
+    let alive = true;
+    const read = () => {
+      source
+        .read()
+        .then(next => {
+          if (alive) {
+            setStatus(next);
+          }
+        })
+        .catch(() => undefined);
+    };
+    read();
+    const timer = setInterval(read, 60_000);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        read();
+      }
+    });
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [source]);
+  return status;
+}
+
+const PHONE_COLOR: Record<BatteryTone, string> = {
+  charging: colors.success,
+  low: colors.danger,
+  medium: colors.warning,
+  ok: colors.textMuted,
+};
+
+const PHONE_TIPS = [
+  'Activer le mode économie d’énergie du téléphone.',
+  'Baisser la luminosité ; la lumière rouge de Fenrir y aide la nuit.',
+  'Couper Wi-Fi, Bluetooth et données mobiles quand ils ne servent pas.',
+  'Passer en mode avion entre deux contacts ; le réactiver pour appeler.',
+  'Garder le téléphone au chaud : le froid vide la batterie plus vite.',
+];
+
+/** Volet de la batterie : de quoi recharger dans le stock, et économiser. */
+function PhoneSheet(props: {
+  visible: boolean;
+  status: BatteryStatus;
+  chargers: readonly ItemSummary[];
+  onClose: () => void;
+}) {
+  const tone = batteryTone(props.status);
+  return (
+    <Modal
+      visible={props.visible}
+      transparent
+      animationType="slide"
+      onRequestClose={props.onClose}
+    >
+      <View style={styles.sheetShade}>
+        <View style={[styles.sheet, { borderTopColor: PHONE_COLOR[tone] }]}>
+          <ScrollView contentContainerStyle={styles.sheetBody}>
+            <View style={styles.sheetHead}>
+              <Text style={[styles.sheetLevel, { color: PHONE_COLOR[tone] }]}>
+                {props.status.level} %
+              </Text>
+              <View style={styles.grow}>
+                <Text style={styles.backupText}>Batterie du téléphone</Text>
+                <Text style={text.subtle}>{BATTERY_STATE[tone]}</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fermer"
+                onPress={props.onClose}
+                style={({ pressed }) => [
+                  styles.sheetClose,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.sheetCloseText}>×</Text>
+              </Pressable>
+            </View>
+            <Text style={text.label}>Pour recharger · dans vos stocks</Text>
+            {props.chargers.length === 0 ? (
+              <Text style={text.subtle}>
+                Aucune batterie externe ni panneau solaire dans Stocks ›
+                Énergie.
+              </Text>
+            ) : (
+              props.chargers.map(item => (
+                <View key={item.id} style={styles.charger}>
+                  <View style={styles.chargerDot} />
+                  <Text style={[text.body, styles.grow]}>{item.name}</Text>
+                  <Text style={text.muted}>
+                    {formatNumber(item.usableQuantity, 0)}
+                  </Text>
+                </View>
+              ))
+            )}
+            <Text style={text.label}>Pour économiser</Text>
+            {PHONE_TIPS.map(tip => (
+              <View key={tip} style={styles.tip}>
+                <Text style={styles.tipMark}>·</Text>
+                <Text style={[text.body, styles.grow]}>{tip}</Text>
+              </View>
+            ))}
+            <Text style={text.subtle}>
+              Fenrir lit seulement le niveau et la charge : rien n’est envoyé,
+              aucune durée n’est estimée.
+            </Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function Stat(props: {
   icon: typeof WaterIcon;
   color: string;
@@ -615,6 +808,22 @@ function QuickLink(props: {
   );
 }
 
+const PHONE_STYLE: Record<BatteryTone, object> = {
+  charging: {
+    borderColor: tint(colors.success, '66'),
+    backgroundColor: solidTint(colors.success, 0.07),
+  },
+  low: {
+    borderColor: tint(colors.danger, '66'),
+    backgroundColor: solidTint(colors.danger, 0.07),
+  },
+  medium: {
+    borderColor: tint(colors.warning, '66'),
+    backgroundColor: solidTint(colors.warning, 0.07),
+  },
+  ok: { borderColor: colors.border, backgroundColor: colors.surfaceRaised },
+};
+
 const styles = StyleSheet.create({
   // Cible d'au moins 44 px de haut, sans changer la ligne de titre.
   seeAll: { minHeight: 44, justifyContent: 'center', marginVertical: -12 },
@@ -651,6 +860,59 @@ const styles = StyleSheet.create({
     backgroundColor: solidTint(colors.warning, 0.07),
   },
   backupText: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  // Batterie du téléphone : même forme que le rappel de sauvegarde.
+  phone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: sizes.touch,
+    paddingVertical: space.s,
+    paddingHorizontal: space.m,
+    borderRadius: radius.button,
+    borderWidth: 1,
+  },
+  sheetShade: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: tint(colors.bg, 'b8'),
+  },
+  sheet: {
+    maxHeight: '85%',
+    backgroundColor: colors.surface,
+    borderTopWidth: 2,
+    borderTopLeftRadius: radius.panel,
+    borderTopRightRadius: radius.panel,
+  },
+  sheetBody: { padding: space.l, gap: space.m },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  sheetLevel: { ...text.value, fontSize: 32 },
+  sheetClose: {
+    width: sizes.touch,
+    height: sizes.touch,
+    borderRadius: sizes.touch / 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseText: { color: colors.text, fontSize: 22 },
+  charger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    minHeight: sizes.touch,
+    paddingHorizontal: space.m,
+    borderRadius: radius.button,
+    backgroundColor: colors.surfaceRaised,
+  },
+  chargerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: colors.energy,
+  },
+  tip: { flexDirection: 'row', gap: space.s },
+  tipMark: { color: colors.cyan, fontSize: 16, fontWeight: '800' },
   noFood: {
     flexDirection: 'row',
     alignItems: 'center',
