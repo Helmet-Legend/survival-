@@ -60,6 +60,7 @@ import { PointsView, type PointsRoute } from './map/PointsView';
 import { useSession } from '../session';
 import { colors, fonts, radius, sizes, space, text } from '../theme';
 import { useBack } from '../useBackHandler';
+import { HelpBubble } from '../help';
 
 type Mode = 'points' | 'map' | 'coords' | 'bearing';
 
@@ -302,6 +303,7 @@ export function MapScreen() {
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!touchingMap}
     >
+      <HelpBubble id="map" />
       {/* Quatre modes sur une ligne, chacun à la largeur de son libellé. */}
       <View style={styles.modes}>
         {MODES.map(([m, label]) => (

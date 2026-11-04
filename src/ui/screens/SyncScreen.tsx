@@ -61,6 +61,7 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
+import { HelpBubble } from '../help';
 
 type Step = 'intro' | 'share' | 'qr' | 'scan' | 'working' | 'done';
 
@@ -202,11 +203,14 @@ export function SyncScreen() {
   };
 
   const title = (
-    <ScreenTitle
-      title="Partage du foyer"
-      onBack={navigation.close}
-      backLabel={navigation.backLabel}
-    />
+    <>
+      <ScreenTitle
+        title="Partage du foyer"
+        onBack={navigation.close}
+        backLabel={navigation.backLabel}
+      />
+      <HelpBubble id="sync" />
+    </>
   );
 
   if (data === null) {

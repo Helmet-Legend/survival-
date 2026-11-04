@@ -404,6 +404,50 @@ describe('cycle de vie', () => {
     now.mockRestore();
   });
 
+  it('montre une bulle d’aide une fois par écran, et la rouvre sur demande', async () => {
+    const { manager } = await existingVault();
+    await render(<AppRoot manager={manager} content={content} />);
+    await unlockWith(MASTER);
+    expect(
+      await screen.findByText(/^Votre tableau de bord : combien de jours/),
+    ).toBeTruthy();
+    // Déjà ouverte : pas de « ? » dans l'en-tête.
+    expect(screen.queryByLabelText('Afficher l’aide de cet écran')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Compris : fermer l’aide'));
+    expect(screen.queryByText(/^Votre tableau de bord/)).toBeNull();
+
+    // Chaque écran a la sienne.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    expect(
+      await screen.findByText(/^Tout ce que vous avez, rangé par catégorie/),
+    ).toBeTruthy();
+
+    // Retour à l'accueil : la bulle vue ne revient pas, « ? » la rouvre.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Afficher l’aide de cet écran'),
+    );
+    expect(await screen.findByText(/^Votre tableau de bord/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Compris : fermer l’aide'));
+
+    // Gardé dans le coffre après un verrouillage.
+    await fireEvent.press(screen.getByLabelText('Verrouiller'));
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    expect(screen.queryByText(/^Votre tableau de bord/)).toBeNull();
+
+    // Les Réglages les font toutes revenir.
+    await fireEvent.press(screen.getByLabelText('Réglages'));
+    await fireEvent.press(await screen.findByText('Revoir les bulles d’aide'));
+    expect(
+      await screen.findByText(
+        'Les bulles réapparaîtront à l’ouverture de chaque écran.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(await screen.findByText(/^Votre tableau de bord/)).toBeTruthy();
+  });
+
   it('ouvre l’Urgence sans code depuis l’écran de verrouillage', async () => {
     const { manager } = await existingVault();
     await render(<AppRoot manager={manager} content={content} />);
@@ -416,7 +460,8 @@ describe('cycle de vie', () => {
     );
     expect(open).toHaveBeenCalledWith('tel:112');
     open.mockRestore();
-    // Rien du coffre : ni plan familial, ni kit, ni alertes.
+    // Rien du coffre : ni plan familial, ni kit, ni alertes, ni bulle d'aide.
+    expect(screen.queryByText('À quoi sert cet écran ?')).toBeNull();
     expect(screen.queryByText('Plan familial')).toBeNull();
     expect(screen.queryByLabelText('Ouvrir le kit et matériel')).toBeNull();
     // Les fiches réflexes se lisent sans coffre.

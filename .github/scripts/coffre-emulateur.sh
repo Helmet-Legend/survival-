@@ -38,6 +38,8 @@ tap() {
   done
   if [ -z "$pos" ]; then
     echo "::error::Élément introuvable à l'écran : « $1 »"
+    # Ce qui est affiché, pour comprendre l'échec.
+    python3 -c "import xml.etree.ElementTree as E; [print(t) for n in E.parse('ui.xml').iter('node') for t in [(n.get('text') or n.get('content-desc') or '').strip()] if t]" 2>/dev/null | head -40 || true
     exit 1
   fi
   # shellcheck disable=SC2086
@@ -110,6 +112,9 @@ adb shell settings put system font_scale 2.0
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
 type_pin
+# Bulle d'aide de l'accueil (coffre neuf) : à 200 %, elle occupe l'écran ;
+# son bouton « Compris » doit rester atteignable.
+tap "Compris : fermer l’aide"
 wait_for "Autonomie du foyer"
 adb shell settings put system font_scale 1.0
 echo "Déverrouillage et accueil utilisables avec le texte à 200 %."

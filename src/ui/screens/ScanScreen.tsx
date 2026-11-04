@@ -47,6 +47,7 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { HelpBubble } from '../help';
 
 interface Feedback {
   message: string;
@@ -99,11 +100,14 @@ export function ScanScreen() {
   }, []);
 
   const title = (
-    <ScreenTitle
-      title="Scanner"
-      onBack={() => navigation.goTo('stock')}
-      backLabel="Retour aux stocks"
-    />
+    <>
+      <ScreenTitle
+        title="Scanner"
+        onBack={() => navigation.goTo('stock')}
+        backLabel="Retour aux stocks"
+      />
+      <HelpBubble id="scan" />
+    </>
   );
   if (error) {
     return (

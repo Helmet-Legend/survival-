@@ -47,6 +47,7 @@ import { useSession } from '../session';
 import { colors, radius, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
 import { GuideReader } from './GuidesScreen';
+import { HelpBubble } from '../help';
 
 const NUMBERS: Array<[string, string]> = [
   ['112', 'Urgences (toute l’Europe)'],
@@ -198,6 +199,7 @@ export function EmergencyView(props: {
         onBack={props.onBack}
         backLabel={props.backLabel}
       />
+      {vault ? <HelpBubble id="emergency" /> : null}
       <Text style={vault ? styles.notice : styles.noticeLimited}>
         {vault
           ? 'Le coffre reste ouvert pendant un appel ou un SMS lancé ici. Il se verrouille après 2 minutes hors de Fenrir.'

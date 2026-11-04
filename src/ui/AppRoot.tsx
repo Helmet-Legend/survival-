@@ -11,7 +11,7 @@
  * - pendant la transition (sélecteur d'applications iOS), un écran noir
  *   masque le contenu pour que l'aperçu système ne le capture pas.
  */
-import { Lock, Settings } from 'lucide-react-native';
+import { CircleHelp, Lock, Settings } from 'lucide-react-native';
 import React, {
   useCallback,
   useEffect,
@@ -125,6 +125,14 @@ import { StockFormScreen } from './stockForms/StockFormScreen';
 import { SessionContext, type BackupCrypto, type Session } from './session';
 import { colors, sizes, space, text } from './theme';
 import { useBackHandler } from './useBackHandler';
+import {
+  HelpContext,
+  helpIdFor,
+  loadHelpSeen,
+  saveHelpSeen,
+  type Help,
+  type HelpId,
+} from './help';
 
 type Phase =
   | { kind: 'loading' }
@@ -200,6 +208,9 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
   const [crisisScenario, setCrisisScenario] = useState<CrisisId | undefined>();
   const [covered, setCovered] = useState(false);
   const [redLightOn, setRedLightOn] = useState(false);
+  // Bulles d'aide : écrans déjà vus (chargés à l'ouverture), bulle rouverte.
+  const [helpSeen, setHelpSeen] = useState<ReadonlySet<HelpId> | null>(null);
+  const [helpReopened, setHelpReopened] = useState<HelpId | null>(null);
   // Écran de verrouillage : « Urgence sans code » ouverte.
   const [lockedEmergency, setLockedEmergency] = useState(false);
   const sessionRef = useRef<Session | null>(null);
@@ -262,6 +273,11 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     loadRedLight(db)
       .then(setRedLightOn)
       .catch(() => undefined);
+    setHelpSeen(null);
+    setHelpReopened(null);
+    loadHelpSeen(db)
+      .then(ids => setHelpSeen(new Set(ids)))
+      .catch(() => setHelpSeen(new Set()));
     // Les rappels suivent le coffre ouvert (stock modifié ailleurs, date…).
     syncReminders(db, reminders).catch(() => undefined);
     setTab('home');
@@ -302,10 +318,38 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
     [redLightOn],
   );
 
+  const help = useMemo<Help | null>(() => {
+    if (helpSeen === null) {
+      return null;
+    }
+    const store = (next: Set<HelpId>) => {
+      setHelpSeen(next);
+      const session = sessionRef.current;
+      if (session !== null) {
+        saveHelpSeen(session.db, [...next]).catch(() => undefined);
+      }
+    };
+    return {
+      seen: helpSeen,
+      reopened: helpReopened,
+      dismiss: id => {
+        setHelpReopened(null);
+        store(new Set([...helpSeen, id]));
+      },
+      reopen: id => setHelpReopened(id),
+      reset: () => {
+        setHelpReopened(null);
+        store(new Set());
+      },
+    };
+  }, [helpSeen, helpReopened]);
+  const helpId = helpIdFor(tab, overlay);
+
   const navigation = useMemo<Navigation>(
     () => ({
       goTo: (next, focus) => {
         setStockFocus(focus);
+        setHelpReopened(null);
         setTab(next);
         setOverlay(null);
         setOverlayStack([]);
@@ -318,6 +362,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         if (next === 'crisis') {
           setCrisisScenario(undefined);
         }
+        setHelpReopened(null);
         setOverlay(next);
       },
       openCrisis: scenario => {
@@ -336,6 +381,7 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
         setOverlay('stockForm');
       },
       close: () => {
+        setHelpReopened(null);
         setOverlay(
           overlayStack.length > 0
             ? overlayStack[overlayStack.length - 1]
@@ -479,102 +525,117 @@ export function AppRoot<TDb extends VaultDatabase>(props: {
       <SessionContext.Provider value={phase.session}>
         <RedLightContext.Provider value={redLight}>
           <NavigationContext.Provider value={navigation}>
-            {overlay === 'stockForm' ? null : (
-              <View style={[styles.bar, overlay !== null && styles.barCompact]}>
-                {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
-                <View style={styles.brandBox}>
-                  <Image
-                    source={LOGO}
-                    style={overlay === null ? styles.logo : styles.logoSmall}
-                    accessibilityIgnoresInvertColors
-                  />
-                  <View style={styles.brandText}>
-                    <Brand size={overlay === null ? 20 : 18} />
-                    {overlay === null ? (
-                      <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+            <HelpContext.Provider value={help}>
+              {overlay === 'stockForm' ? null : (
+                <View
+                  style={[styles.bar, overlay !== null && styles.barCompact]}
+                >
+                  {/* Sous-écrans : en-tête compact, le titre de l'écran suit. */}
+                  <View style={styles.brandBox}>
+                    <Image
+                      source={LOGO}
+                      style={overlay === null ? styles.logo : styles.logoSmall}
+                      accessibilityIgnoresInvertColors
+                    />
+                    <View style={styles.brandText}>
+                      <Brand size={overlay === null ? 20 : 18} />
+                      {overlay === null ? (
+                        <Text style={styles.vaultBadge}>Coffre chiffré</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={styles.tools}>
+                    {helpId !== null &&
+                    help !== null &&
+                    help.seen.has(helpId) &&
+                    help.reopened !== helpId ? (
+                      <IconButton
+                        icon={CircleHelp}
+                        label="Afficher l’aide de cet écran"
+                        color={colors.cyan}
+                        onPress={() => help.reopen(helpId)}
+                      />
                     ) : null}
+                    <IconButton
+                      icon={Lock}
+                      label="Verrouiller"
+                      onPress={() => lock()}
+                    />
+                    <IconButton
+                      icon={Settings}
+                      label="Réglages"
+                      color={
+                        overlay === 'settings' ? colors.primary : colors.text
+                      }
+                      onPress={() =>
+                        overlay === 'settings'
+                          ? navigation.close()
+                          : navigation.open('settings')
+                      }
+                    />
                   </View>
                 </View>
-                <View style={styles.tools}>
-                  <IconButton
-                    icon={Lock}
-                    label="Verrouiller"
-                    onPress={() => lock()}
-                  />
-                  <IconButton
-                    icon={Settings}
-                    label="Réglages"
-                    color={
-                      overlay === 'settings' ? colors.primary : colors.text
-                    }
-                    onPress={() =>
-                      overlay === 'settings'
-                        ? navigation.close()
-                        : navigation.open('settings')
-                    }
-                  />
-                </View>
-              </View>
-            )}
-            <KeyboardAvoidingView
-              style={styles.flex}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              {overlay === 'settings' ? (
-                <SettingsScreen onLock={() => lock()} />
-              ) : overlay === 'plan' ? (
-                <PlanScreen />
-              ) : overlay === 'emergency' ? (
-                <EmergencyScreen />
-              ) : overlay === 'familyPlan' ? (
-                <FamilyPlanScreen />
-              ) : overlay === 'alerts' ? (
-                <AlertsScreen />
-              ) : overlay === 'sync' ? (
-                <SyncScreen />
-              ) : overlay === 'privacy' ? (
-                <PrivacyScreen />
-              ) : overlay === 'preparation' ? (
-                <KitScreen />
-              ) : overlay === 'calculators' ? (
-                <CalculatorsScreen />
-              ) : overlay === 'scan' ? (
-                <ScanScreen />
-              ) : overlay === 'history' ? (
-                <HistoryScreen />
-              ) : overlay === 'readiness' ? (
-                <ReadinessScreen />
-              ) : overlay === 'purchases' ? (
-                <PurchasePlanScreen />
-              ) : overlay === 'crisis' ? (
-                <CrisisScreen />
-              ) : overlay === 'household' ? (
-                <HouseholdScreen />
-              ) : overlay === 'pharmacy' ? (
-                <PharmacyListScreen />
-              ) : overlay === 'stockForm' && formTarget !== null ? (
-                <StockFormScreen target={formTarget} />
-              ) : (
-                <>
-                  {tab === 'home' ? <HomeScreen /> : null}
-                  {tab === 'stock' ? <StockScreen /> : null}
-                  {tab === 'prepare' ? <PrepareScreen /> : null}
-                  {tab === 'map' ? <MapScreen /> : null}
-                  {tab === 'guides' ? <GuidesScreen /> : null}
-                </>
               )}
-            </KeyboardAvoidingView>
-            {overlay === 'stockForm' ? (
-              <View style={{ height: insets.bottom }} />
-            ) : (
-              <BottomNav
-                current={overlay === null ? tab : null}
-                onSelect={navigation.goTo}
-                onSos={() => navigation.open('emergency')}
-                sosActive={overlay === 'emergency'}
-                bottomInset={insets.bottom}
-              />
-            )}
+              <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              >
+                {overlay === 'settings' ? (
+                  <SettingsScreen onLock={() => lock()} />
+                ) : overlay === 'plan' ? (
+                  <PlanScreen />
+                ) : overlay === 'emergency' ? (
+                  <EmergencyScreen />
+                ) : overlay === 'familyPlan' ? (
+                  <FamilyPlanScreen />
+                ) : overlay === 'alerts' ? (
+                  <AlertsScreen />
+                ) : overlay === 'sync' ? (
+                  <SyncScreen />
+                ) : overlay === 'privacy' ? (
+                  <PrivacyScreen />
+                ) : overlay === 'preparation' ? (
+                  <KitScreen />
+                ) : overlay === 'calculators' ? (
+                  <CalculatorsScreen />
+                ) : overlay === 'scan' ? (
+                  <ScanScreen />
+                ) : overlay === 'history' ? (
+                  <HistoryScreen />
+                ) : overlay === 'readiness' ? (
+                  <ReadinessScreen />
+                ) : overlay === 'purchases' ? (
+                  <PurchasePlanScreen />
+                ) : overlay === 'crisis' ? (
+                  <CrisisScreen />
+                ) : overlay === 'household' ? (
+                  <HouseholdScreen />
+                ) : overlay === 'pharmacy' ? (
+                  <PharmacyListScreen />
+                ) : overlay === 'stockForm' && formTarget !== null ? (
+                  <StockFormScreen target={formTarget} />
+                ) : (
+                  <>
+                    {tab === 'home' ? <HomeScreen /> : null}
+                    {tab === 'stock' ? <StockScreen /> : null}
+                    {tab === 'prepare' ? <PrepareScreen /> : null}
+                    {tab === 'map' ? <MapScreen /> : null}
+                    {tab === 'guides' ? <GuidesScreen /> : null}
+                  </>
+                )}
+              </KeyboardAvoidingView>
+              {overlay === 'stockForm' ? (
+                <View style={{ height: insets.bottom }} />
+              ) : (
+                <BottomNav
+                  current={overlay === null ? tab : null}
+                  onSelect={navigation.goTo}
+                  onSos={() => navigation.open('emergency')}
+                  sosActive={overlay === 'emergency'}
+                  bottomInset={insets.bottom}
+                />
+              )}
+            </HelpContext.Provider>
           </NavigationContext.Provider>
         </RedLightContext.Provider>
       </SessionContext.Provider>

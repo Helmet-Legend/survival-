@@ -3,6 +3,7 @@
  * péremption, confidentialité et verrouillage.
  */
 import {
+  CircleHelp,
   Bell,
   FileText,
   Lock,
@@ -29,11 +30,14 @@ import { RED_LIGHT_SUPPORTED, useRedLight } from '../redLight';
 import { loadOnlineLookup, saveOnlineLookup } from '../../scanner/products';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
+import { useHelp } from '../help';
 import { useLoader } from '../useLoader';
 import { BackupPanel } from './BackupPanel';
 
 export function SettingsScreen(props: { onLock: () => void }) {
   const { db, screenCapture, reminders } = useSession();
+  const help = useHelp();
+  const [helpReset, setHelpReset] = useState(false);
   const redLight = useRedLight();
   const navigation = useNavigation();
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
@@ -179,6 +183,32 @@ export function SettingsScreen(props: { onLock: () => void }) {
       ) : null}
 
       <BackupPanel onRestored={reload} />
+
+      {help ? (
+        <Panel
+          title="Aide"
+          right={<CircleHelp color={colors.cyan} size={20} />}
+        >
+          <Text style={text.muted}>
+            Les bulles d’aide s’affichent une fois par écran. Vous pouvez les
+            revoir, par exemple avant de prêter le téléphone.
+          </Text>
+          <Button
+            icon={CircleHelp}
+            label="Revoir les bulles d’aide"
+            onPress={() => {
+              help.reset();
+              setHelpReset(true);
+            }}
+          />
+          {helpReset ? (
+            <Notice
+              tone="ok"
+              message="Les bulles réapparaîtront à l’ouverture de chaque écran."
+            />
+          ) : null}
+        </Panel>
+      ) : null}
 
       <Panel
         title="Confidentialité"

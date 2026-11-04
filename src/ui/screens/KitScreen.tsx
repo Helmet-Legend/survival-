@@ -55,6 +55,7 @@ import { useNavigation, type StockFormTarget } from '../navigation';
 import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
+import { HelpBubble } from '../help';
 
 const TIER_LABELS: Record<Tier, string> = {
   2: '48 h',
@@ -116,11 +117,14 @@ export function KitScreen() {
   }, [scope, tier]);
 
   const title = (
-    <ScreenTitle
-      title="Kit et matériel"
-      onBack={navigation.close}
-      backLabel={navigation.backLabel}
-    />
+    <>
+      <ScreenTitle
+        title="Kit et matériel"
+        onBack={navigation.close}
+        backLabel={navigation.backLabel}
+      />
+      <HelpBubble id="kit" />
+    </>
   );
   if (data === null) {
     return (

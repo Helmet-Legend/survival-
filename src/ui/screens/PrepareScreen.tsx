@@ -38,6 +38,7 @@ import { useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useLoader } from '../useLoader';
 import { scoreColor } from './ReadinessScreen';
+import { HelpBubble } from '../help';
 
 export function PrepareScreen() {
   const { db, repo, documents, bags } = useSession();
@@ -88,6 +89,7 @@ export function PrepareScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <ScreenTitle title="Préparer" />
+      <HelpBubble id="prepare" />
 
       {readiness ? (
         <Pressable

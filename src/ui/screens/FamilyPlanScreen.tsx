@@ -39,6 +39,7 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { HelpBubble } from '../help';
 
 const COMMS_FIELDS: ReadonlyArray<[keyof CommsPlan, string, string]> = [
   ['primary', '1. Principal', 'Ex : téléphone, SMS'],
@@ -54,11 +55,14 @@ export function FamilyPlanScreen() {
   const { data, error } = useLoader(() => loadFamilyPlan(db));
   const navigation = useNavigation();
   const title = (
-    <ScreenTitle
-      title="Plan familial"
-      onBack={navigation.close}
-      backLabel={navigation.backLabel}
-    />
+    <>
+      <ScreenTitle
+        title="Plan familial"
+        onBack={navigation.close}
+        backLabel={navigation.backLabel}
+      />
+      <HelpBubble id="familyPlan" />
+    </>
   );
   if (error || data === null) {
     return (

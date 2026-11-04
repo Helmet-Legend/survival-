@@ -98,6 +98,7 @@ import { ArmorySection } from './ArmorySection';
 import { BAG_COLOR, BagHeader, BagsSection } from './BagsSection';
 import { BOX_COLOR, BoxesSection } from './BoxesSection';
 import { DocumentsSection, documentStatus } from './DocumentsSection';
+import { HelpBubble } from '../help';
 
 type Feedback = { message: string; tone: 'ok' | 'error' } | null;
 
@@ -439,6 +440,7 @@ export function StockScreen() {
           }
         }}
       >
+        <HelpBubble id="stock" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

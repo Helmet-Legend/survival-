@@ -84,6 +84,7 @@ import { SessionContext, useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
+import { HelpBubble } from '../help';
 
 interface GuideRow {
   slug: string;
@@ -221,6 +222,7 @@ export function GuidesScreen() {
       contentContainerStyle={styles.page}
       keyboardShouldPersistTaps="handled"
     >
+      <HelpBubble id="guides" />
       <SearchField
         label="Rechercher une fiche"
         value={query}
