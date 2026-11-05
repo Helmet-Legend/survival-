@@ -34,11 +34,15 @@ class BatteryModule(private val context: ReactApplicationContext) :
       return
     }
     val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+    // Branché : secteur, USB ou sans fil. À 100 % ou en charge optimisée,
+    // Android dit « pas en charge » alors que le téléphone est branché.
+    val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
     val result = Arguments.createMap()
     result.putDouble("level", level * 100.0 / scale)
     result.putBoolean(
         "charging",
-        status == BatteryManager.BATTERY_STATUS_CHARGING ||
+        plugged ||
+            status == BatteryManager.BATTERY_STATUS_CHARGING ||
             status == BatteryManager.BATTERY_STATUS_FULL)
     promise.resolve(result)
   }

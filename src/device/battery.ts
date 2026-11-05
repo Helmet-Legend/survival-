@@ -9,6 +9,7 @@ import { NativeModules, Platform } from 'react-native';
 export interface BatteryStatus {
   /** Niveau de 0 à 100. */
   level: number;
+  /** Branché (secteur, USB, sans fil), même batterie pleine. */
   charging: boolean;
 }
 
@@ -68,7 +69,7 @@ export function batteryTone(status: BatteryStatus): BatteryTone {
 }
 
 export const BATTERY_STATE: Record<BatteryTone, string> = {
-  charging: 'En charge',
+  charging: 'Branché',
   low: 'Faible : économisez la batterie',
   medium: 'À recharger bientôt',
   ok: 'Sur batterie',
