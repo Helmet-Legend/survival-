@@ -47,6 +47,11 @@ export const MedicalIcon = fenrirIcon(
   'medical',
   '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
 );
+/** Pommeau de douche (catégorie Hygiène). */
+export const HygieneIcon = fenrirIcon(
+  'hygiene',
+  '<path d="m4 4 2.5 2.5"/><path d="M13.5 6.5a4.95 4.95 0 0 0-7 7"/><path d="M15 5 5 15"/><path d="M14 17v.01M10 16v.01M13 13v.01M16 10v.01M11 20v.01M17 14v.01M20 11v.01"/>',
+);
 export const ToolIcon = fenrirIcon(
   'tool',
   '<path d="M14 6a5 5 0 0 0-6.4 6.4L3 17l4 4 4.6-4.6A5 5 0 0 0 18 10l-3 3-4-4 3-3Z"/>',

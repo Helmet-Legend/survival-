@@ -35,7 +35,16 @@ import { CATEGORY_TITLES } from '../format';
 import { useNavigation, type StockFormTarget } from '../navigation';
 import { linkBarcode, removeFromBasket } from '../../scanner/products';
 import { useSession } from '../session';
-import { colors, fonts, radius, sizes, space, text, tint } from '../theme';
+import {
+  colors,
+  fonts,
+  radius,
+  sizes,
+  solidTint,
+  space,
+  text,
+  tint,
+} from '../theme';
 import { useLoader } from '../useLoader';
 import { parseDecimal, formatNumber } from '../format';
 import { QuantityIcon, VolumeIcon } from '../icons';
@@ -745,11 +754,25 @@ function StockForm(props: {
 
         {medical && !isEdit ? (
           <View
-            style={styles.summary}
+            style={[
+              styles.summary,
+              // Même carte que le médical, aux couleurs de la catégorie.
+              category !== 'medical' && {
+                borderColor: tint(config.color, '55'),
+                backgroundColor: solidTint(config.color, 0.08),
+              },
+            ]}
             accessibilityLabel={`Stock total : ${stockTotal}`}
           >
             <Text style={styles.summaryLabel}>Stock total</Text>
-            <Text style={styles.summaryValue}>{stockTotal}</Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                category !== 'medical' && { color: config.color },
+              ]}
+            >
+              {stockTotal}
+            </Text>
           </View>
         ) : null}
 

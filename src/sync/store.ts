@@ -21,7 +21,8 @@ import {
   type SharedTable,
 } from './tables';
 
-export const SYNC_FORMAT = 1;
+// 2 : catégorie Hygiène (un téléphone en format 1 ne la connaît pas).
+export const SYNC_FORMAT = 2;
 
 /** Options de partage choisies par le foyer. */
 export interface SyncOptions {

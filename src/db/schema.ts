@@ -928,6 +928,142 @@ const migration19: Migration = {
   ],
 };
 
+/**
+ * Catégorie « Hygiène » (`hygiene`), séparée de Médical : savon, dentifrice,
+ * papier toilette, protections hygiéniques, entretien…
+ *
+ * Comme pour la migration 8, `inventory_items` est reconstruite pour élargir
+ * son CHECK. Ses lots, codes-barres et mouvements sont mis de côté avant de
+ * supprimer l'ancienne table (clés étrangères actives : cascade et mise à
+ * NULL), puis remis à l'identique. Pendant ce temps, `sync_meta.applying`
+ * coupe le journal de synchronisation : rien de ce va-et-vient n'est envoyé.
+ *
+ * Les articles de Médical de type Hygiène passent ensuite dans la nouvelle
+ * catégorie, avec un type déduit du nom ; ce changement-là est journalisé
+ * et partagé.
+ */
+/**
+ * Tables dont les journaux de synchronisation lisent inventory_items : SQLite
+ * refuse de renommer la nouvelle table tant qu'un déclencheur la cite.
+ */
+const CHILDREN_20 = [
+  'inventory_lots',
+  'barcode_products',
+  'stock_movements',
+  'photos',
+];
+
+const migration20: Migration = {
+  version: 20,
+  name: 'catégorie hygiène',
+  statements: [
+    `INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('applying', 'migration 20')`,
+    'CREATE TABLE inventory_lots_backup AS SELECT * FROM inventory_lots',
+    `CREATE TABLE barcode_items_backup AS
+       SELECT code, item_id FROM barcode_products WHERE item_id IS NOT NULL`,
+    `CREATE TABLE movement_items_backup AS
+       SELECT id, item_id FROM stock_movements WHERE item_id IS NOT NULL`,
+    'DROP TRIGGER trg_items_photos_ad',
+    'DROP TRIGGER trg_inventory_items_touch',
+    'DROP TRIGGER trg_sync_inventory_items_ai',
+    'DROP TRIGGER trg_sync_inventory_items_au',
+    'DROP TRIGGER trg_sync_inventory_items_ad',
+    // Ces journaux lisent inventory_items : absents pendant la reconstruction.
+    ...CHILDREN_20.flatMap(t =>
+      ['ai', 'au', 'ad'].map(suffix => `DROP TRIGGER trg_sync_${t}_${suffix}`),
+    ),
+
+    `CREATE TABLE inventory_items_new (
+       id                TEXT PRIMARY KEY NOT NULL,
+       name              TEXT NOT NULL CHECK (length(trim(name)) > 0),
+       category          TEXT NOT NULL
+                         CHECK (category IN ('water', 'food', 'medical', 'energy', 'tool', 'weapon', 'power', 'hygiene')),
+       unit              TEXT NOT NULL CHECK (unit IN ('L', 'mL', 'kg', 'g', 'unit')),
+       calories_per_unit INTEGER CHECK (calories_per_unit IS NULL OR calories_per_unit >= 0),
+       location          TEXT,
+       is_critical       INTEGER NOT NULL DEFAULT 0 CHECK (${isBoolean(
+         'is_critical',
+       )}),
+       notes             TEXT,
+       created_at        TEXT NOT NULL DEFAULT ${NOW},
+       updated_at        TEXT NOT NULL DEFAULT ${NOW},
+       min_stock         REAL CHECK (min_stock IS NULL OR min_stock >= 0),
+       alert_days        INTEGER CHECK (alert_days IS NULL OR alert_days BETWEEN 1 AND 3650),
+       -- Calibre des munitions (ex. « 12/70 »), réservé à la catégorie weapon.
+       caliber           TEXT CHECK (caliber IS NULL
+                                     OR (category = 'weapon' AND length(trim(caliber)) > 0)),
+       package_size      REAL CHECK (package_size IS NULL OR package_size > 0),
+       subtype           TEXT CHECK (subtype IS NULL OR (length(subtype) BETWEEN 1 AND 30)),
+       attributes        TEXT CHECK (attributes IS NULL OR json_valid(attributes)),
+       bag_id            TEXT REFERENCES bags (id) ON DELETE SET NULL,
+       CHECK (category <> 'water' OR unit IN ('L', 'mL'))
+     ) STRICT`,
+    `INSERT INTO inventory_items_new (id, name, category, unit, calories_per_unit,
+       location, is_critical, notes, created_at, updated_at, min_stock, alert_days,
+       caliber, package_size, subtype, attributes, bag_id)
+     SELECT id, name, category, unit, calories_per_unit, location, is_critical,
+       notes, created_at, updated_at, min_stock, alert_days, caliber,
+       package_size, subtype, attributes, bag_id
+     FROM inventory_items`,
+    'DROP TABLE inventory_items',
+    'ALTER TABLE inventory_items_new RENAME TO inventory_items',
+    'CREATE INDEX idx_inventory_items_category ON inventory_items (category)',
+    'CREATE INDEX idx_inventory_items_bag ON inventory_items (bag_id)',
+    touchTrigger('inventory_items'),
+    `CREATE TRIGGER trg_items_photos_ad AFTER DELETE ON inventory_items BEGIN
+       DELETE FROM photos WHERE owner_type = 'item' AND owner_id = OLD.id;
+     END`,
+
+    `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at,
+       expiration_date, created_at, updated_at, box_id)
+     SELECT id, item_id, quantity, acquired_at, expiration_date, created_at,
+       updated_at, box_id
+     FROM inventory_lots_backup
+     WHERE id NOT IN (SELECT id FROM inventory_lots)`,
+    `UPDATE barcode_products
+     SET item_id = (SELECT b.item_id FROM barcode_items_backup b
+                    WHERE b.code = barcode_products.code)
+     WHERE item_id IS NULL
+       AND code IN (SELECT code FROM barcode_items_backup)`,
+    `UPDATE stock_movements
+     SET item_id = (SELECT b.item_id FROM movement_items_backup b
+                    WHERE b.id = stock_movements.id)
+     WHERE item_id IS NULL
+       AND id IN (SELECT id FROM movement_items_backup)`,
+    'DROP TABLE inventory_lots_backup',
+    'DROP TABLE barcode_items_backup',
+    'DROP TABLE movement_items_backup',
+    ...['inventory_items', ...CHILDREN_20].flatMap(table =>
+      syncTriggers(
+        SYNC_SHARED.find(
+          t => t.table === table,
+        ) as (typeof SYNC_SHARED)[number],
+      ),
+    ),
+    `DELETE FROM sync_meta WHERE key = 'applying'`,
+
+    // Médical › Hygiène devient la catégorie Hygiène (partagé avec le foyer).
+    `UPDATE inventory_items
+     SET category = 'hygiene',
+         subtype = CASE
+           WHEN lower(name) LIKE '%dent%' OR lower(name) LIKE '%brosse%'
+             THEN 'dental'
+           WHEN lower(name) LIKE '%papier%' OR lower(name) LIKE '%mouchoir%'
+             THEN 'paper'
+           WHEN lower(name) LIKE '%lingette%' OR lower(name) LIKE '%gel%'
+             THEN 'wipes'
+           WHEN lower(name) LIKE '%serviette%' OR lower(name) LIKE '%tampon%'
+             OR lower(name) LIKE '%protection%' OR lower(name) LIKE '%couche%'
+             THEN 'sanitary'
+           WHEN lower(name) LIKE '%lessive%' OR lower(name) LIKE '%javel%'
+             OR lower(name) LIKE '%vaisselle%' OR lower(name) LIKE '%nettoy%'
+             THEN 'cleaning'
+           ELSE 'toilet'
+         END
+     WHERE category = 'medical' AND subtype = 'hygiene'`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -948,6 +1084,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration17,
   migration18,
   migration19,
+  migration20,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

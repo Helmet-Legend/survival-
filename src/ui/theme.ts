@@ -37,6 +37,7 @@ export const colors = {
   food: '#D6B37A',
   weapons: '#94A3B8',
   health: '#F0A6CA',
+  hygiene: '#8ECBF2',
   tools: '#B7CBD7',
   equipment: '#6E8FA3',
   energy: '#A78BFA',

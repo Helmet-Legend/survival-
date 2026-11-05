@@ -1477,7 +1477,7 @@ describe('écrans', () => {
     await fireEvent.press(await screen.findByText('Rester hors ligne'));
     await fireEvent.press(await screen.findByText('Hygiène'));
     await fireEvent.press(screen.getByText('Créer une fiche à compléter'));
-    expect(await screen.findByText('Ajouter du médical')).toBeTruthy();
+    expect(await screen.findByText('Ajouter de l’hygiène')).toBeTruthy();
   });
 
   it('passe tout l’écran en lumière rouge et s’en souvient', async () => {
@@ -3497,7 +3497,6 @@ describe('fiche médicale', () => {
       'Antiseptiques',
       'Protection',
       'Diagnostic',
-      'Hygiène',
       'Autre',
     ]);
     await fireEvent.press(screen.getByRole('radio', { name: 'Pansements' }));

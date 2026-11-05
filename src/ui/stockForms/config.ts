@@ -15,6 +15,7 @@ import {
 import type { ItemCategory, ItemUnit } from '../../inventory';
 import type { CountUnit } from '../../inventory/attributes';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../format';
+import { HYGIENE_SUBTYPES } from '../itemProfiles';
 import {
   AlertIcon,
   AmmoIcon,
@@ -138,6 +139,7 @@ export const UNIT_OPTIONS = {
   bottle: u('bottle', 'flacon(s)', 'unit', 'bottle'),
   lot: u('lot', 'lot(s)', 'unit', 'lot'),
   kit: u('kit', 'kit(s)', 'unit', 'kit'),
+  roll: u('roll', 'rouleau(x)', 'unit', 'roll'),
 };
 
 const o = (value: string, label: string): Option => ({ value, label });
@@ -534,7 +536,6 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
           o('antiseptic', 'Antiseptiques'),
           o('protection', 'Protection'),
           o('diagnostic', 'Diagnostic'),
-          o('hygiene', 'Hygiène'),
           o('other', 'Autre'),
         ]),
       },
@@ -558,6 +559,69 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         placeholder: 'Facultative — choisir une date',
       },
       location('Ex. Armoire médicale'),
+    ],
+  },
+  // Même mise en page que la fiche médicale : listes, conditionnement et
+  // nombre côte à côte, carte « Stock total ».
+  hygiene: {
+    title: 'Ajouter de l’hygiène',
+    editTitle: 'Modifier l’article d’hygiène',
+    subtitle: 'Enregistrez un produit d’hygiène ou d’entretien.',
+    icon: CATEGORY_ICONS.hygiene,
+    color: CATEGORY_COLORS.hygiene,
+    units: [
+      UNIT_OPTIONS.piece,
+      UNIT_OPTIONS.package,
+      UNIT_OPTIONS.roll,
+      UNIT_OPTIONS.bottle,
+      UNIT_OPTIONS.box,
+    ],
+    requireUnit: true,
+    integerQuantity: true,
+    variant: 'medical',
+    fields: [
+      {
+        type: 'text',
+        key: 'name',
+        label: 'Nom du produit',
+        icon: TagIcon,
+        placeholder: 'Ex. Savon de Marseille',
+        required: true,
+        maxLength: 120,
+      },
+      {
+        type: 'select',
+        key: 'subtype',
+        label: 'Catégorie',
+        icon: BoxIcon,
+        required: true,
+        dropdown: true,
+        options: options(
+          'hygiene.subtype',
+          HYGIENE_SUBTYPES.map(t => o(t.id, t.label)),
+        ),
+      },
+      {
+        type: 'packaging',
+        label: 'Conditionnement',
+        icon: BoxIcon,
+        options: [
+          o('piece', 'Pièce'),
+          o('package', 'Paquet'),
+          o('roll', 'Rouleau'),
+          o('bottle', 'Flacon'),
+          o('box', 'Boîte'),
+        ],
+      },
+      { type: 'quantity', label: 'Nombre', icon: QuantityIcon },
+      {
+        type: 'date',
+        key: 'expiry',
+        label: 'Date de péremption',
+        icon: ExpiryIcon,
+        placeholder: 'Facultative — choisir une date',
+      },
+      location('Ex. Salle de bain'),
     ],
   },
   tool: {
@@ -822,6 +886,7 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
     'serial',
   ],
   medical: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
+  hygiene: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
   tool: ['name', 'quantity', 'condition'],
   energy: ['name', 'quantity', 'condition'],
   power: ['name', 'subtype', 'quantity', 'expiry'],
@@ -856,6 +921,8 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
   weapon: [],
   // Fiche médicale stricte : pas de saisie rapide.
   medical: [],
+  // Comme la fiche médicale : pas de saisie rapide.
+  hygiene: [],
   tool: [
     pick('Couteau', { subtype: 'cutting', unit: 'piece' }),
     pick('Hache', { subtype: 'cutting', unit: 'piece' }),

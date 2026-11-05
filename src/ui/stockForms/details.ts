@@ -30,6 +30,7 @@ export const COUNT_UNIT_LABELS: Record<string, [string, string]> = {
   bottle: ['flacon', 'flacons'],
   lot: ['lot', 'lots'],
   kit: ['kit', 'kits'],
+  roll: ['rouleau', 'rouleaux'],
 };
 
 /** Unité affichée d'un article (« L », « boîtes », « cartouches »…). */

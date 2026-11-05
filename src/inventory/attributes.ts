@@ -19,6 +19,7 @@ export const COUNT_UNITS = [
   'bottle',
   'lot',
   'kit',
+  'roll',
 ] as const;
 export type CountUnit = (typeof COUNT_UNITS)[number];
 

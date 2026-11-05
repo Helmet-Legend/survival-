@@ -368,7 +368,7 @@ describe('Data Matrix des médicaments', () => {
     expect(prefillFor(lampe).category).toBe('energy');
   });
 
-  it('range l’hygiène trouvée sur Open Beauty Facts dans Santé › Hygiène', async () => {
+  it('range l’hygiène trouvée sur Open Beauty Facts dans la catégorie Hygiène', async () => {
     const { db } = await setup();
     await addScans(db, ['96385074']);
     const fetcher = fakeFetch({});
@@ -387,8 +387,8 @@ describe('Data Matrix des médicaments', () => {
     const product = (await getProduct(db, '96385074'))!;
     expect(product.data.category).toBe('hygiene');
     expect(prefillFor(product)).toMatchObject({
-      category: 'medical',
-      prefill: { subtype: 'hygiene', name: 'Savon de Marseille' },
+      category: 'hygiene',
+      prefill: { name: 'Savon de Marseille' },
     });
     // Choix manuel de la catégorie pour un produit inconnu.
     expect(

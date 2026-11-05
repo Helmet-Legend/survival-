@@ -40,6 +40,17 @@ export interface CategoryProfile {
   caliber: boolean;
 }
 
+/** Types d'articles d'hygiène (fiche d'ajout et migration 20). */
+export const HYGIENE_SUBTYPES = [
+  { id: 'toilet', label: 'Toilette (savon, gel douche…)' },
+  { id: 'dental', label: 'Dentaire (dentifrice, brosses…)' },
+  { id: 'paper', label: 'Papier toilette et mouchoirs' },
+  { id: 'sanitary', label: 'Protections hygiéniques et couches' },
+  { id: 'wipes', label: 'Lingettes et gel hydroalcoolique' },
+  { id: 'cleaning', label: 'Entretien (lessive, javel…)' },
+  { id: 'other', label: 'Autre' },
+];
+
 export const PROFILES: Record<ItemCategory, CategoryProfile> = {
   water: {
     formTitle: 'Nouvelle réserve d’eau',
@@ -102,6 +113,20 @@ export const PROFILES: Record<ItemCategory, CategoryProfile> = {
     notesLabel: 'Posologie, indication (facultatif)',
     notesPlaceholder: 'Ex. 1 comprimé toutes les 6 h, fièvre et douleur',
     locationPlaceholder: 'Ex. Trousse de secours, salle de bain',
+    units: ['unit'],
+    container: null,
+    piece: null,
+    calories: false,
+    caliber: false,
+  },
+  hygiene: {
+    formTitle: 'Nouvel article d’hygiène',
+    namePlaceholder: 'Ex. Savon de Marseille',
+    subtypes: HYGIENE_SUBTYPES,
+    expiryLabel: 'Date de péremption (AAAA-MM-JJ, facultatif)',
+    notesLabel: 'Notes (facultatif)',
+    notesPlaceholder: 'Parfum, format…',
+    locationPlaceholder: 'Ex. Salle de bain',
     units: ['unit'],
     container: null,
     piece: null,

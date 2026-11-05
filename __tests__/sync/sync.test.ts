@@ -454,7 +454,11 @@ describe('synchronisation entre deux téléphones', () => {
       (await attempt({ ...pa, rows: [{ ...pa.rows[0], table: 'sync_meta' }] }))
         .code,
     ).toBe('INVALID_PAYLOAD');
-    expect((await attempt({ ...pa, format: 2 })).code).toBe(
+    // Format 1 : téléphone resté sur une version sans la catégorie Hygiène.
+    expect((await attempt({ ...pa, format: 1 })).code).toBe(
+      'UNSUPPORTED_FORMAT',
+    );
+    expect((await attempt({ ...pa, format: 3 })).code).toBe(
       'UNSUPPORTED_FORMAT',
     );
     const future = encodeHlc({
