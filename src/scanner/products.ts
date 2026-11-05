@@ -487,7 +487,7 @@ export const CATEGORY_CHOICES = [
     category: 'medical',
     subtype: 'medicine',
   },
-  { id: 'hygiene', label: 'Hygiène', category: 'medical', subtype: 'hygiene' },
+  { id: 'hygiene', label: 'Hygiène', category: 'hygiene' },
   { id: 'power', label: 'Énergie', category: 'power' },
   { id: 'energy', label: 'Matériel', category: 'energy' },
   { id: 'tool', label: 'Outil', category: 'tool' },

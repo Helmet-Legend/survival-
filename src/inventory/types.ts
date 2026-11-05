@@ -3,6 +3,7 @@ export const ITEM_CATEGORIES = [
   'water',
   'food',
   'medical',
+  'hygiene',
   'energy',
   'tool',
   'weapon',

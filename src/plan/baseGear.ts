@@ -172,8 +172,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         hint: 'Pour désinfecter l’eau : suivre le dosage indiqué par les autorités sanitaires.',
         names: ['javel'],
         add: {
-          category: 'medical',
-          prefill: { name: 'Eau de Javel', subtype: 'hygiene' },
+          category: 'hygiene',
+          prefill: { name: 'Eau de Javel', subtype: 'cleaning' },
         },
       },
       {
@@ -632,7 +632,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         refs: ['bbk', 'canada'],
         label: 'Crème solaire et anti-moustiques',
         names: ['solaire', 'moustique', 'repulsif'],
-        add: { category: 'medical', prefill: { subtype: 'hygiene' } },
+        add: { category: 'hygiene', prefill: { subtype: 'toilet' } },
       },
       {
         id: 'medical_aids',
@@ -693,10 +693,10 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         ],
         label: 'Savon, gel hydroalcoolique et articles de toilette',
         hint: 'Avec les protections hygiéniques si besoin.',
-        category: 'medical',
-        subtypes: ['hygiene'],
+        category: 'hygiene',
+        subtypes: ['toilet', 'dental', 'wipes'],
         names: ['savon', 'gel hydro', 'dentifrice', 'brosse a dents'],
-        add: { category: 'medical', prefill: { subtype: 'hygiene' } },
+        add: { category: 'hygiene', prefill: { subtype: 'toilet' } },
       },
       {
         id: 'wipes',
@@ -705,8 +705,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         hint: 'Pour se laver sans eau courante.',
         names: ['lingette'],
         add: {
-          category: 'medical',
-          prefill: { name: 'Lingettes', subtype: 'hygiene' },
+          category: 'hygiene',
+          prefill: { name: 'Lingettes', subtype: 'wipes' },
         },
       },
       {
@@ -715,8 +715,8 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         label: 'Papier toilette',
         names: ['papier toilette', 'papier hygienique'],
         add: {
-          category: 'medical',
-          prefill: { name: 'Papier toilette', subtype: 'hygiene' },
+          category: 'hygiene',
+          prefill: { name: 'Papier toilette', subtype: 'paper' },
         },
       },
       {
@@ -751,7 +751,7 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         refs: ['canada', 'bbk'],
         label: 'Essuie-tout et mouchoirs',
         names: ['essuie', 'mouchoir'],
-        add: { category: 'medical', prefill: { subtype: 'hygiene' } },
+        add: { category: 'hygiene', prefill: { subtype: 'paper' } },
       },
     ],
   },

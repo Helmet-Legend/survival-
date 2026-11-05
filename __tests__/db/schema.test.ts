@@ -621,3 +621,100 @@ describe('migration 8 (catégorie énergie)', () => {
     expect((await db.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
   });
 });
+
+describe('migration 20 (catégorie hygiène)', () => {
+  it('sépare l’hygiène du médical sans perdre lots, codes, mouvements ni photos', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 19));
+    const item = (id: string, name: string, subtype: string) =>
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, subtype)
+         VALUES (?, ?, 'medical', 'unit', ?)`,
+        [id, name, subtype],
+      );
+    await item('a', 'Savon de Marseille', 'hygiene');
+    await item('b', 'Dentifrice', 'hygiene');
+    await item('c', 'Papier toilette', 'hygiene');
+    await item('d', 'Paracétamol 500 mg', 'medicine');
+    await db.execute(
+      `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at, expiration_date)
+       VALUES ('l1', 'a', 4, '2026-01-01', NULL),
+              ('l2', 'd', 16, '2026-01-01', '2028-01-01')`,
+    );
+    await db.execute(
+      `INSERT INTO barcode_products (code, item_id, status) VALUES ('96385074', 'a', 'local')`,
+    );
+    await db.execute(
+      `INSERT INTO stock_movements (id, item_id, item_name, unit, kind, quantity)
+       VALUES ('m1', 'c', 'Papier toilette', 'unit', 'in', 12)`,
+    );
+    await db.execute(
+      `INSERT INTO photos (id, owner_type, owner_id, data_base64) VALUES ('p1', 'item', 'b', 'AAAA')`,
+    );
+    // Tout est déjà partagé : seul le changement de catégorie doit repartir.
+    await db.execute("UPDATE sync_rows SET hlc = 'x', dirty_at = NULL");
+
+    expect(await migrate(db)).toEqual({ from: 19, to: SCHEMA_VERSION });
+
+    const { rows } = await db.execute(
+      'SELECT id, category, subtype FROM inventory_items ORDER BY id',
+    );
+    expect(rows).toEqual([
+      { id: 'a', category: 'hygiene', subtype: 'toilet' },
+      { id: 'b', category: 'hygiene', subtype: 'dental' },
+      { id: 'c', category: 'hygiene', subtype: 'paper' },
+      { id: 'd', category: 'medical', subtype: 'medicine' },
+    ]);
+    expect(
+      (await db.execute('SELECT id, item_id FROM inventory_lots ORDER BY id'))
+        .rows,
+    ).toEqual([
+      { id: 'l1', item_id: 'a' },
+      { id: 'l2', item_id: 'd' },
+    ]);
+    expect(
+      (await db.execute('SELECT item_id FROM barcode_products')).rows,
+    ).toEqual([{ item_id: 'a' }]);
+    expect(
+      (await db.execute('SELECT item_id FROM stock_movements')).rows,
+    ).toEqual([{ item_id: 'c' }]);
+    expect((await db.execute('SELECT id FROM photos')).rows).toEqual([
+      { id: 'p1' },
+    ]);
+    expect(
+      (
+        await db.execute(
+          'SELECT tbl, key FROM sync_rows WHERE hlc IS NULL ORDER BY key',
+        )
+      ).rows,
+    ).toEqual([
+      { tbl: 'inventory_items', key: 'a' },
+      { tbl: 'inventory_items', key: 'b' },
+      { tbl: 'inventory_items', key: 'c' },
+    ]);
+    expect(
+      (await db.execute("SELECT key FROM sync_meta WHERE key = 'applying'"))
+        .rows,
+    ).toEqual([]);
+
+    // Contraintes, journal, cascade et nettoyage des photos toujours actifs.
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit) VALUES ('x', 'X', 'nope', 'unit')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+    await db.execute(
+      `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at) VALUES ('l3', 'b', 1, '2026-02-01')`,
+    );
+    expect(
+      (await db.execute("SELECT hlc FROM sync_rows WHERE key = 'l3'")).rows,
+    ).toEqual([{ hlc: null }]);
+    await db.execute("DELETE FROM inventory_items WHERE id = 'b'");
+    expect(
+      (await db.execute("SELECT id FROM inventory_lots WHERE item_id = 'b'"))
+        .rows,
+    ).toEqual([]);
+    expect((await db.execute('SELECT id FROM photos')).rows).toEqual([]);
+  });
+});
