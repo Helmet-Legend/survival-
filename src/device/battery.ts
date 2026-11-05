@@ -4,7 +4,7 @@
  * aucune durée restante n'est estimée. Absent dans les tests et l'aperçu
  * web : la ligne de l'accueil est alors masquée.
  */
-import { NativeModules, Platform } from 'react-native';
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
 
 export interface BatteryStatus {
   /** Niveau de 0 à 100. */
@@ -17,7 +17,15 @@ export interface BatterySource {
   available: boolean;
   /** État actuel, ou null s'il n'est pas lisible. */
   read(): Promise<BatteryStatus | null>;
+  /**
+   * Prévient au branchement et au débranchement (Android) ; renvoie de quoi
+   * arrêter. Absent : l'état est relu à intervalle régulier seulement.
+   */
+  watch?(onPlugChange: () => void): () => void;
 }
+
+/** Évènement natif du branchement (Android). */
+export const BATTERY_PLUG_EVENT = 'ResiliosBatteryPlug';
 
 export const NO_BATTERY: BatterySource = {
   available: false,
@@ -26,6 +34,8 @@ export const NO_BATTERY: BatterySource = {
 
 interface NativeBatteryModule {
   getStatus(): Promise<{ level: number; charging: boolean } | null>;
+  start?(): void;
+  stop?(): void;
 }
 
 export function nativeBattery(): BatterySource {
@@ -36,8 +46,27 @@ export function nativeBattery(): BatterySource {
   if (native === undefined) {
     return NO_BATTERY;
   }
+  const start = native.start;
+  const stop = native.stop;
+  const watch =
+    Platform.OS === 'android' &&
+    typeof start === 'function' &&
+    typeof stop === 'function'
+      ? (onPlugChange: () => void) => {
+          const subscription = DeviceEventEmitter.addListener(
+            BATTERY_PLUG_EVENT,
+            onPlugChange,
+          );
+          start.call(native);
+          return () => {
+            subscription.remove();
+            stop.call(native);
+          };
+        }
+      : undefined;
   return {
     available: true,
+    watch,
     read: async () => {
       const status = await native.getStatus();
       if (

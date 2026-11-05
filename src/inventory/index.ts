@@ -15,6 +15,7 @@ export {
   randomUuid,
   type ConsumedPortion,
   type ConsumptionResult,
+  type ConsumptionUndo,
   type InventoryErrorCode,
   type InventoryItem,
   type InventoryLot,

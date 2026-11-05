@@ -22,7 +22,18 @@ import {
   saveRemindersEnabled,
   syncReminders,
 } from '../../resilience/reminders';
-import { Button, Notice, Panel, ScreenTitle } from '../components/controls';
+import {
+  EXPIRY_LEAD_CHOICES,
+  loadExpiryLead,
+  saveExpiryLead,
+} from '../../resilience/expiryLead';
+import {
+  Button,
+  Chip,
+  Notice,
+  Panel,
+  ScreenTitle,
+} from '../components/controls';
 import { formatDate } from '../format';
 import { localToday } from '../../lib/dates';
 import { useNavigation } from '../navigation';
@@ -42,14 +53,15 @@ export function SettingsScreen(props: { onLock: () => void }) {
   const navigation = useNavigation();
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const { data, error, reload } = useLoader(async () => {
-    const [captureAllowed, remindersOn, upcoming, barcodeOnline] =
+    const [captureAllowed, remindersOn, upcoming, barcodeOnline, lead] =
       await Promise.all([
         screenCapture.isAllowed(),
         loadRemindersEnabled(db),
         reminderTimes(db),
         loadOnlineLookup(db),
+        loadExpiryLead(db),
       ]);
-    return { captureAllowed, remindersOn, upcoming, barcodeOnline };
+    return { captureAllowed, remindersOn, upcoming, barcodeOnline, lead };
   });
 
   const title = (
@@ -70,7 +82,12 @@ export function SettingsScreen(props: { onLock: () => void }) {
   if (data === null) {
     return <View style={styles.page}>{title}</View>;
   }
-  const { captureAllowed, remindersOn, upcoming } = data;
+  const { captureAllowed, remindersOn, upcoming, lead } = data;
+  const chooseLead = async (days: number) => {
+    await saveExpiryLead(db, days);
+    await syncReminders(db, reminders);
+    await reload();
+  };
   const toggleReminders = async (enabled: boolean) => {
     setReminderNotice(null);
     if (enabled && !(await reminders.requestPermission())) {
@@ -113,11 +130,28 @@ export function SettingsScreen(props: { onLock: () => void }) {
         onPress={() => navigation.open('sync')}
       />
 
-      {reminders.available ? (
-        <Panel
-          title="Rappels de péremption"
-          right={<Bell color={colors.primary} size={20} />}
-        >
+      <Panel
+        title="Rappels de péremption"
+        right={<Bell color={colors.primary} size={20} />}
+      >
+        <Text style={text.body}>Prévenir avant la péremption</Text>
+        <View style={styles.chips}>
+          {EXPIRY_LEAD_CHOICES.map(days => (
+            <Chip
+              key={days}
+              label={`${days} jours`}
+              selected={lead === days}
+              onPress={() => {
+                void chooseLead(days);
+              }}
+            />
+          ))}
+        </View>
+        <Text style={text.subtle}>
+          Seuil « Bientôt périmé » dans les Stocks et date du premier rappel. Le
+          seuil saisi sur la fiche d’un article reste prioritaire.
+        </Text>
+        {reminders.available ? (
           <View style={styles.settingRow}>
             <Text style={[text.body, styles.grow]}>
               Me prévenir sur le téléphone
@@ -132,30 +166,33 @@ export function SettingsScreen(props: { onLock: () => void }) {
               thumbColor={colors.text}
             />
           </View>
+        ) : null}
+        {reminders.available ? (
           <Text style={text.subtle}>
             Notification neutre « Fenrir : un rappel vous attend », sans nom
             d’article : rien ne s’affiche sur l’écran de verrouillage. Un rappel
-            à l’entrée dans le seuil d’alerte (30 jours par défaut), un autre le
-            jour de la péremption, sacs d’évacuation compris.
+            à l’entrée dans le seuil d’alerte, un autre le jour de la
+            péremption, sacs d’évacuation compris. Aussi : la sauvegarde, 30
+            jours après la dernière, puis chaque semaine si elle tarde.
           </Text>
-          {remindersOn ? (
-            <Text style={text.muted}>
-              {upcoming.length === 0
-                ? 'Aucun rappel à venir.'
-                : `${upcoming.length} rappel${
-                    upcoming.length > 1 ? 's' : ''
-                  } prévu${
-                    upcoming.length > 1 ? 's' : ''
-                  }, le prochain le ${formatDate(
-                    localToday(new Date(upcoming[0])),
-                  )}.`}
-            </Text>
-          ) : null}
-          {reminderNotice ? (
-            <Notice tone="error" message={reminderNotice} />
-          ) : null}
-        </Panel>
-      ) : null}
+        ) : null}
+        {reminders.available && remindersOn ? (
+          <Text style={text.muted}>
+            {upcoming.length === 0
+              ? 'Aucun rappel à venir.'
+              : `${upcoming.length} rappel${
+                  upcoming.length > 1 ? 's' : ''
+                } prévu${
+                  upcoming.length > 1 ? 's' : ''
+                }, le prochain le ${formatDate(
+                  localToday(new Date(upcoming[0])),
+                )}.`}
+          </Text>
+        ) : null}
+        {reminderNotice ? (
+          <Notice tone="error" message={reminderNotice} />
+        ) : null}
+      </Panel>
 
       {RED_LIGHT_SUPPORTED ? (
         <Panel
@@ -285,7 +322,7 @@ const styles = StyleSheet.create({
     gap: space.m,
   },
   grow: { flex: 1, minWidth: 0 },
-  chips: { flexDirection: 'row', gap: space.s },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -44,19 +44,29 @@ export async function saveLastBackup(
   );
 }
 
+/**
+ * Point de départ du rappel : dernière sauvegarde, sinon premier article
+ * saisi. Null sur un coffre neuf (rien à sauvegarder).
+ */
+export async function backupReference(
+  db: SqlDatabase,
+): Promise<{ last: string | null; since: string | null }> {
+  const last = await loadLastBackup(db);
+  if (last !== null) {
+    return { last, since: last };
+  }
+  const { rows } = await db.execute(
+    'SELECT MIN(substr(created_at, 1, 10)) AS first FROM inventory_items',
+  );
+  const first = rows[0]?.first;
+  return { last, since: typeof first === 'string' ? first : null };
+}
+
 export async function getBackupStatus(
   db: SqlDatabase,
   today: string = localToday(),
 ): Promise<BackupStatus> {
-  const last = await loadLastBackup(db);
-  let since = last;
-  if (since === null) {
-    const { rows } = await db.execute(
-      'SELECT MIN(substr(created_at, 1, 10)) AS first FROM inventory_items',
-    );
-    const first = rows[0]?.first;
-    since = typeof first === 'string' ? first : null;
-  }
+  const { last, since } = await backupReference(db);
   const age = since === null ? null : daysBetween(since, today);
   return {
     last,

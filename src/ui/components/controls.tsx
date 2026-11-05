@@ -408,9 +408,15 @@ export function Field(
 
 // --- Messages ---------------------------------------------------------------
 
-export function Notice(props: { message: string; tone: 'ok' | 'error' }) {
+export function Notice(props: {
+  message: string;
+  tone: 'ok' | 'error';
+  /** Bouton à droite du message (ex. « Annuler » un retrait). */
+  action?: { label: string; onPress: () => void };
+}) {
   const color = props.tone === 'error' ? colors.danger : colors.success;
   const Icon = props.tone === 'error' ? AlertTriangle : CheckCircle2;
+  const action = props.action;
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -421,6 +427,23 @@ export function Notice(props: { message: string; tone: 'ok' | 'error' }) {
     >
       <Icon color={color} size={20} strokeWidth={2} />
       <Text style={[styles.noticeText, { color }]}>{props.message}</Text>
+      {action ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
+          onPress={action.onPress}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.noticeAction,
+            { borderColor: color },
+            pressed && { backgroundColor: tint(color, '22') },
+          ]}
+        >
+          <Text style={[styles.noticeActionText, { color }]}>
+            {action.label}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -723,6 +746,14 @@ const styles = StyleSheet.create({
     padding: space.m,
   },
   noticeText: { flex: 1, fontSize: 15, lineHeight: 21 },
+  noticeAction: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: radius.m,
+    paddingHorizontal: space.m,
+  },
+  noticeActionText: { fontSize: 15, fontWeight: '700' },
   reading: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -10,14 +10,20 @@
  * Pour chaque lot daté : un rappel quand il entre dans son seuil d'alerte
  * (le seuil de l'article, 30 jours par défaut), puis le jour de sa
  * péremption. Sacs d'évacuation compris. S'y ajoute, si un plan d'achats
- * existe, le 1er de chaque mois qui a encore des achats prévus.
+ * existe, le 1er de chaque mois qui a encore des achats prévus, et un
+ * rappel de sauvegarde 30 jours après la dernière (puis chaque semaine tant
+ * qu'elle n'est pas refaite).
  */
+import { BACKUP_REMIND_DAYS, backupReference } from '../backup/lastBackup';
 import type { SqlDatabase } from '../db/types';
-import { addDays, localToday } from '../lib/dates';
+import { addDays, daysBetween, localToday } from '../lib/dates';
 import { loadPurchasePlan, monthlyReminderDays } from '../plan/purchasePlan';
+import { DEFAULT_EXPIRY_LEAD_DAYS, loadExpiryLead } from './expiryLead';
 
-/** Seuil d'alerte par défaut, comme le premier palier du plan d'action. */
-export const REMINDER_LEAD_DAYS = 30;
+/** Seuil d'alerte par défaut (réglable : voir `expiryLead.ts`). */
+export const REMINDER_LEAD_DAYS = DEFAULT_EXPIRY_LEAD_DAYS;
+/** Sauvegarde en retard : rappel répété tous les 7 jours. */
+export const BACKUP_REPEAT_DAYS = 7;
 /** Heure locale des rappels. */
 export const REMINDER_HOUR = 9;
 /** Le système limite les alarmes par application : on garde les prochaines. */
@@ -73,11 +79,11 @@ export async function reminderTimes(
       WHERE l.quantity > 0 AND l.expiration_date >= ?`,
     [today],
   );
+  const defaultLead = await loadExpiryLead(db);
   const times = new Set<number>();
   for (const r of rows) {
     const expiry = String(r.expiration_date);
-    const lead =
-      r.alert_days === null ? REMINDER_LEAD_DAYS : Number(r.alert_days);
+    const lead = r.alert_days === null ? defaultLead : Number(r.alert_days);
     for (const day of [addDays(expiry, -lead), expiry]) {
       if (day >= today) {
         times.add(atReminderHour(day));
@@ -88,10 +94,42 @@ export async function reminderTimes(
   for (const day of plan === null ? [] : monthlyReminderDays(plan)) {
     times.add(atReminderHour(day));
   }
+  const backup = await backupReminderDay(db, now);
+  if (backup !== null) {
+    times.add(atReminderHour(backup));
+  }
   return [...times]
     .filter(t => t > now.getTime())
     .sort((a, b) => a - b)
     .slice(0, REMINDER_MAX);
+}
+
+/**
+ * Jour du prochain rappel de sauvegarde : 30 jours après la dernière (ou
+ * après le premier article saisi), puis tous les 7 jours si elle tarde.
+ * Null sur un coffre neuf.
+ */
+export async function backupReminderDay(
+  db: SqlDatabase,
+  now: Date = new Date(),
+): Promise<string | null> {
+  const { since } = await backupReference(db);
+  if (since === null) {
+    return null;
+  }
+  const today = localToday(now);
+  let day = addDays(since, BACKUP_REMIND_DAYS);
+  if (day < today) {
+    const late = daysBetween(day, today);
+    day = addDays(
+      day,
+      Math.ceil(late / BACKUP_REPEAT_DAYS) * BACKUP_REPEAT_DAYS,
+    );
+  }
+  if (atReminderHour(day) <= now.getTime()) {
+    day = addDays(day, BACKUP_REPEAT_DAYS);
+  }
+  return day;
 }
 
 /** Met les rappels du téléphone en accord avec le coffre ouvert. */

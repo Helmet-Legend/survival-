@@ -19,7 +19,7 @@ import {
   SearchX,
   Trash2,
 } from 'lucide-react-native';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Modal,
@@ -35,6 +35,7 @@ import {
   caloriesPerUnit,
   InventoryError,
   roundCount,
+  type ConsumptionUndo,
   type InventoryItem,
   type InventoryLot,
   type ItemCategory,
@@ -43,6 +44,10 @@ import {
   type DocumentSummary,
 } from '../../inventory';
 import { daysBetween, frToIso, localToday } from '../../lib/dates';
+import {
+  DEFAULT_EXPIRY_LEAD_DAYS,
+  loadExpiryLead,
+} from '../../resilience/expiryLead';
 import {
   Button,
   Chip,
@@ -100,9 +105,61 @@ import { BOX_COLOR, BoxesSection } from './BoxesSection';
 import { DocumentsSection, documentStatus } from './DocumentsSection';
 import { HelpBubble } from '../help';
 
-type Feedback = { message: string; tone: 'ok' | 'error' } | null;
+type Feedback = {
+  message: string;
+  tone: 'ok' | 'error';
+  /** Retrait annulable pendant quelques secondes. */
+  undo?: { token: ConsumptionUndo; done: (remaining: number) => string };
+} | null;
 
-const SOON_DAYS = 30;
+/** Durée pendant laquelle « Annuler » reste proposé après un retrait. */
+const UNDO_MS = 10_000;
+
+/** Ordre de la liste des articles. */
+type SortOrder = 'name' | 'expiry' | 'quantity';
+
+const SORT_LABELS: Array<[SortOrder, string]> = [
+  ['name', 'Nom'],
+  ['expiry', 'Péremption'],
+  ['quantity', 'Le moins en stock'],
+];
+
+/** Tri choisi, gardé tant que le coffre reste ouvert. */
+let lastSort: SortOrder = 'name';
+
+/**
+ * Nom : critiques d'abord, puis alphabétique (ordre de la base).
+ * Péremption : lots périmés, puis la péremption la plus proche ; sans date
+ * à la fin. Le moins en stock : quantité utilisable croissante.
+ */
+export function sortItems<T extends ItemSummary>(
+  items: readonly T[],
+  order: SortOrder,
+): T[] {
+  if (order === 'name') {
+    return [...items];
+  }
+  const byName = (a: T, b: T) =>
+    a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+  if (order === 'quantity') {
+    return [...items].sort(
+      (a, b) => a.usableQuantity - b.usableQuantity || byName(a, b),
+    );
+  }
+  const expired = (i: T) => (i.totalQuantity > i.usableQuantity ? 0 : 1);
+  return [...items].sort(
+    (a, b) =>
+      expired(a) - expired(b) ||
+      (a.nextExpiration ?? '9999').localeCompare(b.nextExpiration ?? '9999') ||
+      byName(a, b),
+  );
+}
+
+/**
+ * Seuil « Bientôt périmé » par défaut (Réglages › Rappels de péremption),
+ * relu à chaque chargement de la liste. Le seuil de l'article prime.
+ */
+let soonDays = DEFAULT_EXPIRY_LEAD_DAYS;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -133,7 +190,7 @@ function itemState(
   }
   if (
     item.nextExpiration !== null &&
-    daysBetween(today, item.nextExpiration) <= SOON_DAYS
+    daysBetween(today, item.nextExpiration) <= (item.alertDays ?? soonDays)
   ) {
     return { tone: 'warn', label: 'Bientôt périmé' };
   }
@@ -253,7 +310,7 @@ function watchCount(items: readonly ItemSummary[]): number {
 }
 
 export function StockScreen() {
-  const { repo, armory, documents, bags, boxes } = useSession();
+  const { db, repo, armory, documents, bags, boxes } = useSession();
   const navigation = useNavigation();
   const focus = navigation.stockFocus;
   const [filter, setFilter] = useState<StockFilter>(focus?.category ?? 'all');
@@ -287,6 +344,11 @@ export function StockScreen() {
     setOpenBox({ id, scanned: false });
   };
   const [query, setQuery] = useState('');
+  const [sort, setSortState] = useState<SortOrder>(lastSort);
+  const setSort = (order: SortOrder) => {
+    lastSort = order;
+    setSortState(order);
+  };
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(
@@ -302,6 +364,7 @@ export function StockScreen() {
   };
 
   const { data, error, reload } = useLoader(async () => {
+    soonDays = await loadExpiryLead(db);
     // Le contenu des sacs d'évacuation reste dans son dossier.
     const all = (await repo.listItems({ bag: 'none' })) as ItemSummary[];
     const today = localToday();
@@ -377,12 +440,63 @@ export function StockScreen() {
           result.remaining,
         )}.`,
         tone: 'ok',
+        undo: {
+          token: result.undo,
+          done: remaining =>
+            `${item.name} : retrait annulé. Reste ${formatNumber(remaining)}.`,
+        },
       });
     } catch (e) {
       setFeedback({ message: errorMessage(e), tone: 'error' });
     }
     await reload();
   };
+
+  // Annuler un retrait : une seule fois, et seulement quelques secondes.
+  const undoConsume = async (undo: NonNullable<Feedback>['undo']) => {
+    if (undo === undefined) {
+      return;
+    }
+    setFeedback(null);
+    try {
+      const remaining = await repo.undoConsume(undo.token);
+      setFeedback({ message: undo.done(remaining), tone: 'ok' });
+    } catch (e) {
+      setFeedback({ message: errorMessage(e), tone: 'error' });
+    }
+    await reload();
+  };
+  useEffect(() => {
+    if (feedback?.undo === undefined) {
+      return;
+    }
+    const timer = setTimeout(
+      () =>
+        setFeedback(current =>
+          current?.undo === undefined
+            ? current
+            : { message: current.message, tone: current.tone },
+        ),
+      UNDO_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [feedback]);
+  const notice = feedback ? (
+    <Notice
+      message={feedback.message}
+      tone={feedback.tone}
+      action={
+        feedback.undo
+          ? {
+              label: 'Annuler',
+              onPress: () => {
+                void undoConsume(feedback.undo);
+              },
+            }
+          : undefined
+      }
+    />
+  ) : null;
 
   const today = localToday();
   const showCategories = filter === 'all' && query.trim() === '';
@@ -487,7 +601,7 @@ export function StockScreen() {
 
         {isDocs && data ? (
           <>
-            {feedback ? <Notice {...feedback} /> : null}
+            {notice}
             {error ? <Notice tone="error" message={error} /> : null}
             <DocumentsSection
               documents={data.docs}
@@ -501,7 +615,7 @@ export function StockScreen() {
 
         {isBags && !inBag && data ? (
           <>
-            {feedback ? <Notice {...feedback} /> : null}
+            {notice}
             {error ? <Notice tone="error" message={error} /> : null}
             <BagsSection
               bags={data.bags}
@@ -549,7 +663,7 @@ export function StockScreen() {
               placeholder="Rechercher un article…"
             />
 
-            {feedback ? <Notice {...feedback} /> : null}
+            {notice}
             {error ? <Notice tone="error" message={error} /> : null}
 
             <View style={styles.row}>
@@ -846,9 +960,25 @@ export function StockScreen() {
               />
             ) : null}
 
+            {!showCategories && !isWatch && data && data.items.length > 1 ? (
+              <View style={styles.sortRow}>
+                <Text style={text.subtle}>Trier :</Text>
+                {SORT_LABELS.map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    label={label}
+                    selected={sort === value}
+                    onPress={() => setSort(value)}
+                  />
+                ))}
+              </View>
+            ) : null}
+
             {!showCategories && data ? (
               <>
-                {data.items.slice(0, progressive.visible).map(item => (
+                {(isWatch ? data.items : sortItems(data.items, sort))
+                  .slice(0, progressive.visible)
+                  .map(item => (
                   <ItemRow
                     key={item.id}
                     item={item}
@@ -857,7 +987,7 @@ export function StockScreen() {
                     today={today}
                     actions={rowActions}
                   />
-                ))}
+                  ))}
                 {progressive.rest > 0 ? (
                   <Button
                     variant="ghost"
@@ -1211,6 +1341,11 @@ function ItemDetail(props: {
           result.remaining,
         )} ${unit}.`,
         tone: 'ok',
+        undo: {
+          token: result.undo,
+          done: remaining =>
+            `Retrait annulé. Reste ${formatNumber(remaining)} ${unit}.`,
+        },
       });
     } catch (e) {
       await props.onChanged({ message: errorMessage(e), tone: 'error' });
@@ -1590,6 +1725,12 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: 'row', gap: space.s },
   row: { flexDirection: 'row', gap: space.s },
+  sortRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space.s,
+  },
   menu: {
     gap: space.xs,
     padding: space.s,

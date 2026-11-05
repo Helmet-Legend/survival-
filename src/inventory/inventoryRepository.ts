@@ -170,6 +170,10 @@ export interface MovementFilter {
   itemId?: string;
   /** Entrées (`in`) ou sorties (retraits, périmés, corrections négatives). */
   direction?: 'in' | 'out';
+  /** Mouvements à partir de cet instant (horodatage ISO UTC). */
+  since?: string;
+  /** Nom d'article, insensible à la casse et aux accents. */
+  query?: string;
   limit?: number;
 }
 
@@ -177,6 +181,24 @@ export interface ConsumptionResult {
   taken: ConsumedPortion[];
   /** Quantité utilisable restante pour cet article. */
   remaining: number;
+  /** De quoi remettre le stock tel qu'il était (« Annuler »). */
+  undo: ConsumptionUndo;
+}
+
+/** État des lots entamés par un retrait, pour l'annuler. */
+export interface ConsumptionUndo {
+  itemId: string;
+  /** Mouvement « Retrait » à effacer de l'historique. */
+  movementId: string | null;
+  lots: Array<{
+    id: string;
+    /** Quantité retirée de ce lot. */
+    quantity: number;
+    acquiredAt: string;
+    expirationDate: string | null;
+    boxId: string | null;
+    createdAt: string;
+  }>;
 }
 
 export interface InventoryRepositoryOptions {
@@ -700,7 +722,7 @@ export class InventoryRepository {
     return withTransaction(this.db, async () => {
       await this.requireItem(itemId);
       const { rows } = await this.db.execute(
-        `SELECT id, quantity, expiration_date
+        `SELECT id, quantity, expiration_date, acquired_at, box_id, created_at
            FROM inventory_lots
           WHERE item_id = ? AND quantity > 0
             AND (? OR expiration_date IS NULL OR expiration_date >= ?)
@@ -720,6 +742,7 @@ export class InventoryRepository {
       }
 
       const taken: ConsumedPortion[] = [];
+      const undoLots: ConsumptionUndo['lots'] = [];
       let left = wanted;
       for (const row of rows) {
         if (left <= 0) {
@@ -738,17 +761,78 @@ export class InventoryRepository {
             [rest, row.id as string],
           );
         }
-        taken.push({
-          lotId: String(row.id),
+        const expirationDate =
+          row.expiration_date === null ? null : String(row.expiration_date);
+        taken.push({ lotId: String(row.id), quantity: take, expirationDate });
+        undoLots.push({
+          id: String(row.id),
           quantity: take,
-          expirationDate:
-            row.expiration_date === null ? null : String(row.expiration_date),
+          acquiredAt: String(row.acquired_at),
+          expirationDate,
+          boxId: row.box_id === null ? null : String(row.box_id),
+          createdAt: String(row.created_at),
         });
         left = roundQuantity(left - take);
       }
 
-      await this.record(itemId, 'out', -wanted, options.origin ?? 'manual');
-      return { taken, remaining: await this.usableQuantity(itemId, today) };
+      const movementId = await this.record(
+        itemId,
+        'out',
+        -wanted,
+        options.origin ?? 'manual',
+      );
+      return {
+        taken,
+        remaining: await this.usableQuantity(itemId, today),
+        undo: { itemId, movementId, lots: undoLots },
+      };
+    });
+  }
+
+  /**
+   * Annule un retrait : remet chaque quantité dans son lot, recrée les lots
+   * vidés (même identifiant, même boîte, mêmes dates) et efface le
+   * mouvement « Retrait » de l'historique. Renvoie le stock utilisable.
+   */
+  async undoConsume(undo: ConsumptionUndo): Promise<number> {
+    const today = this.today();
+    return withTransaction(this.db, async () => {
+      await this.requireItem(undo.itemId);
+      for (const lot of undo.lots) {
+        const quantity = validateQuantity(lot.quantity);
+        const { rows } = await this.db.execute(
+          'SELECT quantity FROM inventory_lots WHERE id = ? AND item_id = ?',
+          [lot.id, undo.itemId],
+        );
+        if (rows.length > 0) {
+          await this.db.execute(
+            'UPDATE inventory_lots SET quantity = ? WHERE id = ?',
+            [roundQuantity(Number(rows[0].quantity) + quantity), lot.id],
+          );
+        } else {
+          await this.db.execute(
+            `INSERT INTO inventory_lots
+               (id, item_id, quantity, acquired_at, expiration_date, box_id, created_at)
+             VALUES (?, ?, ?, ?, ?,
+               (SELECT id FROM boxes WHERE id = ?), ?)`,
+            [
+              lot.id,
+              undo.itemId,
+              quantity,
+              lot.acquiredAt,
+              lot.expirationDate,
+              lot.boxId,
+              lot.createdAt,
+            ],
+          );
+        }
+      }
+      if (undo.movementId !== null) {
+        await this.db.execute('DELETE FROM stock_movements WHERE id = ?', [
+          undo.movementId,
+        ]);
+      }
+      return this.usableQuantity(undo.itemId, today);
     });
   }
 
@@ -792,7 +876,14 @@ export class InventoryRepository {
     } else if (filter.direction === 'out') {
       where.push('quantity < 0');
     }
-    params.push(Math.max(1, Math.min(1000, filter.limit ?? 200)));
+    if (filter.since !== undefined) {
+      where.push('created_at >= ?');
+      params.push(filter.since);
+    }
+    const limit = Math.max(1, Math.min(1000, filter.limit ?? 200));
+    // Recherche par nom : faite ici (accents), sur les 1000 plus récents.
+    const needle = filter.query === undefined ? '' : fold(filter.query.trim());
+    params.push(needle === '' ? limit : 1000);
     const { rows } = await this.db.execute(
       `SELECT id, item_id, item_name, unit, kind, quantity, origin, created_at
          FROM stock_movements
@@ -801,16 +892,19 @@ export class InventoryRepository {
         LIMIT ?`,
       params,
     );
-    return rows.map(r => ({
-      id: String(r.id),
-      itemId: r.item_id === null ? null : String(r.item_id),
-      itemName: String(r.item_name),
-      unit: r.unit as ItemUnit,
-      kind: r.kind as MovementKind,
-      quantity: Number(r.quantity),
-      origin: r.origin as MovementOrigin,
-      createdAt: String(r.created_at),
-    }));
+    return rows
+      .map(r => ({
+        id: String(r.id),
+        itemId: r.item_id === null ? null : String(r.item_id),
+        itemName: String(r.item_name),
+        unit: r.unit as ItemUnit,
+        kind: r.kind as MovementKind,
+        quantity: Number(r.quantity),
+        origin: r.origin as MovementOrigin,
+        createdAt: String(r.created_at),
+      }))
+      .filter(m => needle === '' || fold(m.itemName).includes(needle))
+      .slice(0, limit);
   }
 
   private async record(
@@ -818,16 +912,18 @@ export class InventoryRepository {
     kind: MovementKind,
     quantity: number,
     origin: MovementOrigin,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const amount = roundQuantity(quantity);
     if (amount === 0) {
-      return;
+      return null;
     }
+    const id = this.newId();
     await this.db.execute(
       `INSERT INTO stock_movements (id, item_id, item_name, unit, kind, quantity, origin)
        SELECT ?, id, name, unit, ?, ?, ? FROM inventory_items WHERE id = ?`,
-      [this.newId(), kind, amount, origin, itemId],
+      [id, kind, amount, origin, itemId],
     );
+    return id;
   }
 
   // --- Interne --------------------------------------------------------------
