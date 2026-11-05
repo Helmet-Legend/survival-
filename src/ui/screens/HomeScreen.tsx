@@ -634,6 +634,9 @@ function isCharger(item: ItemSummary): boolean {
 }
 
 /** Lit la batterie à l'ouverture, chaque minute et au retour dans Fenrir. */
+/** Délai avant la seconde lecture après un branchement. */
+const PLUG_SETTLE_MS = 1500;
+
 function useBattery(source: BatterySource): BatteryStatus | null {
   const [status, setStatus] = useState<BatteryStatus | null>(null);
   useEffect(() => {
@@ -658,10 +661,20 @@ function useBattery(source: BatterySource): BatteryStatus | null {
         read();
       }
     });
+    // Branchement : relire tout de suite, puis une fois l'état de charge
+    // mis à jour par le système (il suit le branchement de peu).
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const unwatch = source.watch?.(() => {
+      read();
+      clearTimeout(settle);
+      settle = setTimeout(read, PLUG_SETTLE_MS);
+    });
     return () => {
       alive = false;
       clearInterval(timer);
+      clearTimeout(settle);
       subscription.remove();
+      unwatch?.();
     };
   }, [source]);
   return status;

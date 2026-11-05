@@ -1,3 +1,4 @@
+import { saveLastBackup } from '../../src/backup/lastBackup';
 import { prepareDatabase } from '../../src/db/connection';
 import { BagRepository, InventoryRepository } from '../../src/inventory';
 import { addDays } from '../../src/lib/dates';
@@ -5,8 +6,10 @@ import {
   getExpiryAlerts,
   getResilienceReport,
 } from '../../src/resilience/resilienceCalculator';
+import { saveExpiryLead } from '../../src/resilience/expiryLead';
 import {
   REMINDER_MAX,
+  backupReminderDay,
   loadRemindersEnabled,
   reminderTimes,
   saveRemindersEnabled,
@@ -72,12 +75,15 @@ describe('rappels de péremption', () => {
       { name: 'Sel', category: 'food', unit: 'kg' },
       { quantity: 1 },
     );
+    // Sauvegarde faite aujourd'hui : rappel dans 30 jours.
+    await saveLastBackup(db, TODAY);
 
     expect(await reminderTimes(db, NOW)).toEqual([
       at9(in_(3)),
       at9(in_(7)),
       at9(in_(10)),
       at9(in_(12)),
+      at9(in_(30)),
       at9(in_(40)),
     ]);
   });
@@ -106,6 +112,7 @@ describe('rappels de péremption', () => {
       { name: 'Riz', category: 'food', unit: 'kg' },
       { quantity: 2, expirationDate: in_(40) },
     );
+    await saveLastBackup(db, in_(-5));
     const { scheduler, calls } = fakeScheduler();
     expect(await loadRemindersEnabled(db)).toBe(false);
     await syncReminders(db, scheduler, NOW);
@@ -113,7 +120,53 @@ describe('rappels de péremption', () => {
 
     await saveRemindersEnabled(db, true);
     await syncReminders(db, scheduler, NOW);
-    expect(calls[1]).toEqual([at9(in_(10)), at9(in_(40))]);
+    expect(calls[1]).toEqual([at9(in_(10)), at9(in_(25)), at9(in_(40))]);
+  });
+
+  it('suit le seuil d’alerte choisi dans les réglages', async () => {
+    const { db, repo } = await setup();
+    await repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg' },
+      { quantity: 2, expirationDate: in_(70) },
+    );
+    await repo.createItem(
+      { name: 'Lait', category: 'food', unit: 'L', alertDays: 5 },
+      { quantity: 1, expirationDate: in_(12) },
+    );
+    await saveLastBackup(db, TODAY);
+    await saveExpiryLead(db, 60);
+    // Riz : 60 jours avant ; Lait : son propre seuil (5 jours) reste prioritaire.
+    expect(await reminderTimes(db, NOW)).toEqual([
+      at9(in_(7)),
+      at9(in_(10)),
+      at9(in_(12)),
+      at9(in_(30)),
+      at9(in_(70)),
+    ]);
+    await expect(saveExpiryLead(db, 45)).rejects.toThrow(RangeError);
+  });
+
+  it('rappelle la sauvegarde 30 jours après, puis chaque semaine', async () => {
+    const { db, repo } = await setup();
+    // Coffre neuf : rien à sauvegarder, aucun rappel.
+    expect(await backupReminderDay(db, NOW)).toBeNull();
+
+    await repo.createItem(
+      { name: 'Riz', category: 'food', unit: 'kg' },
+      { quantity: 2 },
+    );
+    await saveLastBackup(db, in_(-10));
+    expect(await backupReminderDay(db, NOW)).toBe(in_(20));
+
+    // En retard de 9 jours : prochain rappel à J+30+14 de la sauvegarde.
+    await saveLastBackup(db, in_(-39));
+    expect(await backupReminderDay(db, NOW)).toBe(in_(5));
+
+    // Échéance aujourd'hui, 9 h passée : la semaine suivante.
+    await saveLastBackup(db, in_(-30));
+    expect(await backupReminderDay(db, NOW)).toBe(TODAY);
+    const afternoon = new Date(2026, 9, 15, 14, 0, 0);
+    expect(await backupReminderDay(db, afternoon)).toBe(in_(7));
   });
 
   it('ne fait rien sans service de rappels sur l’appareil', async () => {

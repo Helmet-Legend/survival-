@@ -800,12 +800,17 @@ describe('cycle de vie', () => {
       'valueChange',
       true,
     );
-    expect(await screen.findByText('Aucun rappel à venir.')).toBeTruthy();
-    expect(calls).toEqual(['cancel', []]);
+    // Aucune péremption datée : seul le rappel de sauvegarde est prévu.
+    expect(
+      await screen.findByText(/^1 rappel prévu, le prochain le/),
+    ).toBeTruthy();
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toHaveLength(1);
 
     await fireEvent.press(screen.getByLabelText('Verrouiller'));
     expect(await screen.findByText('Saisissez votre code')).toBeTruthy();
-    await waitFor(() => expect(calls).toEqual(['cancel', [], []]));
+    await waitFor(() => expect(calls).toHaveLength(3));
+    expect(calls[2]).toEqual(calls[1]);
   });
 
   it('masque le réglage des captures hors Android', async () => {
@@ -1523,6 +1528,14 @@ describe('écrans', () => {
     await fireEvent.press(await screen.findByLabelText('Retirer 1 kg de Riz'));
     expect(await screen.findByText('Riz : 1 kg retiré. Reste 9.')).toBeTruthy();
     expect(screen.getByLabelText('Riz, 9 kg')).toBeTruthy();
+
+    // Toucher par erreur : « Annuler » remet le kilo.
+    await fireEvent.press(screen.getByRole('button', { name: 'Annuler' }));
+    expect(
+      await screen.findByText('Riz : retrait annulé. Reste 10.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Riz, 10 kg')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull();
   });
 
   it('simule une crise jour par jour sur le stock réel', async () => {
