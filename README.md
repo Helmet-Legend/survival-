@@ -331,3 +331,9 @@ Sans réseau, la vérification échoue en silence.
 
 Le dépôt doit être public pour que l'application puisse lire les versions
 sans jeton.
+
+## Droits
+
+© 2026 Helmet-Legend. Tous droits réservés. Le dépôt est consultable
+publiquement, mais aucune licence n'est accordée : voir `LICENSE`.
+Version de test, ne pas diffuser.

@@ -15,6 +15,10 @@ import { formatDate } from '../format';
 import { useNavigation } from '../navigation';
 import { sizes, space, text } from '../theme';
 
+/** Mention de droits, hors du texte de la politique (publié tel quel). */
+export const COPYRIGHT =
+  '© 2026 Helmet-Legend. Tous droits réservés. Version de test, ne pas diffuser.';
+
 export function PrivacyScreen() {
   const navigation = useNavigation();
   return (
@@ -37,6 +41,7 @@ export function PrivacyScreen() {
       <Text style={text.subtle}>
         Mise à jour : {formatDate(PRIVACY_UPDATED)}
       </Text>
+      <Text style={text.subtle}>{COPYRIGHT}</Text>
     </ScrollView>
   );
 }
