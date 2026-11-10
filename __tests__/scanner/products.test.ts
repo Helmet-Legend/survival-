@@ -21,6 +21,8 @@ import {
   offUrl,
   parseOffProduct,
   prefillFor,
+  waterContainers,
+  type ProductData,
   removeFromBasket,
   saveOnlineLookup,
   setBasketCount,
@@ -217,18 +219,83 @@ describe('Open Food Facts', () => {
         energyBasis: 'per100g',
       },
     });
-    // Eau : aucune potabilité ni quantité devinée.
+    // Eau : contenance publiée × lectures ; potabilité jamais devinée.
+    expect(
+      prefillFor(
+        {
+          code: NUTELLA,
+          itemId: null,
+          status: 'found',
+          data: {
+            name: 'Eau',
+            category: 'water',
+            quantityLabel: '8 L',
+            netValue: 8,
+            netUnit: 'L',
+          },
+        },
+        { count: 1 },
+      ),
+    ).toEqual({
+      category: 'water',
+      prefill: {
+        name: 'Eau',
+        notes: `Code-barres ${NUTELLA} · Contenance : 8 L`,
+        unit: 'L',
+        containerCount: '1',
+        containerSize: '8',
+        quantity: '8',
+      },
+    });
+    // Sans contenance connue : rien n'est rempli.
     expect(
       prefillFor({
         code: NUTELLA,
         itemId: null,
         status: 'found',
-        data: { name: 'Eau', category: 'water', netValue: 1.5, netUnit: 'L' },
+        data: { name: 'Eau', category: 'water' },
       }),
     ).toEqual({
       category: 'water',
       prefill: { name: 'Eau', notes: `Code-barres ${NUTELLA}` },
     });
+  });
+
+  it('compte les bouteilles d’un pack d’eau', () => {
+    const water = (data: Partial<ProductData>) => ({
+      code: NUTELLA,
+      itemId: null,
+      status: 'found' as const,
+      data: { category: 'water' as const, ...data },
+    });
+    // 2 packs de 6 x 1,5 L : 12 bouteilles, 18 L (le total de la base ignoré).
+    expect(
+      prefillFor(
+        water({ quantityLabel: '6 x 1,5 l', netValue: 9, netUnit: 'L' }),
+        { count: 2 },
+      ).prefill,
+    ).toMatchObject({
+      containerCount: '12',
+      containerSize: '1,5',
+      quantity: '18',
+    });
+    expect(waterContainers({ quantityLabel: '4×50cl' })).toEqual({
+      perScan: 4,
+      liters: 0.5,
+    });
+    expect(waterContainers({ netValue: 1500, netUnit: 'mL' })).toEqual({
+      perScan: 1,
+      liters: 1.5,
+    });
+    expect(waterContainers({ quantityLabel: '33 cl' })).toEqual({
+      perScan: 1,
+      liters: 0.33,
+    });
+    expect(waterContainers({ quantityLabel: 'bonbonne' })).toBeNull();
+    // Nourriture : inchangée.
+    expect(
+      prefillFor(water({ category: 'food', quantityLabel: '8 L' })).prefill,
+    ).not.toHaveProperty('containerCount');
   });
 
   it('compare les noms sans accents ni casse', () => {

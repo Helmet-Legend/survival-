@@ -228,6 +228,30 @@ export function unitLabel(
     : UNIT_LABELS[unit];
 }
 
+/**
+ * Eau : bidons pleins et bidon entamé, plutôt que « 3,6 bidons ».
+ * « 4 bidons de 8 L », « 3 bidons pleins + 1 entamé (5 L) ».
+ */
+function waterContainers(size: number, quantity: number, unit: ItemUnit) {
+  const label = UNIT_LABELS[unit];
+  const full = Math.floor(quantity / size + 1e-9);
+  const rest = Math.round((quantity - full * size) * 100) / 100;
+  if (quantity <= 0) {
+    return null;
+  }
+  if (rest < 0.01) {
+    return `${formatNumber(full)} ${
+      full > 1 ? 'bidons' : 'bidon'
+    } de ${formatNumber(size)} ${label}`;
+  }
+  const opened = `1 entamé (${formatNumber(rest, 2)} ${label})`;
+  return full === 0
+    ? `1 bidon entamé (${formatNumber(rest, 2)} ${label})`
+    : `${formatNumber(full)} ${
+        full > 1 ? 'bidons pleins' : 'bidon plein'
+      } + ${opened}`;
+}
+
 /** « 3 bidons de 10 L », ou null sans contenance connue. */
 export function packageSummary(
   item: Pick<InventoryItem, 'category' | 'unit' | 'packageSize'> & {
@@ -248,6 +272,9 @@ export function packageSummary(
   const container = PROFILES[item.category].container;
   if (item.packageSize === null || container === null) {
     return null;
+  }
+  if (item.category === 'water') {
+    return waterContainers(item.packageSize, quantity, item.unit);
   }
   const count = quantity / item.packageSize;
   return `${formatNumber(count)} ${plural(count, container)} de ${formatNumber(

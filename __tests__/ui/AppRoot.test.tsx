@@ -1353,6 +1353,48 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('préremplit le nombre et la contenance d’une eau scannée', async () => {
+    const WATER = '3274080005003';
+    const reads: string[][] = [[WATER, WATER]];
+    const scanSource = {
+      available: true,
+      scan: jest.fn(async () => reads.shift()?.map(code => ({ code })) ?? null),
+    };
+    const productFetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 1,
+        product: {
+          product_name_fr: 'Eau de source',
+          brands: 'Cristaline',
+          quantity: '8 L',
+          product_quantity: 8,
+          product_quantity_unit: 'l',
+          categories_tags: ['en:beverages', 'en:waters'],
+        },
+      }),
+    }));
+    await openApp({ scanSource, productFetch });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner des codes-barres'),
+    );
+    await fireEvent.press(
+      await screen.findByLabelText('Scanner plusieurs articles à la suite'),
+    );
+    await fireEvent.press(await screen.findByText('Autoriser la recherche'));
+    expect(await screen.findByText('Eau de source')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Créer la fiche préremplie'));
+    expect(
+      await screen.findByDisplayValue('Eau de source (Cristaline)'),
+    ).toBeTruthy();
+    // 2 lectures × 8 L ; la potabilité reste à choisir.
+    expect(screen.getByDisplayValue('2')).toBeTruthy();
+    expect(screen.getByDisplayValue('8')).toBeTruthy();
+    expect(screen.getByText('16 L')).toBeTruthy();
+  });
+
   it('scanne en série, reconnaît en ligne et complète le stock', async () => {
     const LENTILS = '3017620422003';
     const UNKNOWN = '96385074';
@@ -2495,12 +2537,21 @@ describe('écrans', () => {
       await screen.findByText('Retiré : 10 L du lot sans date. Reste 20 L.'),
     ).toBeTruthy();
 
+    // « − » de la ligne : 1 L, pas un bidon entier ; bidon entamé affiché.
+    await fireEvent.press(
+      screen.getByLabelText('Retirer 1 L de Bidons garage'),
+    );
+    expect(
+      await screen.findByText('Bidons garage : 1 L retiré. Reste 19.'),
+    ).toBeTruthy();
+    expect(screen.getByText('1 bidon plein + 1 entamé (9 L)')).toBeTruthy();
+
     await fireEvent.changeText(screen.getByLabelText('Nombre de bidons'), '2');
     await fireEvent.press(screen.getByLabelText('Ajouter au stock existant'));
     expect(
       await screen.findByText('Stock de « Bidons garage » complété.'),
     ).toBeTruthy();
-    expect(screen.getByText('4 bidons de 10 L')).toBeTruthy();
+    expect(screen.getByText('3 bidons pleins + 1 entamé (9 L)')).toBeTruthy();
   });
 
   it('enregistre une arme et compte ses munitions par calibre', async () => {
@@ -3342,6 +3393,8 @@ describe('fiches par type de produit', () => {
     expect(screen.getByText('80 L')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(await screen.findByLabelText('Jerricans garage, 80 L')).toBeTruthy();
+    // La contenance est gardée : la ligne compte les jerricans.
+    expect(screen.getByText(/4 bidons de 20 L/)).toBeTruthy();
   });
 
   it('compte les calories seulement d’après la valeur saisie', async () => {

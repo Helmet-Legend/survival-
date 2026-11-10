@@ -566,7 +566,10 @@ function BasketRow(props: {
   const [expiry, setExpiry] = useState(
     entry.expiry ? isoToFr(entry.expiry) : '',
   );
-  const [choice, setChoice] = useState<CategoryChoice>(defaultChoice(product));
+  // Catégorie choisie à la main ; sinon celle des données, qui peuvent
+  // arriver après l'affichage (recherche en ligne autorisée ensuite).
+  const [picked, setChoice] = useState<CategoryChoice | null>(null);
+  const choice = picked ?? defaultChoice(product);
   const [rowError, setRowError] = useState<string | null>(null);
 
   const counter = (
@@ -715,6 +718,7 @@ function BasketRow(props: {
         choice,
         expiry: entry.expiry,
         lot: entry.lot,
+        count,
       },
     );
     navigation.openStockForm({
