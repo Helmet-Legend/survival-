@@ -353,6 +353,9 @@ export function parseOffProduct(body: unknown): ProductData | null {
     } else if (unit === 'l') {
       data.netValue = net;
       data.netUnit = 'L';
+    } else if (unit === 'cl') {
+      data.netValue = net * 10;
+      data.netUnit = 'mL';
     }
   }
   const nutriments = p.nutriments as Record<string, unknown> | undefined;
@@ -477,6 +480,49 @@ function decimal(value: number): string {
   return String(Math.round(value * 1000) / 1000).replace('.', ',');
 }
 
+/** Litres, arrondis au centilitre. */
+function toLiters(value: number, unit: string): number | null {
+  const factor =
+    unit === 'l' ? 1 : unit === 'cl' ? 0.01 : unit === 'ml' ? 0.001 : null;
+  if (factor === null || !(value > 0)) {
+    return null;
+  }
+  return Math.round(value * factor * 100) / 100;
+}
+
+/**
+ * Eau : contenants par article scanné et contenance de chacun, en litres,
+ * d'après la contenance publiée (« 8 L », « 6 x 1,5 l », 1500 mL). Null si
+ * la base n'en donne pas : rien n'est deviné.
+ */
+export function waterContainers(
+  d: ProductData,
+): { perScan: number; liters: number } | null {
+  const label = d.quantityLabel?.toLowerCase().replace(/\s+/g, ' ') ?? '';
+  const pack = /(\d{1,3}) ?[x×] ?(\d+(?:[.,]\d+)?) ?(cl|ml|l)\b/.exec(label);
+  if (pack !== null) {
+    const liters = toLiters(Number(pack[2].replace(',', '.')), pack[3]);
+    const perScan = Number(pack[1]);
+    if (liters !== null && perScan >= 1) {
+      return { perScan, liters };
+    }
+  }
+  if (d.netValue !== undefined && (d.netUnit === 'L' || d.netUnit === 'mL')) {
+    const liters = toLiters(d.netValue, d.netUnit === 'L' ? 'l' : 'ml');
+    if (liters !== null) {
+      return { perScan: 1, liters };
+    }
+  }
+  const single = /^(\d+(?:[.,]\d+)?) ?(cl|ml|l)$/.exec(label.trim());
+  if (single !== null) {
+    const liters = toLiters(Number(single[1].replace(',', '.')), single[2]);
+    if (liters !== null) {
+      return { perScan: 1, liters };
+    }
+  }
+  return null;
+}
+
 /** Catégories proposées pour un code inconnu, vers les fiches existantes. */
 export const CATEGORY_CHOICES = [
   { id: 'food', label: 'Nourriture', category: 'food' },
@@ -527,6 +573,8 @@ export function prefillFor(
     choice?: CategoryChoice;
     expiry?: string | null;
     lot?: string | null;
+    /** Nombre de lectures du code au scanner (1 par défaut). */
+    count?: number;
   } = {},
 ): {
   category: ItemCategory;
@@ -555,6 +603,20 @@ export function prefillFor(
   prefill.notes = notes.join(' · ');
   if (options.expiry) {
     prefill.expiry = isoToFr(options.expiry);
+  }
+  const scans = Math.max(1, Math.round(options.count ?? 1));
+  if (category === 'water') {
+    // Contenance publiée × lectures ; la potabilité reste à choisir.
+    const containers = waterContainers(d);
+    if (containers !== null) {
+      const count = containers.perScan * scans;
+      prefill.unit = 'L';
+      prefill.containerCount = String(count);
+      prefill.containerSize = decimal(containers.liters);
+      prefill.quantity = decimal(
+        Math.round(count * containers.liters * 100) / 100,
+      );
+    }
   }
   if (category === 'food') {
     if (d.netValue !== undefined && (d.netUnit === 'g' || d.netUnit === 'kg')) {

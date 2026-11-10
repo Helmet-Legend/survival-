@@ -176,6 +176,13 @@ export function toItemDraft(
       ...(recordType === 'ammo' && unitOption.countUnit === 'box'
         ? { packageSize: number(values, 'packageSize') ?? null }
         : {}),
+      // Eau créée en « Nombre × Contenance » : la contenance d'un contenant
+      // est gardée (« 4 bidons de 8 L », ajout par bidons).
+      ...(category === 'water' &&
+      !isEdit &&
+      number(values, 'containerSize') !== undefined
+        ? { packageSize: number(values, 'containerSize') ?? null }
+        : {}),
     },
     lot,
   };

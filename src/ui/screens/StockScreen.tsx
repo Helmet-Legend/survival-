@@ -243,6 +243,11 @@ function renewCount(docs: readonly DocumentSummary[]): number {
 
 /** Quantité retirée par le bouton « − » : un contenant, sinon une unité. */
 function quickStep(item: ItemSummary): number {
+  // Eau : on boit par petites quantités, « − » retire 1 L même en bidons
+  // (« Retirer 1 bidon » reste dans la fiche).
+  if (item.category === 'water') {
+    return 1;
+  }
   return item.packageSize !== null && item.packageSize > 0
     ? item.packageSize
     : 1;
