@@ -17,7 +17,8 @@ Textes prêts à coller. Langue principale : français (France).
 > Fenrir tient l'inventaire de vos réserves d'urgence et vous dit, chiffres à l'appui, combien de jours votre foyer peut tenir. Tout fonctionne sans réseau et reste chiffré sur votre téléphone : pas de compte, pas de serveur, pas de publicité.
 >
 > **VOS STOCKS, CLAIREMENT**
-> • Fiches adaptées à chaque catégorie : eau, nourriture, santé et médicaments, énergie et éclairage, matériel, documents.
+> • Fiches adaptées à chaque catégorie : eau, nourriture, santé et médicaments, hygiène, énergie et éclairage, matériel, documents.
+> • Eau comptée en bidons : contenants pleins et entamés, retrait d'un geste, « Annuler » en cas d'erreur.
 > • Dates de péremption, lots et quantités, historique des mouvements.
 > • Scanner de codes-barres et des carrés Data Matrix des boîtes de médicaments (reconnus sans réseau).
 > • Scanner de documents : pages nettes et redressées, jusqu'à 30 par document, gardées dans le coffre chiffré.
@@ -32,11 +33,12 @@ Textes prêts à coller. Langue principale : français (France).
 > • Rappels de péremption au texte neutre.
 >
 > **QUAND IL FAUT AGIR**
-> • Écran Urgence : position GPS, envoi de votre position par SMS, numéros utiles.
+> • Écran Urgence, ouvert sans code depuis l'écran de verrouillage : position GPS, envoi de votre position par SMS, numéros utiles.
 > • Plan familial : contacts, points de regroupement, itinéraires, plan de communication.
 > • Cartes hors ligne (IGN), boussole et points de repère.
 > • Guide pratique hors ligne en 10 familles : eau, alimentation, santé, énergie, habitat, évacuation, gestion de crise…
 > • Mode lumière rouge pour préserver la vision de nuit.
+> • Bulles d'aide à la première ouverture de chaque écran.
 > • Alertes facultatives : vigilance météo, rappels de produits, ruptures de médicaments, séismes, restrictions d'eau, signal gaz, carburants.
 >
 > **VIE PRIVÉE ET SÉCURITÉ**
