@@ -1,12 +1,14 @@
 /** Création ou modification d'un point de repère. */
 import { LocateFixed } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Position } from '../../../device/location';
 import { mgrsToLatLon, type LatLon } from '../../../geo/geoConverter';
 import {
+  MONTH_LABELS,
   SENSITIVE_TYPES,
+  WAYPOINT_DEFAULT_NAMES,
   WAYPOINT_LABELS,
   WAYPOINT_TYPES,
   type Waypoint,
@@ -21,7 +23,7 @@ import {
   ScreenTitle,
 } from '../../components/controls';
 import { parseDecimal } from '../../format';
-import { space, text } from '../../theme';
+import { colors, radius, sizes, space, text } from '../../theme';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -44,6 +46,22 @@ export function PointForm(props: {
   const [lon, setLon] = useState(start ? start.longitude.toFixed(6) : '');
   const [mgrs, setMgrs] = useState('');
   const [notes, setNotes] = useState(props.point?.notes ?? '');
+  const [months, setMonths] = useState<number[]>(
+    props.point?.harvestMonths ?? [],
+  );
+  // Nom proposé selon le type tant que l'utilisateur ne l'a pas changé.
+  const pickType = (t: WaypointType) => {
+    if (label.trim() === '' || label === WAYPOINT_DEFAULT_NAMES[type]) {
+      setLabel(WAYPOINT_DEFAULT_NAMES[t]);
+    }
+    setType(t);
+  };
+  const toggleMonth = (m: number) =>
+    setMonths(
+      months.includes(m)
+        ? months.filter(x => x !== m)
+        : [...months, m].sort((a, b) => a - b),
+    );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -77,7 +95,13 @@ export function PointForm(props: {
     }
     setSaving(true);
     try {
-      await props.onSave({ label, type, notes, ...position });
+      await props.onSave({
+        label,
+        type,
+        notes,
+        harvestMonths: type === 'harvest' ? months : [],
+        ...position,
+      });
     } catch (e) {
       setError(message(e));
       setSaving(false);
@@ -105,10 +129,38 @@ export function PointForm(props: {
             key={t}
             label={WAYPOINT_LABELS[t]}
             selected={type === t}
-            onPress={() => setType(t)}
+            onPress={() => pickType(t)}
           />
         ))}
       </View>
+      {type === 'harvest' ? (
+        <View style={styles.months}>
+          <Text style={text.subtle}>Saison de récolte (facultatif)</Text>
+          <View style={styles.monthGrid}>
+            {MONTH_LABELS.map((m, i) => {
+              const on = months.includes(i + 1);
+              return (
+                <Pressable
+                  key={m}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`Récolte en ${m}`}
+                  onPress={() => toggleMonth(i + 1)}
+                  style={({ pressed }) => [
+                    styles.month,
+                    on && styles.monthOn,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.monthText, on && styles.monthTextOn]}>
+                    {m}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
       {SENSITIVE_TYPES.has(type) ? (
         <Text style={text.subtle}>
           Point sensible : son partage demandera une confirmation.
@@ -175,6 +227,21 @@ export function PointForm(props: {
 }
 
 const styles = StyleSheet.create({
+  months: { gap: space.xs },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  month: {
+    width: '15.5%',
+    minHeight: sizes.touch,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.s,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  monthOn: { backgroundColor: '#C08457', borderColor: '#C08457' },
+  monthText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  monthTextOn: { color: colors.onPrimary },
   page: { gap: space.m },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   pair: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },

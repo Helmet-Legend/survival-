@@ -23,6 +23,7 @@ import {
 import {
   cardinal,
   formatDistance,
+  harvestLabel,
   SENSITIVE_TYPES,
   WAYPOINT_LABELS,
   waypointMessage,
@@ -228,6 +229,9 @@ export function PointDetail(props: {
           />
         ) : null}
       </Panel>
+      {harvestLabel(point.harvestMonths) ? (
+        <Text style={styles.notes}>{harvestLabel(point.harvestMonths)}</Text>
+      ) : null}
       {point.notes ? <Text style={styles.notes}>{point.notes}</Text> : null}
 
       <Button

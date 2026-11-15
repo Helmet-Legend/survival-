@@ -26,7 +26,8 @@ export type HelpId =
   | 'familyPlan'
   | 'crisis'
   | 'kit'
-  | 'sync';
+  | 'sync'
+  | 'mapPoints';
 
 export const HELP_TIPS: Record<HelpId, string> = {
   home: 'Votre tableau de bord : combien de jours le foyer tient, la ressource qui manque en premier et ce qui périme bientôt. Les accès rapides ouvrent Préparer, le plan familial, la pharmacie et le scanner.',
@@ -47,6 +48,8 @@ export const HELP_TIPS: Record<HelpId, string> = {
   crisis:
     'Choisissez un scénario (coupure de courant, confinement…) et une durée : Fenrir simule jour par jour ce que votre stock réel permet de tenir, et ce qui manquerait.',
   kit: 'Le sac d’évacuation et le matériel de la maison, comparés à ce que vous avez déjà. Cochez ce qui est prêt ; ce qui manque peut s’ajouter au stock.',
+  mapPoints:
+    'Marquez vos repères : point d’eau, arbre fruitier, grotte… à votre position ou n’importe où sur la carte, avec « + Point ».',
   sync: 'Partagez le stock du foyer entre vos téléphones, sur le même réseau Wi-Fi et sans passer par Internet. Choisissez ce qui est partagé en plus des stocks.',
 };
 

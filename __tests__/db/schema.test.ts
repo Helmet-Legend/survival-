@@ -784,3 +784,36 @@ describe('migration 22 (pâtée des animaux)', () => {
     ]);
   });
 });
+
+describe('migration 23 (cueillette et grottes)', () => {
+  it('garde les points et accepte les nouveaux types sans renvoyer au foyer', async () => {
+    const db = new NodeSqliteDb();
+    await migrate(db, MIGRATIONS.slice(0, 22));
+    await db.execute(
+      `INSERT INTO poi_locations (id, label, latitude, longitude, type)
+       VALUES ('a', 'Source', 45, 6, 'water_source')`,
+    );
+    await db.execute("UPDATE sync_rows SET hlc = 'x', dirty_at = NULL");
+    await migrate(db);
+    expect(
+      (await db.execute('SELECT id, type FROM poi_locations')).rows,
+    ).toEqual([{ id: 'a', type: 'water_source' }]);
+    expect(
+      (await db.execute('SELECT key FROM sync_rows WHERE hlc IS NULL')).rows,
+    ).toEqual([]);
+    await db.execute(
+      `INSERT INTO poi_locations (id, label, latitude, longitude, type, harvest_months)
+       VALUES ('b', 'Pommiers', 45, 6, 'harvest', '9,10')`,
+    );
+    // Journal de partage toujours actif.
+    expect(
+      (await db.execute('SELECT key FROM sync_rows WHERE hlc IS NULL')).rows,
+    ).toEqual([{ key: 'b' }]);
+    await expect(
+      db.execute(
+        `INSERT INTO poi_locations (id, label, latitude, longitude, type)
+         VALUES ('x', 'X', 45, 6, 'nope')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+  });
+});

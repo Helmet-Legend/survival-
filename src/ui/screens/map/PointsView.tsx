@@ -10,6 +10,7 @@ import type { Position } from '../../../device/location';
 import type { LatLon } from '../../../geo/geoConverter';
 import {
   describeFrom,
+  harvestLabel,
   planWaypoints,
   WAYPOINT_LABELS,
   type Waypoint,
@@ -195,9 +196,10 @@ function PointRow(props: {
   const Icon = WAYPOINT_ICONS[point.type];
   const color = WAYPOINT_COLORS[point.type];
   const where = here ? describeFrom(here, point) : null;
+  const harvest = harvestLabel(point.harvestMonths);
   const kind = `${WAYPOINT_LABELS[point.type]}${
     point.fromPlan ? ' · plan familial' : ''
-  }`;
+  }${harvest ? ` · ${harvest}` : ''}`;
   return (
     <Pressable
       accessibilityRole="button"
