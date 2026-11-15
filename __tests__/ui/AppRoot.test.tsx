@@ -2162,6 +2162,45 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('tient la nourriture des animaux à part, avec ses jours de ration', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
+    await fireEvent.press(screen.getByLabelText('Ajouter : Animaux'));
+    expect(await screen.findByText('Ajouter pour les animaux')).toBeTruthy();
+    // Pas de valeur énergétique : jamais compté dans l'autonomie du foyer.
+    expect(screen.queryByText('Valeur énergétique')).toBeNull();
+    // La ration n'existe que pour la nourriture.
+    expect(screen.queryByLabelText('Ration journalière')).toBeNull();
+    await fireEvent.press(
+      screen.getByRole('radio', { name: 'Croquettes / Pâtée' }),
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Nom / Description, obligatoire'),
+      'Croquettes chien',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantité, obligatoire'),
+      '12',
+    );
+    await unit('kg');
+    await fireEvent.changeText(
+      screen.getByLabelText('Ration journalière'),
+      '300',
+    );
+    expect(screen.getByText('Autonomie : 40 jours de nourriture')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(
+      await screen.findByText('« Croquettes chien » enregistré.'),
+    ).toBeTruthy();
+    expect(await screen.findByText(/🐾 40 jours de nourriture/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
+    expect(
+      await screen.findByText('Croquettes chien : 40 jours de nourriture'),
+    ).toBeTruthy();
+  });
+
   it('ajoute un article dans sa catégorie et signale le champ invalide', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));

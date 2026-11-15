@@ -52,6 +52,11 @@ export const HygieneIcon = fenrirIcon(
   'hygiene',
   '<path d="m4 4 2.5 2.5"/><path d="M13.5 6.5a4.95 4.95 0 0 0-7 7"/><path d="M15 5 5 15"/><path d="M14 17v.01M10 16v.01M13 13v.01M16 10v.01M11 20v.01M17 14v.01M20 11v.01"/>',
 );
+/** Patte (catégorie Animaux). */
+export const PetsIcon = fenrirIcon(
+  'pets',
+  '<ellipse cx="12" cy="16" rx="4.5" ry="3.8"/><ellipse cx="5.5" cy="10.5" rx="1.8" ry="2.3"/><ellipse cx="9.3" cy="6.5" rx="1.8" ry="2.4"/><ellipse cx="14.7" cy="6.5" rx="1.8" ry="2.4"/><ellipse cx="18.5" cy="10.5" rx="1.8" ry="2.3"/>',
+);
 export const ToolIcon = fenrirIcon(
   'tool',
   '<path d="M14 6a5 5 0 0 0-6.4 6.4L3 17l4 4 4.6-4.6A5 5 0 0 0 18 10l-3 3-4-4 3-3Z"/>',

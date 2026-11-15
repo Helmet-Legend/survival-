@@ -80,6 +80,8 @@ export interface ItemAttributes {
   energyValue?: number;
   energyBasis?: (typeof ENERGY_BASES)[number];
   storage?: (typeof STORAGE)[number];
+  // Animaux : ration journalière en grammes, saisie par l'utilisateur.
+  dailyRation?: number;
   // Médical
   dosage?: string;
   lotNumber?: string;
@@ -125,6 +127,7 @@ const ITEM_RULES: Record<keyof ItemAttributes, Rule> = {
   energyValue: { kind: 'number' },
   energyBasis: { kind: 'enum', values: ENERGY_BASES },
   storage: { kind: 'enum', values: STORAGE },
+  dailyRation: { kind: 'number' },
   dosage: { kind: 'text', max: 120 },
   lotNumber: { kind: 'text', max: 60 },
   recordType: { kind: 'enum', values: RECORD_TYPES },

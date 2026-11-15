@@ -297,8 +297,9 @@ export const GEAR_SECTIONS: readonly GearSection[] = [
         ],
         label: 'Nourriture et affaires des animaux',
         hint: 'Si vous avez des animaux : nourriture, laisse, cage de transport.',
+        category: 'pets',
         names: ['croquette', 'patee', 'litiere', 'animaux'],
-        add: { category: 'food' },
+        add: { category: 'pets', prefill: { subtype: 'food' } },
       },
       {
         id: 'cookware',

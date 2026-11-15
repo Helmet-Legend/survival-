@@ -50,7 +50,8 @@ import {
   formatNumber,
   formatSince,
 } from '../format';
-import { FoodIcon, WaterIcon } from '../icons';
+import { petFoodDays, petFoodLabel } from '../../inventory/petFood';
+import { FoodIcon, PetsIcon, WaterIcon } from '../icons';
 import { useNavigation, type Navigation } from '../navigation';
 import {
   currentMonthIndex,
@@ -145,6 +146,11 @@ export function HomeScreen() {
       share,
       backup,
       chargers: items.filter(isCharger),
+      // Animaux : à part, jamais dans l'autonomie du foyer.
+      pets: items.flatMap(i => {
+        const days = petFoodDays(i, i.usableQuantity);
+        return days === null ? [] : [{ id: i.id, name: i.name, days }];
+      }),
     };
   });
 
@@ -358,6 +364,27 @@ export function HomeScreen() {
             onPress={() => navigation.goTo('stock', { category: 'power' })}
           />
         </View>
+        {data.pets.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Animaux : ${data.pets
+              .map(p => `${p.name}, ${petFoodLabel(p.days)}`)
+              .join(' ; ')}. Ouvrir la section Animaux`}
+            onPress={() => navigation.goTo('stock', { category: 'pets' })}
+            style={({ pressed }) => [styles.pets, pressed && styles.pressed]}
+          >
+            <PetsIcon color={colors.pets} size={20} />
+            <View style={styles.grow}>
+              <Text style={styles.petsTitle}>Animaux</Text>
+              {data.pets.map(p => (
+                <Text key={p.id} style={text.subtle}>
+                  {`${p.name} : ${petFoodLabel(p.days)}`}
+                </Text>
+              ))}
+            </View>
+            <ChevronRight color={colors.text} size={20} />
+          </Pressable>
+        ) : null}
         {phone ? (
           <Pressable
             accessibilityRole="button"
@@ -874,6 +901,19 @@ const styles = StyleSheet.create({
   },
   backupText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   // Batterie du téléphone : même forme que le rappel de sauvegarde.
+  pets: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    minHeight: sizes.touch,
+    paddingVertical: space.s,
+    paddingHorizontal: space.m,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: tint(colors.pets, '66'),
+    backgroundColor: solidTint(colors.pets, 0.07),
+  },
+  petsTitle: { color: colors.pets, fontSize: 15, fontWeight: '700' },
   phone: {
     flexDirection: 'row',
     alignItems: 'center',

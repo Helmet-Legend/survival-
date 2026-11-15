@@ -14,6 +14,7 @@ export const CATEGORY_ILLUSTRATIONS: Record<ItemCategory, ImageSourcePropType> =
     weapon: require('../assets/illustrations/weapon.jpg'),
     medical: require('../assets/illustrations/medical.jpg'),
     hygiene: require('../assets/illustrations/hygiene.jpg'),
+    pets: require('../assets/illustrations/pets.jpg'),
     tool: require('../assets/illustrations/tool.jpg'),
     energy: require('../assets/illustrations/energy.jpg'),
     // Lanterne et bidons : vaut aussi pour l'énergie.

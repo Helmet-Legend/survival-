@@ -22,7 +22,8 @@ import {
 } from './tables';
 
 // 2 : catégorie Hygiène (un téléphone en format 1 ne la connaît pas).
-export const SYNC_FORMAT = 2;
+// 3 : catégorie Animaux.
+export const SYNC_FORMAT = 3;
 
 /** Options de partage choisies par le foyer. */
 export interface SyncOptions {
