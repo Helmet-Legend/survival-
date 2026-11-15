@@ -4,6 +4,7 @@
  * calories, calibre et libellés.
  */
 import type { InventoryItem, ItemCategory, ItemUnit } from '../inventory';
+import { petFoodDays, petFoodLabel } from '../inventory/petFood';
 import { formatNumber, UNIT_LABELS } from './format';
 
 export interface Container {
@@ -48,6 +49,15 @@ export const HYGIENE_SUBTYPES = [
   { id: 'sanitary', label: 'Protections hygiéniques et couches' },
   { id: 'wipes', label: 'Lingettes et gel hydroalcoolique' },
   { id: 'cleaning', label: 'Entretien (lessive, javel…)' },
+  { id: 'other', label: 'Autre' },
+];
+
+/** Types d'articles pour les animaux (fiche d'ajout Animaux). */
+export const PET_SUBTYPES = [
+  { id: 'food', label: 'Croquettes / Pâtée' },
+  { id: 'litter', label: 'Litière' },
+  { id: 'care', label: 'Soins et médicaments' },
+  { id: 'gear', label: 'Matériel (laisse, caisse…)' },
   { id: 'other', label: 'Autre' },
 ];
 
@@ -128,6 +138,22 @@ export const PROFILES: Record<ItemCategory, CategoryProfile> = {
     notesPlaceholder: 'Parfum, format…',
     locationPlaceholder: 'Ex. Salle de bain',
     units: ['unit'],
+    container: null,
+    piece: null,
+    calories: false,
+    caliber: false,
+  },
+  // Jamais de calories : la nourriture des animaux reste hors de
+  // l'autonomie du foyer.
+  pets: {
+    formTitle: 'Nouvel article pour les animaux',
+    namePlaceholder: 'Ex. Croquettes chien',
+    subtypes: PET_SUBTYPES,
+    expiryLabel: 'Date de péremption (AAAA-MM-JJ, facultatif)',
+    notesLabel: 'Notes (facultatif)',
+    notesPlaceholder: 'Animal, marque, gamme…',
+    locationPlaceholder: 'Ex. Cellier',
+    units: ['kg', 'g', 'unit'],
     container: null,
     piece: null,
     calories: false,
@@ -256,9 +282,18 @@ function waterContainers(size: number, quantity: number, unit: ItemUnit) {
 export function packageSummary(
   item: Pick<InventoryItem, 'category' | 'unit' | 'packageSize'> & {
     attributes?: InventoryItem['attributes'];
+    subtype?: string | null;
   },
   quantity: number,
 ): string | null {
+  // Nourriture des animaux : jours couverts par la ration indiquée.
+  if (item.category === 'pets') {
+    const days = petFoodDays(
+      { ...item, subtype: item.subtype ?? null },
+      quantity,
+    );
+    return days === null ? null : `🐾 ${petFoodLabel(days)}`;
+  }
   const countUnit = item.attributes?.countUnit;
   if (countUnit !== undefined) {
     // Fiche récente : la quantité compte déjà les boîtes.

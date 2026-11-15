@@ -15,7 +15,8 @@ import {
 import type { ItemCategory, ItemUnit } from '../../inventory';
 import type { CountUnit } from '../../inventory/attributes';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../format';
-import { HYGIENE_SUBTYPES } from '../itemProfiles';
+import { petFoodDays, petFoodLabel } from '../../inventory/petFood';
+import { HYGIENE_SUBTYPES, PET_SUBTYPES } from '../itemProfiles';
 import {
   AlertIcon,
   AmmoIcon,
@@ -95,6 +96,8 @@ export type Field =
       key: string;
       placeholder?: string;
       suffix?: string;
+      /** Résultat calculé affiché sous le champ (ex. jours couverts). */
+      hint?: (values: Values) => string | null;
     });
 
 export interface FormConfig {
@@ -624,6 +627,59 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
       location('Ex. Salle de bain'),
     ],
   },
+  // Animaux : à part de la nourriture du foyer, sans valeur énergétique.
+  pets: {
+    title: 'Ajouter pour les animaux',
+    editTitle: 'Modifier l’article pour les animaux',
+    subtitle: 'Nourriture, litière, soins et matériel de vos animaux.',
+    icon: CATEGORY_ICONS.pets,
+    color: CATEGORY_COLORS.pets,
+    units: [UNIT_OPTIONS.kg, UNIT_OPTIONS.g, UNIT_OPTIONS.package],
+    fields: [
+      {
+        type: 'select',
+        key: 'subtype',
+        label: 'Type',
+        icon: BoxIcon,
+        required: true,
+        options: options(
+          'pets.subtype',
+          PET_SUBTYPES.map(t => o(t.id, t.label)),
+        ),
+      },
+      name('Ex : Croquettes chien, litière…'),
+      quantity,
+      {
+        type: 'measure',
+        key: 'unitWeight',
+        unitKey: 'unitWeightUnit',
+        label: 'Poids d’un paquet',
+        icon: WeightIcon,
+        units: options('unitWeightUnit', [o('g', 'g'), o('kg', 'kg')]),
+        placeholder: 'Ex : 12',
+        visible: v => v.subtype === 'food' && v.unit === 'package',
+      },
+      {
+        type: 'number',
+        key: 'dailyRation',
+        label: 'Ration journalière',
+        icon: CaloriesIcon,
+        placeholder: 'Ex : 300',
+        suffix: 'g / jour',
+        visible: v => v.subtype === 'food',
+        hint: petFoodHint,
+      },
+      {
+        type: 'date',
+        key: 'expiry',
+        label: 'Date de péremption',
+        icon: ExpiryIcon,
+      },
+      location('Ex : Cellier'),
+      threshold,
+      notes('Ex : Animal, marque, gamme…'),
+    ],
+  },
   tool: {
     title: 'Ajouter un outil',
     editTitle: 'Modifier l’outil',
@@ -887,6 +943,7 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
   ],
   medical: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
   hygiene: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
+  pets: ['subtype', 'name', 'quantity', 'unitWeight', 'dailyRation', 'expiry'],
   tool: ['name', 'quantity', 'condition'],
   energy: ['name', 'quantity', 'condition'],
   power: ['name', 'subtype', 'quantity', 'expiry'],
@@ -923,6 +980,11 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
   medical: [],
   // Comme la fiche médicale : pas de saisie rapide.
   hygiene: [],
+  pets: [
+    pick('Croquettes', { subtype: 'food', unit: 'kg' }),
+    pick('Pâtée', { subtype: 'food', unit: 'kg' }),
+    pick('Litière', { subtype: 'litter', unit: 'kg' }),
+  ],
   tool: [
     pick('Couteau', { subtype: 'cutting', unit: 'piece' }),
     pick('Hache', { subtype: 'cutting', unit: 'piece' }),
@@ -955,3 +1017,33 @@ export const COMMON_CALIBERS = [
   '.308 Win',
   '7,62×39',
 ] as const;
+
+/**
+ * « Autonomie : 40 jours de nourriture », d'après la quantité saisie et la
+ * ration (fiche Animaux, création). Rien tant qu'il manque une valeur.
+ */
+function petFoodHint(values: Values): string | null {
+  const read = (key: string) => {
+    const n = Number((values[key] ?? '').replace(',', '.'));
+    return values[key] && Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const amount = read('quantity');
+  const unitOption = FORMS.pets.units.find(x => x.value === values.unit);
+  if (amount === undefined || unitOption === undefined) {
+    return null;
+  }
+  const days = petFoodDays(
+    {
+      category: 'pets',
+      subtype: values.subtype || null,
+      unit: unitOption.unit,
+      attributes: {
+        dailyRation: read('dailyRation'),
+        unitWeight: read('unitWeight'),
+        unitWeightUnit: values.unitWeightUnit === 'kg' ? 'kg' : 'g',
+      },
+    },
+    amount,
+  );
+  return days === null ? null : `Autonomie : ${petFoodLabel(days)}`;
+}

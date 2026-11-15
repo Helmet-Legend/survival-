@@ -718,3 +718,49 @@ describe('migration 20 (catégorie hygiène)', () => {
     expect((await db.execute('SELECT id FROM photos')).rows).toEqual([]);
   });
 });
+
+describe('migration 21 (catégorie animaux)', () => {
+  it('accepte la catégorie et y range croquettes et litière sans perdre leurs lots', async () => {
+    const db = new NodeSqliteDb();
+    await db.execute('PRAGMA foreign_keys = ON');
+    await migrate(db, MIGRATIONS.slice(0, 20));
+    const item = (id: string, name: string, kcal: number | null) =>
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit, calories_per_unit)
+         VALUES (?, ?, 'food', 'kg', ?)`,
+        [id, name, kcal],
+      );
+    await item('a', 'Croquettes chien', 3600);
+    await item('b', 'Litière chat', null);
+    await item('c', 'Riz long grain', 3500);
+    await db.execute(
+      `INSERT INTO inventory_lots (id, item_id, quantity, acquired_at)
+       VALUES ('l1', 'a', 12, '2026-01-01')`,
+    );
+
+    expect(await migrate(db)).toEqual({ from: 20, to: SCHEMA_VERSION });
+
+    expect(
+      (
+        await db.execute(
+          'SELECT id, category, subtype, calories_per_unit FROM inventory_items ORDER BY id',
+        )
+      ).rows,
+    ).toEqual([
+      { id: 'a', category: 'pets', subtype: 'food', calories_per_unit: null },
+      { id: 'b', category: 'pets', subtype: 'litter', calories_per_unit: null },
+      { id: 'c', category: 'food', subtype: null, calories_per_unit: 3500 },
+    ]);
+    expect(
+      (await db.execute('SELECT item_id FROM inventory_lots')).rows,
+    ).toEqual([{ item_id: 'a' }]);
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit) VALUES ('d', 'Pâtée', 'pets', 'kg')`,
+    );
+    await expect(
+      db.execute(
+        `INSERT INTO inventory_items (id, name, category, unit) VALUES ('x', 'X', 'nope', 'unit')`,
+      ),
+    ).rejects.toThrow(/constraint/i);
+  });
+});

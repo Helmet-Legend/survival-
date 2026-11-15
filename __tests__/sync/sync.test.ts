@@ -458,7 +458,11 @@ describe('synchronisation entre deux téléphones', () => {
     expect((await attempt({ ...pa, format: 1 })).code).toBe(
       'UNSUPPORTED_FORMAT',
     );
-    expect((await attempt({ ...pa, format: 3 })).code).toBe(
+    // Format 2 : téléphone resté sur une version sans la catégorie Animaux.
+    expect((await attempt({ ...pa, format: 2 })).code).toBe(
+      'UNSUPPORTED_FORMAT',
+    );
+    expect((await attempt({ ...pa, format: 4 })).code).toBe(
       'UNSUPPORTED_FORMAT',
     );
     const future = encodeHlc({

@@ -125,6 +125,11 @@ export function toItemDraft(
             | 'perPortion')
         : undefined,
     storage: text(values, 'storage') as ItemAttributes['storage'],
+    // Ration : seulement pour la nourriture des animaux.
+    dailyRation:
+      category === 'pets' && text(values, 'subtype') === 'food'
+        ? number(values, 'dailyRation')
+        : undefined,
     dosage: text(values, 'dosage'),
     lotNumber: text(values, 'lotNumber'),
     brandModel: text(values, 'brandModel'),
@@ -250,6 +255,7 @@ export function valuesFromItem(item: InventoryItem): Values {
     energyValue: str(a.energyValue),
     energyBasis: a.energyBasis ?? 'per100g',
     storage: a.storage ?? '',
+    dailyRation: str(a.dailyRation),
     dosage: a.dosage ?? '',
     lotNumber: a.lotNumber ?? '',
     brandModel: a.brandModel ?? '',

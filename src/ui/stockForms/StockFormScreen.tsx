@@ -367,8 +367,8 @@ function StockForm(props: {
             error={errors[field.key]}
           />
         );
-      case 'number':
-        return (
+      case 'number': {
+        const row = (
           <TextRow
             key={key}
             icon={field.icon}
@@ -382,6 +382,16 @@ function StockForm(props: {
             error={errors[field.key]}
           />
         );
+        const hint = field.hint?.(values) ?? null;
+        return hint === null ? (
+          row
+        ) : (
+          <View key={key}>
+            {row}
+            <Text style={styles.fieldHint}>{hint}</Text>
+          </View>
+        );
+      }
       case 'select':
         if (field.dropdown) {
           return (
@@ -1081,6 +1091,13 @@ function ContainerCalculator(props: {
 }
 
 const styles = StyleSheet.create({
+  fieldHint: {
+    color: colors.success,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: space.xs,
+    marginLeft: space.s,
+  },
   screen: { flex: 1 },
   page: {
     paddingHorizontal: 16,
