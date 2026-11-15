@@ -25,6 +25,7 @@ import { addDays, assertIsoDate, daysBetween, localToday } from '../lib/dates';
 import { parseAttributes, type ItemAttributes } from '../inventory/attributes';
 import { caloriesPerUnit } from '../inventory/nutrition';
 import { BABY_NEEDS, CHILD_NEEDS } from './householdProfiles';
+import { loadPets, petsPotableWater } from './pets';
 export type { ItemCategory, ItemUnit };
 
 export interface HouseholdSettings {
@@ -39,6 +40,11 @@ export interface HouseholdSettings {
   babies?: number;
   /** Multiplicateur d'eau des enfants et bébés (scénario canicule). */
   waterFactor?: number;
+  /**
+   * Eau potable bue chaque jour par les animaux de Mon foyer (L), calculée
+   * à la lecture du foyer (jamais enregistrée ici).
+   */
+  petWaterLiters?: number;
 }
 
 export interface StockLot {
@@ -158,7 +164,8 @@ export function dailyWaterNeed(household: HouseholdSettings): number {
     adultsOf(household) * household.waterLitersPerPersonDay +
     ((household.children ?? 0) * CHILD_NEEDS.waterLiters +
       (household.babies ?? 0) * BABY_NEEDS.waterLiters) *
-      factor
+      factor +
+    (household.petWaterLiters ?? 0)
   );
 }
 
@@ -410,7 +417,35 @@ export async function loadHousehold(
     babies: values.get(SETTING_KEYS.babies) ?? 0,
   };
   assertHousehold(household);
+  // Animaux qui boivent l'eau potable (ou l'eau de cuve, s'il n'y en a pas).
+  const pets = await loadPets(db);
+  if (pets.length > 0) {
+    const raw = await rawWaterLiters(db);
+    const liters = petsPotableWater(pets, raw > 0);
+    if (liters > 0) {
+      household.petWaterLiters = Math.round(liters * 1000) / 1000;
+    }
+  }
   return household;
+}
+
+/**
+ * Litres d'eau non potable ou à traiter du stock général (eau de pluie,
+ * cuve), lots périmés compris : réserve possible pour les animaux.
+ */
+export async function rawWaterLiters(db: SqlDatabase): Promise<number> {
+  const { rows } = await db.execute(
+    `SELECT i.unit, i.attributes, l.quantity
+       FROM inventory_lots AS l
+       JOIN inventory_items AS i ON i.id = l.item_id
+      WHERE l.quantity > 0 AND i.category = 'water' AND i.bag_id IS NULL`,
+  );
+  return rows
+    .filter(r => !isDrinkable(parseAttributes<ItemAttributes>(r.attributes)))
+    .reduce(
+      (sum, r) => sum + Number(r.quantity) * (r.unit === 'mL' ? 0.001 : 1),
+      0,
+    );
 }
 
 export async function saveHousehold(

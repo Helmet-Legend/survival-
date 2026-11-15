@@ -7,6 +7,8 @@ import {
   type InventoryItem,
   type Weapon,
 } from '../../inventory';
+import { isPetFood, petFoodDays, petFoodRation } from '../../inventory/petFood';
+import { eatersOf, knownPets } from '../../resilience/pets';
 import { isoToFr } from '../../lib/dates';
 import { formatNumber, UNIT_LABELS, WEAPON_KIND_LABELS } from '../format';
 import { optionLabel } from './config';
@@ -68,7 +70,11 @@ export function itemTypeLabel(item: InventoryItem): string | null {
   return optionLabel(`${item.category}.subtype`, item.subtype);
 }
 
-export function itemFacts(item: InventoryItem): Fact[] {
+/**
+ * `usable` : quantité utilisable, pour l'autonomie de la nourriture des
+ * animaux (non calculée sans elle).
+ */
+export function itemFacts(item: InventoryItem, usable?: number): Fact[] {
   const a = item.attributes;
   const facts: Fact[] = [];
   push(facts, 'Type', itemTypeLabel(item));
@@ -107,6 +113,42 @@ export function itemFacts(item: InventoryItem): Fact[] {
             1,
           )}`,
     );
+  }
+  if (isPetFood(item)) {
+    const pets = knownPets();
+    const ration = petFoodRation(item, pets);
+    if (pets.length > 0) {
+      const eaters = eatersOf(pets, a.forPets).map(p => p.name);
+      push(
+        facts,
+        'Pour',
+        eaters.length === pets.length && pets.length > 1
+          ? `Tous (${eaters.join(', ')})`
+          : eaters.join(', '),
+      );
+    }
+    push(
+      facts,
+      'Ration journalière',
+      ration !== null
+        ? `${formatNumber(ration, 0)} g / jour`
+        : pets.length > 0
+        ? 'Aucune pour ces animaux : réglez-la dans Mon foyer'
+        : 'À renseigner : ajoutez l’animal dans Mon foyer',
+    );
+    // Les jours couverts s'affichent déjà en tête du détail ; ici, seulement
+    // ce qui manque pour les calculer.
+    if (
+      ration !== null &&
+      usable !== undefined &&
+      petFoodDays(item, usable, pets) === null
+    ) {
+      push(
+        facts,
+        'Autonomie',
+        'Indiquez le poids d’un paquet pour la calculer',
+      );
+    }
   }
   push(
     facts,

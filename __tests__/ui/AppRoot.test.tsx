@@ -2162,7 +2162,7 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
-  it('tient la nourriture des animaux à part, avec ses jours de ration', async () => {
+  it('tient la nourriture des animaux à part, avec les rations de Mon foyer', async () => {
     await openApp();
     await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
     await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
@@ -2170,11 +2170,44 @@ describe('écrans', () => {
     expect(await screen.findByText('Ajouter pour les animaux')).toBeTruthy();
     // Pas de valeur énergétique : jamais compté dans l'autonomie du foyer.
     expect(screen.queryByText('Valeur énergétique')).toBeNull();
-    // La ration n'existe que pour la nourriture.
-    expect(screen.queryByLabelText('Ration journalière')).toBeNull();
-    await fireEvent.press(
-      screen.getByRole('radio', { name: 'Croquettes / Pâtée' }),
+    await fireEvent.press(screen.getByRole('radio', { name: 'Croquettes' }));
+    // Sans animal dans Mon foyer : invitation à en ajouter un.
+    expect(
+      screen.getByText(
+        'Ajoutez l’animal et sa ration dans Mon foyer pour calculer l’autonomie.',
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('+ Ajouter un animal'));
+
+    // Mon foyer › Animaux
+    expect(await screen.findByText('Ration à renseigner')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Nom'), 'Rex');
+    await fireEvent(screen.getByLabelText('Nom'), 'endEditing');
+    await fireEvent.changeText(
+      screen.getByLabelText('Croquettes par jour'),
+      '300',
     );
+    await fireEvent(screen.getByLabelText('Croquettes par jour'), 'endEditing');
+    await fireEvent.changeText(screen.getByLabelText('Poids'), '20');
+    await fireEvent(screen.getByLabelText('Poids'), 'endEditing');
+    // Eau estimée d'après le poids, repère signalé.
+    expect(await screen.findByText(/60 mL par kg et par jour/)).toBeTruthy();
+    expect(
+      screen.getByText(/croquettes 300 g \/ jour · eau 1,2 L \(potable\)/),
+    ).toBeTruthy();
+    // L'eau potable de Rex s'ajoute au besoin du foyer.
+    expect(
+      screen.getByText(/eau potable des animaux comprise : 1,2 L/),
+    ).toBeTruthy();
+
+    // Retour à la fiche : les croquettes « Pour » Rex.
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(await screen.findByLabelText('+ Ajouter un article'));
+    await fireEvent.press(screen.getByLabelText('Ajouter : Animaux'));
+    await fireEvent.press(
+      await screen.findByRole('radio', { name: 'Croquettes' }),
+    );
+    expect(screen.getByRole('radio', { name: 'Rex' })).toBeTruthy();
     await fireEvent.changeText(
       screen.getByLabelText('Nom / Description, obligatoire'),
       'Croquettes chien',
@@ -2184,21 +2217,19 @@ describe('écrans', () => {
       '12',
     );
     await unit('kg');
-    await fireEvent.changeText(
-      screen.getByLabelText('Ration journalière'),
-      '300',
-    );
     expect(screen.getByText('Autonomie : 40 jours de nourriture')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
     expect(
       await screen.findByText('« Croquettes chien » enregistré.'),
     ).toBeTruthy();
     expect(await screen.findByText(/🐾 40 jours de nourriture/)).toBeTruthy();
+    await fireEvent.press(
+      await screen.findByLabelText('Croquettes chien, 12 kg'),
+    );
+    expect(await screen.findByText('300 g / jour')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Accueil' }));
-    expect(
-      await screen.findByText('Croquettes chien : 40 jours de nourriture'),
-    ).toBeTruthy();
+    expect(await screen.findByText('Rex : croquettes 40 j')).toBeTruthy();
   });
 
   it('ajoute un article dans sa catégorie et signale le champ invalide', async () => {

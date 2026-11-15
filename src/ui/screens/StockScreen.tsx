@@ -48,6 +48,7 @@ import {
   DEFAULT_EXPIRY_LEAD_DAYS,
   loadExpiryLead,
 } from '../../resilience/expiryLead';
+import { loadPets } from '../../resilience/pets';
 import {
   Button,
   Chip,
@@ -370,6 +371,8 @@ export function StockScreen() {
 
   const { data, error, reload } = useLoader(async () => {
     soonDays = await loadExpiryLead(db);
+    // Animaux de Mon foyer : jours de nourriture des aliments pour animaux.
+    await loadPets(db);
     // Le contenu des sacs d'évacuation reste dans son dossier.
     const all = (await repo.listItems({ bag: 'none' })) as ItemSummary[];
     const today = localToday();
@@ -1288,7 +1291,7 @@ function ItemDetail(props: {
       {},
     ),
   ).sort((a, b) => a.labelNo - b.labelNo);
-  const facts = itemFacts(item);
+  const facts = itemFacts(item, usable);
   const color = CATEGORY_COLORS[item.category];
   // Bidons, boîtes… de contenance connue : on compte les contenants.
   const packaged = container !== null && item.packageSize !== null;

@@ -37,8 +37,10 @@ import {
   getExpiryAlerts,
   getResilienceReport,
   loadTargetDays,
+  rawWaterLiters,
   type ExpiryAlert,
 } from '../../resilience/resilienceCalculator';
+import type { SqlDatabase } from '../../db/types';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
 import { AlertBanner } from '../components/AlertBanner';
 import { AutonomyGauge } from '../components/AutonomyGauge';
@@ -50,7 +52,12 @@ import {
   formatNumber,
   formatSince,
 } from '../format';
-import { petFoodDays, petFoodLabel } from '../../inventory/petFood';
+import {
+  petFoodDays,
+  petFoodLabel,
+  petFoodSummary,
+} from '../../inventory/petFood';
+import { loadPets, petsRawWater } from '../../resilience/pets';
 import { FoodIcon, PetsIcon, WaterIcon } from '../icons';
 import { useNavigation, type Navigation } from '../navigation';
 import {
@@ -147,10 +154,7 @@ export function HomeScreen() {
       backup,
       chargers: items.filter(isCharger),
       // Animaux : à part, jamais dans l'autonomie du foyer.
-      pets: items.flatMap(i => {
-        const days = petFoodDays(i, i.usableQuantity);
-        return days === null ? [] : [{ id: i.id, name: i.name, days }];
-      }),
+      pets: await petLines(db, items),
     };
   });
 
@@ -368,7 +372,7 @@ export function HomeScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Animaux : ${data.pets
-              .map(p => `${p.name}, ${petFoodLabel(p.days)}`)
+              .map(p => p.text)
               .join(' ; ')}. Ouvrir la section Animaux`}
             onPress={() => navigation.goTo('stock', { category: 'pets' })}
             style={({ pressed }) => [styles.pets, pressed && styles.pressed]}
@@ -377,8 +381,11 @@ export function HomeScreen() {
             <View style={styles.grow}>
               <Text style={styles.petsTitle}>Animaux</Text>
               {data.pets.map(p => (
-                <Text key={p.id} style={text.subtle}>
-                  {`${p.name} : ${petFoodLabel(p.days)}`}
+                <Text
+                  key={p.id}
+                  style={[text.subtle, p.warn && { color: colors.warning }]}
+                >
+                  {p.text}
                 </Text>
               ))}
             </View>
@@ -644,6 +651,59 @@ function compact(n: number): string {
   return n >= 1_000_000
     ? `${formatNumber(n / 1_000_000, 1)} M`
     : formatNumber(n, 0);
+}
+
+const shortDays = (d: number) => `${d} j`;
+
+/**
+ * Lignes du bloc Animaux : une par animal de Mon foyer (jours de croquettes
+ * et de pâtée), l'eau de pluie ou de cuve bue par les animaux, ou, sans
+ * animal enregistré, les aliments dont la fiche porte une ration.
+ */
+async function petLines(
+  db: SqlDatabase,
+  items: readonly ItemSummary[],
+): Promise<Array<{ id: string; text: string; warn: boolean }>> {
+  const pets = await loadPets(db);
+  if (pets.length === 0) {
+    return items.flatMap(i => {
+      const days = petFoodDays(i, i.usableQuantity, pets);
+      return days === null
+        ? []
+        : [
+            {
+              id: i.id,
+              text: `${i.name} : ${petFoodLabel(days)}`,
+              warn: false,
+            },
+          ];
+    });
+  }
+  const lines = petFoodSummary(items, pets).map(({ pet, lines: food }) => ({
+    id: pet.id,
+    warn: food.length === 0 || food.some(f => f.days === null),
+    text:
+      food.length === 0
+        ? `${pet.name} : ration à renseigner`
+        : `${pet.name} : ${food
+            .map(
+              f =>
+                `${f.subtype === 'wet' ? 'pâtée' : 'croquettes'} ${
+                  f.days === null ? 'aucun stock' : shortDays(f.days)
+                }`,
+            )
+            .join(' · ')}`,
+  }));
+  const raw = await rawWaterLiters(db);
+  const need = petsRawWater(pets, raw > 0);
+  if (need > 0) {
+    lines.push({
+      id: 'raw-water',
+      warn: false,
+      text: `Eau de pluie / cuve : ${shortDays(Math.floor(raw / need))}`,
+    });
+  }
+  return lines;
 }
 
 /** Une ressource dans la carte Autonomie : valeur et part de l'objectif. */

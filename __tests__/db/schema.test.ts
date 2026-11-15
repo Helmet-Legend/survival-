@@ -764,3 +764,23 @@ describe('migration 21 (catégorie animaux)', () => {
     ).rejects.toThrow(/constraint/i);
   });
 });
+
+describe('migration 22 (pâtée des animaux)', () => {
+  it('classe la pâtée à part des croquettes', async () => {
+    const db = new NodeSqliteDb();
+    await migrate(db, MIGRATIONS.slice(0, 21));
+    await db.execute(
+      `INSERT INTO inventory_items (id, name, category, unit, subtype)
+       VALUES ('a', 'Pâtée chat', 'pets', 'kg', 'food'),
+              ('b', 'Croquettes chien', 'pets', 'kg', 'food')`,
+    );
+    await migrate(db);
+    expect(
+      (await db.execute('SELECT id, subtype FROM inventory_items ORDER BY id'))
+        .rows,
+    ).toEqual([
+      { id: 'a', subtype: 'wet' },
+      { id: 'b', subtype: 'food' },
+    ]);
+  });
+});
