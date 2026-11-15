@@ -78,7 +78,7 @@ import {
 } from '../components/controls';
 import { formatNumber } from '../format';
 import { GUIDE_IMAGES } from '../guideImages';
-import { WaterIcon, type Icon as AppIcon } from '../icons';
+import { MushroomIcon, WaterIcon, type Icon as AppIcon } from '../icons';
 import { useNavigation } from '../navigation';
 import { SessionContext, useSession } from '../session';
 import { colors, radius, sizes, space, text, tint } from '../theme';
@@ -603,6 +603,21 @@ function FicheLinks(props: {
               onPress={() => {
                 props.onLeave();
                 navigation.openCrisis(link.scenario);
+              }}
+            />
+          );
+        }
+        if (link.kind === 'mushrooms') {
+          return (
+            <ModuleLink
+              key="mushrooms"
+              icon={MushroomIcon}
+              color={colors.health}
+              title="Reconnaître les champignons"
+              detail="40 espèces en photos, caractéristiques, intoxication"
+              onPress={() => {
+                props.onLeave();
+                navigation.open('mushrooms');
               }}
             />
           );

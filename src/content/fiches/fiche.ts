@@ -189,7 +189,8 @@ export type FicheLink =
   | { kind: 'waterStock' }
   | { kind: 'healthStock' }
   | { kind: 'crisis'; scenario: CrisisId }
-  | { kind: 'localRisks' };
+  | { kind: 'localRisks' }
+  | { kind: 'mushrooms' };
 
 /** Lignes « → » à écrire dans une fiche. */
 export const LINK = {
@@ -197,6 +198,7 @@ export const LINK = {
   healthStock: '→ trousse',
   crisis: (scenario: CrisisId) => `→ simulateur ${scenario}`,
   localRisks: '→ consignes-locales',
+  mushrooms: '→ champignons',
 } as const;
 
 function parseLink(target: string): FicheLink | null {
@@ -208,6 +210,9 @@ function parseLink(target: string): FicheLink | null {
   }
   if (target === 'consignes-locales') {
     return { kind: 'localRisks' };
+  }
+  if (target === 'champignons') {
+    return { kind: 'mushrooms' };
   }
   const crisis = /^simulateur (\w+)$/.exec(target);
   return crisis ? { kind: 'crisis', scenario: crisis[1] as CrisisId } : null;
