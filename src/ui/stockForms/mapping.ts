@@ -13,6 +13,7 @@ import type {
   WeaponKind,
 } from '../../inventory';
 import type { ItemAttributes } from '../../inventory/attributes';
+import { PET_FOOD_SUBTYPES } from '../../inventory/petFood';
 import { frToIso, isoToFr } from '../../lib/dates';
 import { parseDecimal } from '../format';
 import { FORMS, unitOptionFor, WATER_TREATED, type Values } from './config';
@@ -105,6 +106,9 @@ export function toItemDraft(
         ? 'accessory'
         : 'ammo'
       : undefined;
+  const petFood =
+    category === 'pets' &&
+    PET_FOOD_SUBTYPES.includes(text(values, 'subtype') ?? '');
   const attributes: ItemAttributes = {
     countUnit: unitOption.countUnit,
     recordType,
@@ -125,10 +129,12 @@ export function toItemDraft(
             | 'perPortion')
         : undefined,
     storage: text(values, 'storage') as ItemAttributes['storage'],
-    // Ration : seulement pour la nourriture des animaux.
-    dailyRation:
-      category === 'pets' && text(values, 'subtype') === 'food'
-        ? number(values, 'dailyRation')
+    // Ration (ancienne saisie) et animaux : seulement pour la nourriture
+    // des animaux.
+    dailyRation: petFood ? number(values, 'dailyRation') : undefined,
+    forPets:
+      petFood && text(values, 'forPets') !== 'all'
+        ? text(values, 'forPets')
         : undefined,
     dosage: text(values, 'dosage'),
     lotNumber: text(values, 'lotNumber'),
@@ -256,6 +262,7 @@ export function valuesFromItem(item: InventoryItem): Values {
     energyBasis: a.energyBasis ?? 'per100g',
     storage: a.storage ?? '',
     dailyRation: str(a.dailyRation),
+    forPets: a.forPets ?? 'all',
     dosage: a.dosage ?? '',
     lotNumber: a.lotNumber ?? '',
     brandModel: a.brandModel ?? '',

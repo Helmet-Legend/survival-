@@ -189,6 +189,48 @@ function Pill(props: {
 }
 
 /**
+ * Animaux qui mangent un aliment : « Tous » ou plusieurs noms. Valeur :
+ * `all`, ou identifiants séparés par des virgules.
+ */
+export function PetsRow(props: {
+  icon: Icon;
+  color: string;
+  label: string;
+  value: string;
+  pets: ReadonlyArray<{ id: string; name: string }>;
+  onChange: (value: string) => void;
+}) {
+  const ids =
+    props.value === '' || props.value === 'all' ? [] : props.value.split(',');
+  const toggle = (id: string) => {
+    const next = ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id];
+    props.onChange(next.length === 0 ? 'all' : next.join(','));
+  };
+  return (
+    <Row icon={props.icon} color={props.color}>
+      <Text style={styles.label}>{props.label}</Text>
+      <View accessibilityLabel={bare(props.label)} style={styles.pills}>
+        {props.pets.map(p => (
+          <Pill
+            key={p.id}
+            label={p.name}
+            selected={ids.includes(p.id)}
+            color={props.color}
+            onPress={() => toggle(p.id)}
+          />
+        ))}
+        <Pill
+          label="Tous"
+          selected={ids.length === 0}
+          color={props.color}
+          onPress={() => props.onChange('all')}
+        />
+      </View>
+    </Row>
+  );
+}
+
+/**
  * Choix parmi quelques options, affichées en pastilles : un appui choisit,
  * un second appui sur la même pastille efface le choix.
  */

@@ -1179,6 +1179,22 @@ const migration21: Migration = {
   ],
 };
 
+/**
+ * Pâtée des animaux : type à part des croquettes (rations distinctes dans
+ * Mon foyer). Les aliments nommés « pâtée » passent du type `food`
+ * (croquettes) au type `wet` ; changement journalisé et partagé.
+ */
+const migration22: Migration = {
+  version: 22,
+  name: 'pâtée des animaux',
+  statements: [
+    `UPDATE inventory_items
+     SET subtype = 'wet'
+     WHERE category = 'pets' AND subtype = 'food'
+       AND (lower(name) LIKE '%pâtée%' OR lower(name) LIKE '%patee%')`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -1201,6 +1217,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration19,
   migration20,
   migration21,
+  migration22,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

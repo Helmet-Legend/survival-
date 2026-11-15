@@ -15,7 +15,12 @@ import {
 import type { ItemCategory, ItemUnit } from '../../inventory';
 import type { CountUnit } from '../../inventory/attributes';
 import { CATEGORY_COLORS, CATEGORY_ICONS } from '../format';
-import { petFoodDays, petFoodLabel } from '../../inventory/petFood';
+import {
+  PET_FOOD_SUBTYPES,
+  petFoodDays,
+  petFoodLabel,
+} from '../../inventory/petFood';
+import { knownPets } from '../../resilience/pets';
 import { HYGIENE_SUBTYPES, PET_SUBTYPES } from '../itemProfiles';
 import {
   AlertIcon,
@@ -35,6 +40,7 @@ import {
   TagIcon,
   ToolIcon,
   VolumeIcon,
+  PetsIcon,
   WeightIcon,
   type Icon,
 } from '../icons';
@@ -91,6 +97,12 @@ export type Field =
       placeholder?: string;
     })
   | (Base & { type: 'threshold' })
+  /** Animaux de Mon foyer qui mangent cet aliment (fiche Animaux). */
+  | (Base & {
+      type: 'pets';
+      key: string;
+      hint?: (values: Values) => string | null;
+    })
   | (Base & {
       type: 'number';
       key: string;
@@ -657,8 +669,17 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         icon: WeightIcon,
         units: options('unitWeightUnit', [o('g', 'g'), o('kg', 'kg')]),
         placeholder: 'Ex : 12',
-        visible: v => v.subtype === 'food' && v.unit === 'package',
+        visible: v => isPetFoodType(v) && v.unit === 'package',
       },
+      {
+        type: 'pets',
+        key: 'forPets',
+        label: 'Pour',
+        icon: PetsIcon,
+        visible: isPetFoodType,
+        hint: petFoodHint,
+      },
+      // Ancienne saisie : seulement tant qu'aucun animal n'est dans Mon foyer.
       {
         type: 'number',
         key: 'dailyRation',
@@ -666,7 +687,8 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         icon: CaloriesIcon,
         placeholder: 'Ex : 300',
         suffix: 'g / jour',
-        visible: v => v.subtype === 'food',
+        visible: v =>
+          isPetFoodType(v) && knownPets().length === 0 && !!v.dailyRation,
         hint: petFoodHint,
       },
       {
@@ -943,7 +965,15 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
   ],
   medical: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
   hygiene: ['name', 'subtype', 'packaging', 'quantity', 'expiry', 'location'],
-  pets: ['subtype', 'name', 'quantity', 'unitWeight', 'dailyRation', 'expiry'],
+  pets: [
+    'subtype',
+    'name',
+    'quantity',
+    'unitWeight',
+    'forPets',
+    'dailyRation',
+    'expiry',
+  ],
   tool: ['name', 'quantity', 'condition'],
   energy: ['name', 'quantity', 'condition'],
   power: ['name', 'subtype', 'quantity', 'expiry'],
@@ -982,7 +1012,7 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
   hygiene: [],
   pets: [
     pick('Croquettes', { subtype: 'food', unit: 'kg' }),
-    pick('Pâtée', { subtype: 'food', unit: 'kg' }),
+    pick('Pâtée', { subtype: 'wet', unit: 'kg' }),
     pick('Litière', { subtype: 'litter', unit: 'kg' }),
   ],
   tool: [
@@ -1018,9 +1048,15 @@ export const COMMON_CALIBERS = [
   '7,62×39',
 ] as const;
 
+/** Croquettes ou pâtée (fiche Animaux). */
+function isPetFoodType(v: Values): boolean {
+  return PET_FOOD_SUBTYPES.includes(v.subtype);
+}
+
 /**
  * « Autonomie : 40 jours de nourriture », d'après la quantité saisie et la
- * ration (fiche Animaux, création). Rien tant qu'il manque une valeur.
+ * ration des animaux choisis (ou la ration saisie, sans animal). Sans animal
+ * ni ration : invitation à en ajouter un.
  */
 function petFoodHint(values: Values): string | null {
   const read = (key: string) => {
@@ -1029,21 +1065,26 @@ function petFoodHint(values: Values): string | null {
   };
   const amount = read('quantity');
   const unitOption = FORMS.pets.units.find(x => x.value === values.unit);
+  const item = {
+    category: 'pets' as const,
+    subtype: values.subtype || null,
+    unit: unitOption?.unit ?? ('kg' as const),
+    attributes: {
+      dailyRation: read('dailyRation'),
+      forPets: values.forPets || undefined,
+      unitWeight: read('unitWeight'),
+      unitWeightUnit:
+        values.unitWeightUnit === 'kg' ? ('kg' as const) : ('g' as const),
+    },
+  };
+  if (knownPets().length === 0 && item.attributes.dailyRation === undefined) {
+    return 'Ajoutez l’animal et sa ration dans Mon foyer pour calculer l’autonomie.';
+  }
   if (amount === undefined || unitOption === undefined) {
     return null;
   }
-  const days = petFoodDays(
-    {
-      category: 'pets',
-      subtype: values.subtype || null,
-      unit: unitOption.unit,
-      attributes: {
-        dailyRation: read('dailyRation'),
-        unitWeight: read('unitWeight'),
-        unitWeightUnit: values.unitWeightUnit === 'kg' ? 'kg' : 'g',
-      },
-    },
-    amount,
-  );
-  return days === null ? null : `Autonomie : ${petFoodLabel(days)}`;
+  const days = petFoodDays(item, amount);
+  return days === null
+    ? 'Aucune ration de ce type pour ces animaux : réglez-la dans Mon foyer.'
+    : `Autonomie : ${petFoodLabel(days)}`;
 }

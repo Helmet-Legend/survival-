@@ -18,6 +18,7 @@ import {
   dailyWaterNeed,
   loadHousehold,
   loadTargetDays,
+  rawWaterLiters,
   saveHousehold,
   saveTargetDays,
 } from '../../resilience/resilienceCalculator';
@@ -38,6 +39,8 @@ import { useNavigation } from '../navigation';
 import { useSession } from '../session';
 import { colors, sizes, space, text } from '../theme';
 import { useLoader } from '../useLoader';
+import { loadPets } from '../../resilience/pets';
+import { PetsPanel } from './PetsPanel';
 
 const MAX_MEMBERS = 12;
 
@@ -47,12 +50,14 @@ export function HouseholdScreen() {
   const { db } = useSession();
   const navigation = useNavigation();
   const { data, error, reload } = useLoader(async () => {
-    const [household, targetDays, whPerPerson] = await Promise.all([
+    const [household, targetDays, whPerPerson, pets, raw] = await Promise.all([
       loadHousehold(db),
       loadTargetDays(db),
       loadEnergyNeed(db),
+      loadPets(db),
+      rawWaterLiters(db),
     ]);
-    return { household, targetDays, whPerPerson };
+    return { household, targetDays, whPerPerson, pets, raw };
   });
 
   const title = (
@@ -73,7 +78,7 @@ export function HouseholdScreen() {
   if (data === null) {
     return <View style={styles.page}>{title}</View>;
   }
-  const { household, targetDays, whPerPerson } = data;
+  const { household, targetDays, whPerPerson, pets, raw } = data;
 
   const adults = adultsOf(household);
   const children = household.children ?? 0;
@@ -232,11 +237,18 @@ export function HouseholdScreen() {
           compter les jours couverts par vos batteries.
         </Text>
         <Text style={text.muted}>
-          Besoins du foyer ({household.members} pers.) :{' '}
-          {formatNumber(dailyWaterNeed(household))} L d’eau et{' '}
+          Besoins du foyer ({household.members} pers.
+          {household.petWaterLiters
+            ? `, eau potable des animaux comprise : ${formatNumber(
+                household.petWaterLiters,
+                2,
+              )} L`
+            : ''}
+          ) : {formatNumber(dailyWaterNeed(household))} L d’eau et{' '}
           {formatNumber(dailyKcalNeed(household), 0)} kcal par jour.
         </Text>
       </Panel>
+      <PetsPanel db={db} pets={pets} hasRawWater={raw > 0} onSaved={reload} />
     </ScrollView>
   );
 }

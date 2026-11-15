@@ -54,7 +54,8 @@ export const HYGIENE_SUBTYPES = [
 
 /** Types d'articles pour les animaux (fiche d'ajout Animaux). */
 export const PET_SUBTYPES = [
-  { id: 'food', label: 'Croquettes / Pâtée' },
+  { id: 'food', label: 'Croquettes' },
+  { id: 'wet', label: 'Pâtée' },
   { id: 'litter', label: 'Litière' },
   { id: 'care', label: 'Soins et médicaments' },
   { id: 'gear', label: 'Matériel (laisse, caisse…)' },

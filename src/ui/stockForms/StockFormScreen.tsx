@@ -70,9 +70,11 @@ import {
   DateRow,
   DropdownRow,
   MeasureRow,
+  PetsRow,
   Suggestions,
   TextRow,
 } from './FormRows';
+import { knownPets, loadPets, requestNewPet } from '../../resilience/pets';
 import {
   CATEGORY_ILLUSTRATIONS,
   ILLUSTRATION_FADE_SIDE,
@@ -97,6 +99,8 @@ export function StockFormScreen({ target }: { target: StockFormTarget }) {
   const { repo, armory, db } = useSession();
   const { data, error } = useLoader(async () => {
     const household = await loadHousehold(db).catch(() => null);
+    // Animaux de Mon foyer : choix « Pour » des aliments pour animaux.
+    await loadPets(db).catch(() => []);
     if (target.itemId) {
       return { household, item: (await repo.getItem(target.itemId)).item };
     }
@@ -599,6 +603,48 @@ function StockForm(props: {
           );
         }
         return quantityRow;
+      case 'pets': {
+        const pets = knownPets();
+        const hint = field.hint?.(values) ?? null;
+        return (
+          <View key={key}>
+            {pets.length > 0 ? (
+              <PetsRow
+                icon={field.icon}
+                color={color}
+                label={field.label}
+                value={values[field.key] ?? 'all'}
+                pets={pets}
+                onChange={set(field.key)}
+              />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  requestNewPet();
+                  navigation.open('household');
+                }}
+                style={({ pressed }) => [
+                  styles.addPet,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.addPetText}>+ Ajouter un animal</Text>
+              </Pressable>
+            )}
+            {hint === null ? null : (
+              <Text
+                style={[
+                  styles.fieldHint,
+                  hint.startsWith('Autonomie') ? null : styles.fieldHintWarn,
+                ]}
+              >
+                {hint}
+              </Text>
+            )}
+          </View>
+        );
+      }
       case 'threshold':
         return (
           <TextRow
@@ -1091,6 +1137,17 @@ function ContainerCalculator(props: {
 }
 
 const styles = StyleSheet.create({
+  fieldHintWarn: { color: colors.warning, fontWeight: '600' },
+  addPet: {
+    minHeight: sizes.touch,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.pets,
+  },
+  addPetText: { color: colors.pets, fontSize: 16, fontWeight: '700' },
   fieldHint: {
     color: colors.success,
     fontSize: 15,
