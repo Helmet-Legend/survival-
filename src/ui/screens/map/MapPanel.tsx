@@ -3,9 +3,15 @@
  * liste des zones gardées dans le coffre et le téléchargement d'une zone
  * autour du centre de la carte.
  */
-import { Download, Trash2 } from 'lucide-react-native';
+import {
+  Crosshair,
+  Download,
+  LocateFixed,
+  Plus,
+  Trash2,
+} from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Position } from '../../../device/location';
 import type { LatLon } from '../../../geo/geoConverter';
@@ -20,7 +26,14 @@ import {
   type DownloadProgress,
   type MapArea,
 } from '../../../geo/tiles';
-import type { Waypoint } from '../../../geo/waypoints';
+import {
+  WAYPOINT_LABELS,
+  WAYPOINT_TYPES,
+  type Waypoint,
+  type WaypointType,
+} from '../../../geo/waypoints';
+import { HELP_TIPS, useHelp } from '../../help';
+import { WAYPOINT_COLORS, WAYPOINT_ICONS } from './markers';
 import {
   Button,
   Chip,
@@ -70,6 +83,11 @@ export function MapPanel(props: {
   onLongPress: (at: LatLon) => void;
   onTouching: (touching: boolean) => void;
 }) {
+  const help = useHelp();
+  // « + Point » : choix du lieu, puis viseur au centre de la carte.
+  const [choosing, setChoosing] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [hidden, setHidden] = useState<WaypointType[]>([]);
   const session = useSession();
   const { tiles } = session;
   const { setView } = props;
@@ -182,6 +200,10 @@ export function MapPanel(props: {
     return null;
   }
   const plan = planArea(view.center, radius.km, radius.maxZoom);
+  // Types présents parmi les points : un filtre par type.
+  const types = WAYPOINT_TYPES.filter(t =>
+    (data?.points ?? []).some(p => p.type === t),
+  );
   const busy = progress !== null;
 
   return (
@@ -191,7 +213,7 @@ export function MapPanel(props: {
           store={tiles}
           view={view}
           onViewChange={setView}
-          points={data?.points ?? []}
+          points={(data?.points ?? []).filter(p => !hidden.includes(p.type))}
           here={props.here}
           onPointPress={props.onPointPress}
           onLongPress={props.onLongPress}
@@ -206,13 +228,52 @@ export function MapPanel(props: {
               .catch(() => undefined);
           }}
           locating={props.locating}
-          crosshair={picking}
+          crosshair={picking || placing}
           revision={revision}
           attribution={IGN_PLAN.attribution}
           height={380}
           onTouching={props.onTouching}
         />
-        {data && data.areas.length === 0 && !busy && !picking ? (
+        {placing ? (
+          <View style={styles.placeBar}>
+            <Text style={styles.placeHelp}>
+              Placez le viseur sur l’endroit voulu, puis « Placer ici ».
+            </Text>
+            <View style={styles.placeButtons}>
+              <Button
+                label="Annuler"
+                onPress={() => setPlacing(false)}
+                style={styles.grow}
+              />
+              <Button
+                variant="primary"
+                label="Placer ici"
+                onPress={() => {
+                  setPlacing(false);
+                  props.onLongPress(view.center);
+                }}
+                style={styles.grow}
+              />
+            </View>
+          </View>
+        ) : !picking && !busy ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter un point de repère"
+            onPress={() => {
+              help?.dismiss('mapPoints');
+              setChoosing(true);
+            }}
+            style={({ pressed }) => [
+              styles.addPoint,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Plus color={colors.onPrimary} size={20} strokeWidth={2.6} />
+            <Text style={styles.addPointText}>Point</Text>
+          </Pressable>
+        ) : null}
+        {data && data.areas.length === 0 && !busy && !picking && !placing ? (
           <View pointerEvents="none" style={styles.empty}>
             <Text style={styles.emptyTitle}>Aucune carte téléchargée</Text>
             <Text style={styles.emptyText}>
@@ -221,6 +282,81 @@ export function MapPanel(props: {
           </View>
         ) : null}
       </View>
+      {help && !help.seen.has('mapPoints') && !placing ? (
+        <View style={styles.tip}>
+          <Text style={[text.body, styles.grow]}>{HELP_TIPS.mapPoints}</Text>
+          <Button label="Compris" onPress={() => help.dismiss('mapPoints')} />
+        </View>
+      ) : null}
+      {choosing ? (
+        <Panel title="Où placer le point ?" accent={colors.primary}>
+          <Button
+            variant="primary"
+            icon={LocateFixed}
+            label={props.locating ? 'Recherche du GPS…' : 'Ma position'}
+            disabled={props.locating}
+            onPress={() => {
+              props
+                .locate()
+                .then(fix => {
+                  if (fix) {
+                    setChoosing(false);
+                    props.onLongPress(fix);
+                  }
+                })
+                .catch(() => undefined);
+            }}
+          />
+          <Button
+            icon={Crosshair}
+            label="Choisir sur la carte"
+            onPress={() => {
+              setChoosing(false);
+              setPlacing(true);
+            }}
+          />
+          <Text style={text.subtle}>
+            Sans GPS, choisissez sur la carte. Un appui long sur la carte place
+            aussi un point.
+          </Text>
+          <Button label="Annuler" onPress={() => setChoosing(false)} />
+        </Panel>
+      ) : null}
+      {types.length > 1 ? (
+        <View style={styles.filters}>
+          {types.map(t => {
+            const Icon = WAYPOINT_ICONS[t];
+            const on = !hidden.includes(t);
+            return (
+              <Pressable
+                key={t}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${on ? 'Masquer' : 'Afficher'} : ${
+                  WAYPOINT_LABELS[t]
+                }`}
+                onPress={() =>
+                  setHidden(on ? [...hidden, t] : hidden.filter(x => x !== t))
+                }
+                style={({ pressed }) => [
+                  styles.filter,
+                  on && { borderColor: WAYPOINT_COLORS[t] },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Icon
+                  color={on ? WAYPOINT_COLORS[t] : colors.textSubtle}
+                  size={16}
+                  strokeWidth={2.4}
+                />
+                <Text style={[styles.filterText, !on && styles.filterOff]}>
+                  {WAYPOINT_LABELS[t]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       <Text style={text.subtle}>
         Glissez pour déplacer, pincez ou + / − pour zoomer. Appui long : nouveau
         point à cet endroit.
@@ -404,6 +540,56 @@ export function MapPanel(props: {
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
+  addPoint: {
+    position: 'absolute',
+    right: space.m,
+    bottom: space.m,
+    minHeight: 56,
+    paddingHorizontal: space.l,
+    borderRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    backgroundColor: colors.primary,
+  },
+  addPointText: { color: colors.onPrimary, fontSize: 17, fontWeight: '800' },
+  placeBar: {
+    position: 'absolute',
+    left: space.s,
+    right: space.s,
+    bottom: space.s,
+    gap: space.s,
+    padding: space.s,
+    borderRadius: corners.m,
+    backgroundColor: tint(colors.bg, 'E6'),
+  },
+  placeHelp: { color: colors.text, fontSize: 14 },
+  placeButtons: { flexDirection: 'row', gap: space.s },
+  tip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    padding: space.m,
+    borderRadius: corners.m,
+    borderWidth: 2,
+    borderColor: colors.cyan,
+    backgroundColor: '#072431',
+  },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  filter: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.s,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  filterOff: { color: colors.textSubtle },
   page: { gap: space.m },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
   row: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },

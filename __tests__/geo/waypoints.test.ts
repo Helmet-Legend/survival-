@@ -1,5 +1,8 @@
 import { prepareDatabase } from '../../src/db/connection';
 import {
+  harvestLabel,
+  SENSITIVE_TYPES,
+  WAYPOINT_DEFAULT_NAMES,
   cardinal,
   describeFrom,
   formatDistance,
@@ -115,10 +118,41 @@ describe('points de repère', () => {
         label: 'Maison',
         type: 'home',
         notes: null,
+        harvestMonths: [],
         createdAt: '',
         latitude: 45.83265,
         longitude: 6.86518,
       }),
     ).toBe('Maison : 45.83265, 6.86518 · MGRS 32T LR 34199 77670');
+  });
+});
+
+describe('cueillette et grottes', () => {
+  it('garde les mois de récolte d’un point de cueillette, triés', async () => {
+    const repo = new WaypointRepository(await freshDb());
+    const pommiers = await repo.create({
+      label: 'Pommiers du chemin',
+      type: 'harvest',
+      harvestMonths: [10, 9, 9, 13],
+      latitude: 45.1,
+      longitude: 6.1,
+    });
+    expect(pommiers.harvestMonths).toEqual([9, 10]);
+    expect(harvestLabel(pommiers.harvestMonths)).toBe('Récolte : sep · oct');
+    // Les mois ne valent que pour la cueillette.
+    const grotte = await repo.update(pommiers.id, {
+      label: 'Grotte de la falaise',
+      type: 'cave',
+      harvestMonths: [9],
+      latitude: 45.1,
+      longitude: 6.1,
+    });
+    expect(grotte.harvestMonths).toEqual([]);
+    expect(SENSITIVE_TYPES.has('cave')).toBe(true);
+  });
+
+  it('propose un nom d’après le type', () => {
+    expect(WAYPOINT_DEFAULT_NAMES.harvest).toBe('Cueillette');
+    expect(WAYPOINT_DEFAULT_NAMES.water_source).toBe('Point d’eau');
   });
 });

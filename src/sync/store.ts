@@ -23,7 +23,8 @@ import {
 
 // 2 : catégorie Hygiène (un téléphone en format 1 ne la connaît pas).
 // 3 : catégorie Animaux.
-export const SYNC_FORMAT = 3;
+// 4 : points de cueillette et grottes (mois de récolte).
+export const SYNC_FORMAT = 4;
 
 /** Options de partage choisies par le foyer. */
 export interface SyncOptions {

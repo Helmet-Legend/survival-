@@ -462,7 +462,11 @@ describe('synchronisation entre deux téléphones', () => {
     expect((await attempt({ ...pa, format: 2 })).code).toBe(
       'UNSUPPORTED_FORMAT',
     );
-    expect((await attempt({ ...pa, format: 4 })).code).toBe(
+    // Format 3 : sans les points de cueillette et les grottes.
+    expect((await attempt({ ...pa, format: 3 })).code).toBe(
+      'UNSUPPORTED_FORMAT',
+    );
+    expect((await attempt({ ...pa, format: 5 })).code).toBe(
       'UNSUPPORTED_FORMAT',
     );
     const future = encodeHlc({

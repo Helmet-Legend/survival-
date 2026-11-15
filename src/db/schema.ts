@@ -1195,6 +1195,58 @@ const migration22: Migration = {
   ],
 };
 
+/**
+ * Points de repère : types « cueillette » (arbres fruitiers, plantes) et
+ * « grotte / souterrain », et mois de récolte d'un point de cueillette
+ * (`harvest_months` : numéros de 1 à 12 séparés par des virgules).
+ *
+ * La table est reconstruite pour élargir son CHECK ; le journal de
+ * synchronisation est coupé pendant la copie (`sync_meta.applying`) puis
+ * ses déclencheurs sont recréés : rien n'est renvoyé au foyer.
+ */
+const migration23: Migration = {
+  version: 23,
+  name: 'points : cueillette et grottes',
+  statements: [
+    `INSERT OR REPLACE INTO sync_meta (key, value) VALUES ('applying', 'migration 23')`,
+    'DROP TRIGGER trg_poi_locations_touch',
+    'DROP TRIGGER trg_sync_poi_locations_ai',
+    'DROP TRIGGER trg_sync_poi_locations_au',
+    'DROP TRIGGER trg_sync_poi_locations_ad',
+    `CREATE TABLE poi_locations_new (
+       id         TEXT PRIMARY KEY NOT NULL,
+       label      TEXT NOT NULL CHECK (length(trim(label)) > 0),
+       latitude   REAL NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+       longitude  REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+       mgrs       TEXT,
+       type       TEXT NOT NULL
+                  CHECK (type IN ('home', 'meeting', 'water_source', 'shelter',
+                                  'resource', 'cache', 'danger', 'other',
+                                  'harvest', 'cave')),
+       notes      TEXT,
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW},
+       harvest_months TEXT CHECK (harvest_months IS NULL
+                                  OR length(harvest_months) BETWEEN 1 AND 40)
+     ) STRICT`,
+    `INSERT INTO poi_locations_new (id, label, latitude, longitude, mgrs, type,
+       notes, created_at, updated_at)
+     SELECT id, label, latitude, longitude, mgrs, type, notes, created_at,
+       updated_at
+     FROM poi_locations`,
+    'DROP TABLE poi_locations',
+    'ALTER TABLE poi_locations_new RENAME TO poi_locations',
+    'CREATE INDEX idx_poi_locations_type ON poi_locations (type)',
+    touchTrigger('poi_locations'),
+    ...syncTriggers(
+      SYNC_SHARED.find(
+        t => t.table === 'poi_locations',
+      ) as (typeof SYNC_SHARED)[number],
+    ),
+    `DELETE FROM sync_meta WHERE key = 'applying'`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -1218,6 +1270,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration20,
   migration21,
   migration22,
+  migration23,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

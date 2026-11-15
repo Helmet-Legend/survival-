@@ -1,9 +1,11 @@
 /** Icônes, couleurs et flèche de direction des points de repère. */
 import {
+  Apple,
   Archive,
   Droplet,
   House,
   MapPin,
+  Mountain,
   ShoppingBasket,
   Tent,
   TriangleAlert,
@@ -26,17 +28,23 @@ export const WAYPOINT_ICONS: Record<WaypointType, LucideIcon> = {
   cache: Archive,
   danger: TriangleAlert,
   other: MapPin,
+  harvest: Apple,
+  cave: Mountain,
 };
 
 export const WAYPOINT_COLORS: Record<WaypointType, string> = {
-  home: colors.primary,
+  // Cyan : l'orange reste réservé aux boutons d'action.
+  home: colors.cyan,
   meeting: colors.purple,
   water_source: colors.water,
   shelter: colors.equipment,
   resource: colors.food,
   cache: colors.tools,
   danger: colors.danger,
-  other: colors.cyan,
+  other: colors.cyanSoft,
+  // Brun terre et gris pierre, hors des couleurs d'état.
+  harvest: '#C08457',
+  cave: '#8D99A6',
 };
 
 /**

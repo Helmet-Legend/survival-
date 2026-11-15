@@ -23,6 +23,8 @@ export const WAYPOINT_TYPES = [
   'cache',
   'danger',
   'other',
+  'harvest',
+  'cave',
 ] as const;
 
 export type WaypointType = (typeof WAYPOINT_TYPES)[number];
@@ -36,18 +38,63 @@ export const WAYPOINT_LABELS: Record<WaypointType, string> = {
   cache: 'Cache',
   danger: 'Danger',
   other: 'Autre',
+  harvest: 'Cueillette',
+  cave: 'Grotte / souterrain',
 };
+
+/** Nom proposé à la création, d'après le type (modifiable). */
+export const WAYPOINT_DEFAULT_NAMES: Record<WaypointType, string> = {
+  home: 'Domicile',
+  meeting: 'Point de regroupement',
+  water_source: 'Point d’eau',
+  shelter: 'Abri',
+  resource: 'Ravitaillement',
+  cache: 'Cache',
+  danger: 'Danger',
+  other: 'Point',
+  harvest: 'Cueillette',
+  cave: 'Grotte',
+};
+
+export const MONTH_LABELS = [
+  'Jan',
+  'Fév',
+  'Mar',
+  'Avr',
+  'Mai',
+  'Juin',
+  'Juil',
+  'Août',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Déc',
+] as const;
+
+/** « Récolte : sep · oct », ou null sans mois. */
+export function harvestLabel(months: readonly number[]): string | null {
+  return months.length === 0
+    ? null
+    : `Récolte : ${months
+        .map(m => MONTH_LABELS[m - 1].toLowerCase())
+        .join(' · ')}`;
+}
 
 /**
  * Types à ne pas exposer : pas de coordonnées dans un aperçu ni de partage
  * sans confirmation.
  */
-export const SENSITIVE_TYPES: ReadonlySet<WaypointType> = new Set(['cache']);
+export const SENSITIVE_TYPES: ReadonlySet<WaypointType> = new Set([
+  'cache',
+  'cave',
+]);
 
 export interface WaypointInput extends LatLon {
   label: string;
   type: WaypointType;
   notes?: string | null;
+  /** Mois de récolte (1 à 12), pour un point de cueillette. */
+  harvestMonths?: readonly number[];
 }
 
 export interface Waypoint extends LatLon {
@@ -55,6 +102,8 @@ export interface Waypoint extends LatLon {
   label: string;
   type: WaypointType;
   notes: string | null;
+  /** Mois de récolte (1 à 12), triés ; vide hors cueillette. */
+  harvestMonths: number[];
   /** Point issu du plan familial, modifiable seulement là-bas. */
   fromPlan?: boolean;
   createdAt: string;
@@ -94,10 +143,17 @@ function validate(input: WaypointInput) {
   } catch {
     // Zone polaire : pas de MGRS, les degrés suffisent.
   }
+  const months =
+    input.type === 'harvest'
+      ? [...new Set(input.harvestMonths ?? [])]
+          .filter(m => Number.isInteger(m) && m >= 1 && m <= 12)
+          .sort((a, b) => a - b)
+      : [];
   return {
     label,
     type: input.type,
     notes: notes === '' ? null : notes,
+    harvestMonths: months.length === 0 ? null : months.join(','),
     latitude,
     longitude,
     mgrs,
@@ -110,6 +166,13 @@ function toWaypoint(row: SqlRow): Waypoint {
     label: String(row.label),
     type: String(row.type) as WaypointType,
     notes: row.notes === null ? null : String(row.notes),
+    harvestMonths:
+      typeof row.harvest_months === 'string' && row.harvest_months !== ''
+        ? row.harvest_months
+            .split(',')
+            .map(Number)
+            .filter(m => m >= 1 && m <= 12)
+        : [],
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
     createdAt: String(row.created_at),
@@ -150,9 +213,19 @@ export class WaypointRepository {
     }
     const id = this.newId();
     await this.db.execute(
-      `INSERT INTO poi_locations (id, label, latitude, longitude, mgrs, type, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, v.label, v.latitude, v.longitude, v.mgrs, v.type, v.notes],
+      `INSERT INTO poi_locations (id, label, latitude, longitude, mgrs, type, notes,
+         harvest_months)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        v.label,
+        v.latitude,
+        v.longitude,
+        v.mgrs,
+        v.type,
+        v.notes,
+        v.harvestMonths,
+      ],
     );
     return (await this.get(id)) as Waypoint;
   }
@@ -161,9 +234,19 @@ export class WaypointRepository {
     const v = validate(input);
     await this.db.execute(
       `UPDATE poi_locations
-          SET label = ?, latitude = ?, longitude = ?, mgrs = ?, type = ?, notes = ?
+          SET label = ?, latitude = ?, longitude = ?, mgrs = ?, type = ?, notes = ?,
+              harvest_months = ?
         WHERE id = ?`,
-      [v.label, v.latitude, v.longitude, v.mgrs, v.type, v.notes, id],
+      [
+        v.label,
+        v.latitude,
+        v.longitude,
+        v.mgrs,
+        v.type,
+        v.notes,
+        v.harvestMonths,
+        id,
+      ],
     );
     const updated = await this.get(id);
     if (updated === null) {
@@ -198,6 +281,7 @@ export function planWaypoints(plan: FamilyPlan): Waypoint[] {
         id,
         label: meeting.place.trim() === '' ? fallback : meeting.place.trim(),
         type: 'meeting',
+        harvestMonths: [],
         notes: null,
         fromPlan: true,
         createdAt: '',

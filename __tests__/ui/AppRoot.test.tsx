@@ -2485,6 +2485,25 @@ describe('écrans', () => {
     expect(await screen.findByText(/Aucune zone téléchargée/)).toBeTruthy();
   });
 
+  it('ajoute un point de cueillette depuis la carte, au viseur', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Position' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Carte' }));
+    expect(await screen.findByText(/« \+ Point »/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Ajouter un point de repère'));
+    await fireEvent.press(await screen.findByText('Choisir sur la carte'));
+    await fireEvent.press(await screen.findByText('Placer ici'));
+    expect(await screen.findByText('Nouveau point')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cueillette' }));
+    expect(screen.getByLabelText('Nom du point').props.value).toBe(
+      'Cueillette',
+    );
+    await fireEvent.press(screen.getByLabelText('Récolte en Sep'));
+    await fireEvent.press(screen.getByLabelText('Récolte en Oct'));
+    await fireEvent.press(screen.getByText('Enregistrer le point'));
+    expect(await screen.findByText('Récolte : sep · oct')).toBeTruthy();
+  });
+
   it('affiche les vraies quantités sur l’accueil, les stocks et les guides', async () => {
     await openApp();
     expect(

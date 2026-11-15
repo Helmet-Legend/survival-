@@ -34,6 +34,8 @@ import { WAYPOINT_COLORS, WAYPOINT_ICONS } from './markers';
 
 export const MAP_MIN_ZOOM = 5;
 export const MAP_MAX_ZOOM = 18;
+/** Distance à l'écran (px) sous laquelle deux points se regroupent. */
+const CLUSTER_PX = 30;
 
 export interface MapView {
   center: LatLon;
@@ -264,6 +266,41 @@ export function OfflineMap(props: {
       ? props.here.accuracy / metersPerPixel(props.here.latitude, view.zoom)
       : 0;
 
+  // Points trop proches à l'écran : regroupés en une pastille qui zoome.
+  const singles: Waypoint[] = [];
+  const clusters: Array<{ left: number; top: number; points: Waypoint[] }> = [];
+  for (const point of props.points) {
+    const s = toScreen(point);
+    if (!visible(s)) {
+      continue;
+    }
+    const near =
+      view.zoom < MAP_MAX_ZOOM
+        ? clusters.find(
+            g => Math.hypot(g.left - s.left, g.top - s.top) < CLUSTER_PX,
+          ) ??
+          (() => {
+            const k = singles.findIndex(p => {
+              const o = toScreen(p);
+              return Math.hypot(o.left - s.left, o.top - s.top) < CLUSTER_PX;
+            });
+            if (k < 0) {
+              return undefined;
+            }
+            const [other] = singles.splice(k, 1);
+            const o = toScreen(other);
+            const group = { left: o.left, top: o.top, points: [other] };
+            clusters.push(group);
+            return group;
+          })()
+        : undefined;
+    if (near) {
+      near.points.push(point);
+    } else {
+      singles.push(point);
+    }
+  }
+
   return (
     <View
       style={[styles.frame, { height }]}
@@ -325,11 +362,29 @@ export function OfflineMap(props: {
             <View style={styles.hereDot} />
           </View>
         ) : null}
-        {props.points.map(point => {
+        {clusters.map(group => (
+          <View
+            key={`cluster-${group.points[0].id}`}
+            style={[styles.anchor, { left: group.left, top: group.top }]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${group.points.length} points proches : zoomer`}
+              hitSlop={6}
+              onPress={() =>
+                onViewChange({
+                  center: group.points[0],
+                  zoom: Math.min(MAP_MAX_ZOOM, view.zoom + 2),
+                })
+              }
+              style={styles.cluster}
+            >
+              <Text style={styles.clusterText}>{group.points.length}</Text>
+            </Pressable>
+          </View>
+        ))}
+        {singles.map(point => {
           const s = toScreen(point);
-          if (!visible(s)) {
-            return null;
-          }
           const Icon = WAYPOINT_ICONS[point.type];
           const color = WAYPOINT_COLORS[point.type];
           return (
@@ -433,6 +488,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  cluster: {
+    position: 'absolute',
+    top: -22,
+    left: -22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
+    borderColor: colors.text,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clusterText: { color: colors.text, fontSize: 16, fontWeight: '800' },
   anchor: { position: 'absolute', width: 0, height: 0, alignItems: 'center' },
   marker: {
     position: 'absolute',
