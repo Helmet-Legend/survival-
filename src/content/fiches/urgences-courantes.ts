@@ -148,6 +148,7 @@ export const URGENCES = [
       '- Dire l’heure du repas et celle des premiers signes, et garder la photo et les restes pour l’identification.',
       '✕ Se fier à une application de reconnaissance par photo.',
       '✕ Manger un champignon douteux, même cuit.',
+      LINK.mushrooms,
     ],
     {
       priority: 'importante',

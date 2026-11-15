@@ -131,3 +131,9 @@ export const PhotoIcon = fenrirIcon(
   '<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="m7 6 1.5-3h7L17 6"/>',
 );
 export const CheckIcon = fenrirIcon('check', '<path d="m5 12 4 4L19 6"/>');
+
+// Fiche Champignons : chapeau en dôme et pied.
+export const MushroomIcon = fenrirIcon(
+  'mushroom',
+  '<path d="M3 12.5a9 9 0 0 1 18 0Z"/><path d="M9.5 12.5v6.2a2.5 2.5 0 0 0 5 0v-6.2"/><path d="M8 8.5h.01M12.5 6.5h.01M16 9h.01"/>',
+);
