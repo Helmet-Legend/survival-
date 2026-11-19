@@ -5,6 +5,14 @@
  */
 import { NativeModules, Platform } from 'react-native';
 
+/** PDF importé : ses pages converties en JPEG base64 sur le téléphone. */
+export interface ImportedPdf {
+  name: string;
+  /** Pages du fichier (peut dépasser `pages.length` si le PDF est long). */
+  pageCount: number;
+  pages: string[];
+}
+
 export interface PhotoSource {
   available: boolean;
   take(): Promise<string | null>;
@@ -15,12 +23,18 @@ export interface PhotoSource {
    * Absent sans ce scanner (téléphone sans services Google).
    */
   scan?(maxPages: number): Promise<string[] | null>;
+  /**
+   * PDF choisi dans les fichiers du téléphone, au plus `maxPages` pages,
+   * ou null si annulé. Absent dans les tests et l'aperçu web.
+   */
+  pickPdf?(maxPages: number): Promise<ImportedPdf | null>;
 }
 
 interface NativePhotoModule {
   takePhoto(): Promise<string | null>;
   pickPhoto(): Promise<string | null>;
   scanDocument?(maxPages: number): Promise<string[] | null>;
+  pickPdf?(maxPages: number): Promise<ImportedPdf | null>;
   canScanDocuments?: boolean;
   getConstants?(): { canScanDocuments?: boolean };
 }
@@ -58,6 +72,7 @@ export function nativePhotoSource(): PhotoSource {
     };
   }
   const scanDocument = native.scanDocument;
+  const pickPdf = native.pickPdf;
   const canScan =
     scanDocument !== undefined &&
     (native.canScanDocuments ??
@@ -71,6 +86,12 @@ export function nativePhotoSource(): PhotoSource {
       ? {
           scan: (maxPages: number) =>
             whileAway(() => scanDocument.call(native, maxPages)),
+        }
+      : {}),
+    ...(pickPdf !== undefined
+      ? {
+          pickPdf: (maxPages: number) =>
+            whileAway(() => pickPdf.call(native, maxPages)),
         }
       : {}),
   };

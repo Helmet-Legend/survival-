@@ -7,12 +7,15 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.pdf.PdfRenderer
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -22,6 +25,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableNativeArray
+import com.facebook.react.bridge.WritableNativeMap
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
@@ -46,12 +50,17 @@ import kotlin.concurrent.thread
  * Scan de document : le scanner de Google Play (bords, redressement,
  * filtres, plusieurs pages), traité sur le téléphone. Absent sans les
  * services Google ; « Photographier » reste alors disponible.
+ *
+ * PDF : choisi dans les fichiers du téléphone, chaque page est convertie en
+ * image JPEG par le moteur PDF d'Android, sans réseau. Le fichier d'origine
+ * n'est pas copié.
  */
 class PhotoModule(private val context: ReactApplicationContext) :
     ReactContextBaseJavaModule(context), ActivityEventListener {
 
   private var pending: Promise? = null
   private var cameraFile: File? = null
+  private var pdfLimit = 30
   private val handler = Handler(Looper.getMainLooper())
 
   init {
@@ -204,6 +213,92 @@ class PhotoModule(private val context: ReactApplicationContext) :
     }
   }
 
+  /**
+   * PDF choisi dans les fichiers du téléphone : { name, pageCount, pages }
+   * (au plus `maxPages` pages, en JPEG base64), ou null si annulé.
+   */
+  @ReactMethod
+  fun pickPdf(maxPages: Double, promise: Promise) {
+    val activity = start(promise) ?: return
+    pdfLimit = maxPages.toInt().coerceIn(1, 100)
+    try {
+      val intent =
+          Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "application/pdf"
+            addCategory(Intent.CATEGORY_OPENABLE)
+          }
+      activity.startActivityForResult(intent, REQUEST_PDF)
+    } catch (e: Exception) {
+      fail("PICK_FAILED", e.message ?: "Sélection de fichier impossible")
+    }
+  }
+
+  private fun onPdfResult(resultCode: Int, data: Intent?) {
+    val promise = pending ?: return
+    pending = null
+    val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+    if (uri == null) {
+      promise.resolve(null)
+      return
+    }
+    val limit = pdfLimit
+    thread(name = "resilios-pdf") {
+      try {
+        promise.resolve(renderPdf(uri, limit))
+      } catch (e: SecurityException) {
+        promise.reject("PDF_PROTECTED", PDF_PROTECTED, e)
+      } catch (e: Exception) {
+        promise.reject("PDF_FAILED", e.message ?: "PDF illisible", e)
+      }
+    }
+  }
+
+  private fun renderPdf(uri: Uri, limit: Int): WritableNativeMap {
+    val resolver = context.contentResolver
+    val name =
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+          if (it.moveToFirst()) it.getString(0) else null
+        } ?: "document.pdf"
+    val descriptor =
+        resolver.openFileDescriptor(uri, "r") ?: throw IllegalArgumentException("PDF illisible")
+    // Le moteur PDF prend la main sur le descripteur et le ferme avec lui.
+    val renderer =
+        try {
+          PdfRenderer(descriptor)
+        } catch (e: Exception) {
+          descriptor.close()
+          throw e
+        }
+    try {
+      val total = renderer.pageCount
+      val pages = WritableNativeArray()
+      for (index in 0 until minOf(total, limit)) {
+        val page = renderer.openPage(index)
+        try {
+          val scale = PDF_MAX_SIDE.toFloat() / maxOf(page.width, page.height, 1)
+          val width = maxOf(1, (page.width * scale).toInt())
+          val height = maxOf(1, (page.height * scale).toInt())
+          val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+          bitmap.eraseColor(Color.WHITE)
+          page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+          val out = ByteArrayOutputStream()
+          bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+          bitmap.recycle()
+          pages.pushString(Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
+        } finally {
+          page.close()
+        }
+      }
+      return WritableNativeMap().apply {
+        putString("name", name)
+        putInt("pageCount", total)
+        putArray("pages", pages)
+      }
+    } finally {
+      renderer.close()
+    }
+  }
+
   override fun onActivityResult(
       activity: Activity,
       requestCode: Int,
@@ -212,6 +307,10 @@ class PhotoModule(private val context: ReactApplicationContext) :
   ) {
     if (requestCode == REQUEST_SCAN) {
       onScanResult(resultCode, data)
+      return
+    }
+    if (requestCode == REQUEST_PDF) {
+      onPdfResult(resultCode, data)
       return
     }
     if (requestCode != REQUEST_CAMERA && requestCode != REQUEST_PICK) {
@@ -359,6 +458,11 @@ class PhotoModule(private val context: ReactApplicationContext) :
     private const val REQUEST_SCAN = 0x5247
     private const val SCAN_START_TIMEOUT_MS = 20_000L
     private const val REQUEST_CAMERA_PERMISSION = 0x5248
+    private const val REQUEST_PDF = 0x5249
+    /** Pages de PDF : lisibles en zoomant, sans alourdir le coffre. */
+    private const val PDF_MAX_SIDE = 1800
+    private const val PDF_PROTECTED =
+        "Ce PDF est protégé par un mot de passe : Fenrir ne peut pas l’ouvrir."
     private const val CAMERA_DENIED =
         "Fenrir n’a pas l’autorisation d’utiliser l’appareil photo. Autorisez-la dans Réglages › Applications › Fenrir › Autorisations, ou choisissez une image dans la Galerie."
     private const val MAX_SIDE = 1600

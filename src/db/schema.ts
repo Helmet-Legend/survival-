@@ -1247,6 +1247,42 @@ const migration23: Migration = {
   ],
 };
 
+/**
+ * Mes fiches : fiches écrites par l'utilisateur (texte, photos, pages de
+ * PDF converties en images sur le téléphone), rangées dans une famille des
+ * fiches Fenrir ou dans aucune. Elles restent sur ce téléphone : pas de
+ * partage du foyer pour l'instant (aucun trigger de synchronisation).
+ */
+const migration24: Migration = {
+  version: 24,
+  name: 'mes fiches',
+  statements: [
+    `CREATE TABLE user_fiches (
+       id         TEXT PRIMARY KEY NOT NULL,
+       title      TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 120),
+       family     TEXT CHECK (family IS NULL OR length(family) BETWEEN 1 AND 60),
+       body       TEXT NOT NULL DEFAULT '' CHECK (length(body) <= 20000),
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('user_fiches'),
+    `CREATE TABLE user_fiche_images (
+       id          TEXT PRIMARY KEY NOT NULL,
+       fiche_id    TEXT NOT NULL REFERENCES user_fiches (id) ON DELETE CASCADE,
+       kind        TEXT NOT NULL CHECK (kind IN ('photo', 'pdf')),
+       pdf_id      TEXT,
+       pdf_name    TEXT CHECK (pdf_name IS NULL OR length(pdf_name) BETWEEN 1 AND 200),
+       page        INTEGER NOT NULL DEFAULT 0 CHECK (page >= 0),
+       data_base64 TEXT NOT NULL CHECK (length(data_base64) > 0),
+       created_at  TEXT NOT NULL DEFAULT ${NOW},
+       CHECK ((kind = 'photo' AND pdf_id IS NULL AND pdf_name IS NULL)
+              OR (kind = 'pdf' AND pdf_id IS NOT NULL AND pdf_name IS NOT NULL))
+     ) STRICT`,
+    `CREATE INDEX idx_user_fiche_images_fiche
+       ON user_fiche_images (fiche_id, kind, pdf_id, page)`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -1271,6 +1307,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration21,
   migration22,
   migration23,
+  migration24,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

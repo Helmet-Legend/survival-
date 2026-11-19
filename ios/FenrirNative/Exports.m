@@ -62,6 +62,9 @@ RCT_EXTERN_METHOD(pickPhoto:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(scanDocument:(double)maxPages
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(pickPdf:(double)maxPages
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
 @end
 
 @interface RCT_EXTERN_MODULE(ResiliosScanner, NSObject)

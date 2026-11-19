@@ -36,7 +36,7 @@ export const HELP_TIPS: Record<HelpId, string> = {
   prepare:
     'Tout ce qui sert à se préparer : votre foyer, le kit et le matériel, le plan d’action, les achats, la pharmacie, le plan familial, le simulateur de crise et les calculateurs.',
   guides:
-    'Les consignes de survie, lisibles sans réseau. Cherchez par mot-clé ou ouvrez une famille. Les fiches réflexes (hémorragie, arrêt cardiaque…) sont aussi dans l’écran Urgence.',
+    'Les consignes de survie, lisibles sans réseau. Cherchez par mot-clé ou ouvrez une famille. Les fiches réflexes (hémorragie, arrêt cardiaque…) sont aussi dans l’écran Urgence. « Mes fiches » accueille les vôtres : texte, photos et PDF.',
   map: 'Vos points de repère, la carte hors ligne, la boussole, vos coordonnées (GPS et MGRS) et l’azimut vers un point. Tout fonctionne sans réseau une fois la carte téléchargée.',
   emergency:
     'Les numéros d’urgence, le signal lumineux, votre position à envoyer par SMS et les fiches réflexes. Le coffre reste ouvert 2 minutes pendant un appel lancé ici.',

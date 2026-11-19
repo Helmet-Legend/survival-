@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Compass,
   DoorOpen,
+  FilePlus2,
   ExternalLink,
   Landmark,
   Timer,
@@ -62,6 +63,7 @@ import {
   setGuideCheck,
 } from '../../content/guideChecks';
 import { searchGuides, type BundledGuide } from '../../db/guides';
+import type { UserFiche } from '../../db/userFiches';
 import { isoToFr, localToday } from '../../lib/dates';
 import { crisisById } from '../../plan/crisis';
 import {
@@ -85,6 +87,13 @@ import { colors, radius, sizes, space, text, tint } from '../theme';
 import { useBack } from '../useBackHandler';
 import { useLoader } from '../useLoader';
 import { HelpBubble } from '../help';
+import {
+  UserFicheEditor,
+  UserFicheList,
+  UserFicheReader,
+  UserFicheRow,
+  useUserFiches,
+} from './fiches/UserFiches';
 
 interface GuideRow {
   slug: string;
@@ -157,6 +166,28 @@ export function GuidesScreen() {
   useBack(category !== null || query !== '', () =>
     query !== '' ? setQuery('') : setCategory(null),
   );
+  // Mes fiches : liste, fiche ouverte, saisie (« new » ou fiche modifiée).
+  const [mine, setMine] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<UserFiche | 'new' | null>(null);
+  useBack(mine || userId !== null || editing !== null, () => {
+    if (editing !== null) {
+      setEditing(null);
+    } else if (userId !== null) {
+      setUserId(null);
+    } else {
+      setMine(false);
+    }
+  });
+  const userFiches = useUserFiches();
+  const { data: own, reload: reloadOwn } = useLoader(
+    async () => ({
+      list: await userFiches.list(),
+      thumbs: await userFiches.thumbnails(),
+      hits: query.trim() === '' ? [] : await userFiches.search(query),
+    }),
+    [userFiches, query],
+  );
 
   const { data, error } = useLoader(async (): Promise<GuideRow[]> => {
     if (query.trim() === '') {
@@ -183,6 +214,56 @@ export function GuidesScreen() {
       priority: 'importante' as const,
     }));
   }, [query]);
+
+  if (editing !== null) {
+    return (
+      <UserFicheEditor
+        fiche={editing === 'new' ? null : editing}
+        styleOf={categoryStyle}
+        onCancel={() => setEditing(null)}
+        onSaved={id => {
+          setEditing(null);
+          setUserId(id);
+          void reloadOwn();
+        }}
+      />
+    );
+  }
+  if (userId !== null) {
+    return (
+      <UserFicheReader
+        key={userId}
+        id={userId}
+        styleOf={categoryStyle}
+        backLabel={
+          mine
+            ? 'Retour à mes fiches'
+            : query.trim() !== ''
+            ? 'Retour aux résultats'
+            : category !== null
+            ? `Retour : ${category}`
+            : undefined
+        }
+        onBack={() => setUserId(null)}
+        onEdit={fiche => setEditing(fiche)}
+        onDeleted={() => {
+          setUserId(null);
+          void reloadOwn();
+        }}
+      />
+    );
+  }
+  if (mine) {
+    return (
+      <UserFicheList
+        key={own?.list.length ?? 0}
+        styleOf={categoryStyle}
+        onBack={() => setMine(false)}
+        onOpen={setUserId}
+        onCreate={() => setEditing('new')}
+      />
+    );
+  }
 
   if (slug !== null) {
     return (
@@ -216,6 +297,17 @@ export function GuidesScreen() {
     searching || category === null
       ? data ?? []
       : (data ?? []).filter(g => g.category === category);
+  const ownByFamily = new Map<string, number>();
+  for (const f of own?.list ?? []) {
+    if (f.family !== null) {
+      ownByFamily.set(f.family, (ownByFamily.get(f.family) ?? 0) + 1);
+    }
+  }
+  const ownShown = searching
+    ? own?.hits ?? []
+    : category === null
+    ? []
+    : (own?.list ?? []).filter(f => f.family === category);
 
   return (
     <ScrollView
@@ -265,10 +357,33 @@ export function GuidesScreen() {
                 >
                   <IconTile icon={Icon} color={color} />
                   <Text style={styles.folderName}>{name}</Text>
-                  <Text style={styles.count}>{fiches(guides.length)}</Text>
+                  <Text style={styles.count}>
+                    {fiches(guides.length)}
+                    {ownByFamily.get(name)
+                      ? ` + ${ownByFamily.get(name)} perso`
+                      : ''}
+                  </Text>
                 </Pressable>
               );
             })}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Mes fiches, ${own?.list.length ?? 0}`}
+            onPress={() => setMine(true)}
+            style={({ pressed }) => [
+              styles.folder,
+              styles.folderMine,
+              pressed && styles.pressed,
+            ]}
+          >
+            <IconTile icon={FilePlus2} color={colors.text} />
+            <Text style={styles.folderName}>Mes fiches</Text>
+            <Text style={styles.count}>
+              {own?.list.length
+                ? fiches(own.list.length)
+                : 'Photos, textes, PDF'}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         shown.map(guide => {
@@ -305,8 +420,17 @@ export function GuidesScreen() {
           );
         })
       )}
+      {ownShown.map(f => (
+        <UserFicheRow
+          key={f.id}
+          fiche={f}
+          thumb={own?.thumbs.get(f.id)}
+          styleOf={categoryStyle}
+          onPress={() => setUserId(f.id)}
+        />
+      ))}
 
-      {data?.length === 0 ? (
+      {data?.length === 0 && ownShown.length === 0 ? (
         <EmptyState
           icon={SearchX}
           title="Aucune fiche ne correspond."
@@ -1069,6 +1193,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
   },
   folderName: { ...text.body, fontWeight: '700' },
+  folderMine: { borderStyle: 'dashed', borderColor: colors.cyan },
   pressed: { opacity: 0.82 },
   grow: { flex: 1, minWidth: 0 },
   count: { color: colors.text, fontSize: 15 },
