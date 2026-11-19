@@ -1,22 +1,31 @@
 import Foundation
+import PDFKit
 import PhotosUI
 import React
 import UIKit
+import UniformTypeIdentifiers
 import VisionKit
 
 /**
  * Photo d'un article, d'une arme ou d'un document : appareil photo ou
  * photothèque. L'image est réduite (côté le plus long ≤ 1 600 px), redressée
  * et rendue en JPEG base64 ; elle n'est gardée que dans le coffre chiffré.
+ *
+ * PDF : choisi dans Fichiers, chaque page est convertie en image par PDFKit,
+ * sans réseau ; la copie temporaire du fichier est effacée aussitôt.
  */
 @objc(ResiliosPhoto)
 class ResiliosPhoto: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate,
-  PHPickerViewControllerDelegate, VNDocumentCameraViewControllerDelegate
+  PHPickerViewControllerDelegate, VNDocumentCameraViewControllerDelegate,
+  UIDocumentPickerDelegate
 {
   private static let maxSide: CGFloat = 1600
   /** Pages de documents : assez fines pour être réimprimées en A4. */
   private static let scanMaxSide: CGFloat = 2500
   private var scanLimit = 30
+  private var pdfLimit = 30
+  /** Pages de PDF : lisibles en zoomant, sans alourdir le coffre. */
+  private static let pdfMaxSide: CGFloat = 1800
   private static let quality: CGFloat = 0.8
   private var resolve: RCTPromiseResolveBlock?
   private var reject: RCTPromiseRejectBlock?
@@ -169,6 +178,70 @@ class ResiliosPhoto: NSObject, UIImagePickerControllerDelegate, UINavigationCont
     provider.loadObject(ofClass: UIImage.self) { object, _ in
       DispatchQueue.main.async { self.finish(object as? UIImage) }
     }
+  }
+
+  /** PDF choisi dans Fichiers : { name, pageCount, pages }, ou null si annulé. */
+  @objc func pickPdf(
+    _ maxPages: Double, resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      guard let presenter = self.start(resolve, reject) else { return }
+      self.pdfLimit = max(1, Int(maxPages))
+      let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
+      picker.allowsMultipleSelection = false
+      picker.delegate = self
+      presenter.present(picker, animated: true)
+    }
+  }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    let done = resolve
+    let fail = reject
+    resolve = nil
+    reject = nil
+    guard let url = urls.first else {
+      done?(nil)
+      return
+    }
+    let limit = pdfLimit
+    DispatchQueue.global(qos: .userInitiated).async {
+      defer { try? FileManager.default.removeItem(at: url) }
+      guard let document = PDFDocument(url: url) else {
+        fail?("PDF_FAILED", "PDF illisible", nil)
+        return
+      }
+      if document.isLocked && !document.unlock(withPassword: "") {
+        fail?("PDF_PROTECTED", "Ce PDF est protégé par un mot de passe : Fenrir ne peut pas l’ouvrir.", nil)
+        return
+      }
+      var pages: [String] = []
+      for index in 0..<min(document.pageCount, limit) {
+        guard let page = document.page(at: index) else { continue }
+        let box = page.bounds(for: .mediaBox)
+        let turned = page.rotation % 180 != 0
+        let width = turned ? box.height : box.width
+        let height = turned ? box.width : box.height
+        let scale = ResiliosPhoto.pdfMaxSide / max(width, height, 1)
+        let image = page.thumbnail(
+          of: CGSize(width: width * scale, height: height * scale), for: .mediaBox)
+        if let data = image.jpegData(compressionQuality: ResiliosPhoto.quality) {
+          pages.append(data.base64EncodedString())
+        }
+      }
+      done?([
+        "name": url.lastPathComponent,
+        "pageCount": document.pageCount,
+        "pages": pages,
+      ])
+    }
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    let done = resolve
+    resolve = nil
+    reject = nil
+    done?(nil)
   }
 
   /** Réduit, redresse (orientation EXIF) et encode en JPEG base64. */

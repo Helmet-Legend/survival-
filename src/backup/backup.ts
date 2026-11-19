@@ -117,6 +117,8 @@ const TABLE_ORDER = [
   'preparation_marks',
   'barcode_products',
   'barcode_basket',
+  'user_fiches',
+  'user_fiche_images',
 ];
 
 /**
