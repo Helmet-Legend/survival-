@@ -1,6 +1,7 @@
 /**
- * Position : points de repère enregistrés, carte hors ligne, conversion de
- * coordonnées (MGRS, UTM, DMS) et calcul d'azimut vers un point MGRS. Tout
+ * Position : points de repère enregistrés, carte hors ligne, boussole,
+ * conversion de coordonnées (MGRS, UTM, DMS) et calcul d'azimut vers un
+ * point MGRS. Tout
  * est calculé sur l'appareil, sans réseau ; la position vient du GPS du
  * téléphone, à la demande. Seul le téléchargement d'une carte utilise
  * internet, quand on le demande.
@@ -54,6 +55,7 @@ import {
 } from '../components/controls';
 import type { Position } from '../../device/location';
 import { formatNumber, parseDecimal } from '../format';
+import { CompassView } from './map/CompassView';
 import { MapPanel } from './map/MapPanel';
 import type { MapView } from './map/OfflineMap';
 import { PointsView, type PointsRoute } from './map/PointsView';
@@ -62,11 +64,12 @@ import { colors, fonts, radius, sizes, space, text } from '../theme';
 import { useBack } from '../useBackHandler';
 import { HelpBubble } from '../help';
 
-type Mode = 'points' | 'map' | 'coords' | 'bearing';
+type Mode = 'points' | 'map' | 'compass' | 'coords' | 'bearing';
 
 const MODES: Array<[Mode, string]> = [
   ['points', 'Points'],
   ['map', 'Carte'],
+  ['compass', 'Boussole'],
   ['coords', 'Coordonnées'],
   ['bearing', 'Azimut'],
 ];
@@ -304,7 +307,7 @@ export function MapScreen() {
       scrollEnabled={!touchingMap}
     >
       <HelpBubble id="map" />
-      {/* Quatre modes sur une ligne, chacun à la largeur de son libellé. */}
+      {/* Cinq modes sur une ligne, chacun à la largeur de son libellé. */}
       <View style={styles.modes}>
         {MODES.map(([m, label]) => (
           <Pressable
@@ -364,6 +367,13 @@ export function MapScreen() {
             setMode('points');
           }}
           onTouching={setTouchingMap}
+        />
+      ) : mode === 'compass' ? (
+        <CompassView
+          here={here}
+          locate={measure}
+          locating={gps.state === 'locating'}
+          gpsError={gpsError}
         />
       ) : mode === 'coords' ? (
         <>
