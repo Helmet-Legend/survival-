@@ -86,6 +86,7 @@ import { useAlerts } from '../useAlerts';
 import { useLoader } from '../useLoader';
 import { backupAge, getBackupStatus } from '../../backup/lastBackup';
 import { HelpBubble } from '../help';
+import { WhatsNewBubble } from '../whatsNew';
 import {
   BATTERY_STATE,
   batteryTone,
@@ -193,6 +194,7 @@ export function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <WhatsNewBubble />
       <HelpBubble id="home" />
       {/* Alerte en cours : en premier, rouge ou orange. */}
       <AlertBanner

@@ -2,9 +2,16 @@
  * Photos d'une arme ou d'un document : vignettes, affichage en grand,
  * suppression confirmée, ajout depuis l'appareil photo ou la galerie. Pour
  * un document, le scanner du téléphone ajoute des pages nettes et
- * redressées.
+ * redressées, et un PDF du téléphone peut être importé page par page.
  */
-import { Camera, ImagePlus, ScanLine, Trash2, X } from 'lucide-react-native';
+import {
+  Camera,
+  FileText,
+  ImagePlus,
+  ScanLine,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Image,
@@ -17,6 +24,7 @@ import {
 } from 'react-native';
 
 import { photoLimit, type Photo, type PhotoOwner } from '../../inventory';
+import { pdfPagesToKeep } from '../../photo/pdfImport';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -36,6 +44,7 @@ export function PhotoStrip(props: {
   const [open, setOpen] = useState<Photo | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { data, reload } = useLoader(
     () => photos.list(props.owner, props.ownerId),
@@ -46,15 +55,28 @@ export function PhotoStrip(props: {
   const full = list.length >= limit;
   const isDocument = props.owner === 'document';
   const scan = isDocument ? photoSource.scan : undefined;
+  const pickPdf = isDocument ? photoSource.pickPdf : undefined;
 
-  const add = async (from: 'take' | 'pick' | 'scan') => {
+  const add = async (from: 'take' | 'pick' | 'scan' | 'pdf') => {
     setError(null);
+    setNotice(null);
     setBusy(true);
     try {
-      const images =
-        from === 'scan'
-          ? (await scan?.(limit - list.length)) ?? []
-          : [await photoSource[from]()].filter((b): b is string => b !== null);
+      const room = limit - list.length;
+      let images: string[];
+      if (from === 'pdf') {
+        const pdf = await pickPdf?.(room);
+        const kept = pdf ? pdfPagesToKeep(pdf, room) : null;
+        images = kept?.pages ?? [];
+        setNotice(kept?.notice ?? null);
+      } else {
+        images =
+          from === 'scan'
+            ? (await scan?.(room)) ?? []
+            : [await photoSource[from]()].filter(
+                (b): b is string => b !== null,
+              );
+      }
       for (const base64 of images) {
         await photos.add(props.owner, props.ownerId, base64);
       }
@@ -108,6 +130,7 @@ export function PhotoStrip(props: {
         </Text>
       )}
       {error ? <Notice tone="error" message={error} /> : null}
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {scan ? (
         <Button
           variant="primary"
@@ -143,6 +166,19 @@ export function PhotoStrip(props: {
               void add('pick');
             }}
           />
+          {pickPdf ? (
+            <Button
+              compact
+              variant="ghost"
+              icon={FileText}
+              label={busy ? 'Conversion…' : 'PDF'}
+              accessibilityLabel="Importer un PDF du téléphone"
+              disabled={busy || full}
+              onPress={() => {
+                void add('pdf');
+              }}
+            />
+          ) : null}
         </View>
       ) : null}
       {full ? (
@@ -215,6 +251,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   row: { flexDirection: 'row', gap: space.s, flexWrap: 'wrap' },
+  notice: { color: colors.warning, fontSize: 14, fontWeight: '600' },
   viewer: {
     flex: 1,
     backgroundColor: colors.bg,
