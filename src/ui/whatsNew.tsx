@@ -28,6 +28,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
   {
+    id: 3,
+    title: 'Filtre à eau, chauffage et cuisson',
+    items: [
+      'Un filtre ou des pastilles (Stocks → Matériel → Traitement de l’eau) ajoutent les jours d’eau que vous pouvez rendre potable, à part de l’autonomie garantie.',
+      'Bois, charbon et gaz (Stocks → Énergie) donnent vos jours de chauffage et de cuisson. La consommation par jour est proposée, et modifiable dans chaque fiche.',
+    ],
+  },
+  {
     id: 2,
     title: 'Documents en PDF',
     items: [

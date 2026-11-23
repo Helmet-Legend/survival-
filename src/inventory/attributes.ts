@@ -66,6 +66,8 @@ export const CAPACITY_UNITS = [
   'other',
 ] as const;
 export const RECORD_TYPES = ['ammo', 'accessory'] as const;
+/** Usage d'un combustible (bois, gaz, carburant). */
+export const FUEL_USES = ['heating', 'cooking', 'lighting'] as const;
 
 export interface ItemAttributes {
   countUnit?: CountUnit;
@@ -98,6 +100,10 @@ export interface ItemAttributes {
   capacityValue?: number;
   capacityUnit?: (typeof CAPACITY_UNITS)[number];
   weightDims?: string;
+  // Combustibles : usage et consommation par jour (kg ou L), pour le
+  // logement (chauffage) ou par personne (cuisson).
+  fuelUse?: (typeof FUEL_USES)[number];
+  dailyUse?: number;
 }
 
 /** Champs d'une arme (table `weapons`). */
@@ -141,6 +147,8 @@ const ITEM_RULES: Record<keyof ItemAttributes, Rule> = {
   nextServiceAt: { kind: 'date' },
   capacityValue: { kind: 'number' },
   capacityUnit: { kind: 'enum', values: CAPACITY_UNITS },
+  fuelUse: { kind: 'enum', values: FUEL_USES },
+  dailyUse: { kind: 'number' },
   weightDims: { kind: 'text', max: 120 },
 };
 

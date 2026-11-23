@@ -21,6 +21,11 @@ import {
   petFoodLabel,
 } from '../../inventory/petFood';
 import { knownPets } from '../../resilience/pets';
+import {
+  defaultDailyUse,
+  type FuelUse,
+  WATER_TREATMENT_SUBTYPE,
+} from '../../resilience/reserves';
 import { HYGIENE_SUBTYPES, PET_SUBTYPES } from '../itemProfiles';
 import {
   AlertIcon,
@@ -242,6 +247,49 @@ export const WATER_TREATED = (v: Values) =>
   v.treatment !== '' &&
   v.treatment !== 'none' &&
   v.treatment !== 'unknown';
+
+/** Combustible dont on compte les jours (bois, charbon, gaz, carburant). */
+export const IS_FUEL = (v: Values) =>
+  v.subtype === 'wood' || v.subtype === 'gas' || v.subtype === 'fuel';
+
+/** Usage choisi, ou celui proposé d'après le type et le nom. */
+export function fuelUseOf(v: Values): FuelUse {
+  if (v.fuelUse === 'heating' || v.fuelUse === 'cooking') {
+    return v.fuelUse;
+  }
+  if (v.fuelUse === 'lighting') {
+    return 'lighting';
+  }
+  if (v.subtype === 'gas') {
+    return 'cooking';
+  }
+  if (v.subtype === 'wood' && /charbon/i.test(v.name ?? '')) {
+    return 'cooking';
+  }
+  return 'heating';
+}
+
+const FUEL_BASE = (v: Values) =>
+  v.unit === 'L' || (v.unit !== 'kg' && v.capacityUnit === 'L') ? 'L' : 'kg';
+
+function dailyUseHint(v: Values): string {
+  const use = fuelUseOf(v);
+  const proposed = defaultDailyUse(
+    v.subtype ?? null,
+    use,
+    /charbon/i.test(v.name ?? ''),
+  );
+  const unit = FUEL_BASE(v);
+  const who = use === 'cooking' ? 'par personne' : 'pour le logement';
+  return `Vide : ${String(proposed).replace(
+    '.',
+    ',',
+  )} ${unit} par jour ${who}, valeur prudente. ${
+    use === 'cooking'
+      ? 'Charbon et barbecue : dehors uniquement.'
+      : 'Poêle dans une pièce aérée, détecteur de CO à piles.'
+  }`;
+}
 
 export const FORMS: Record<ItemCategory, FormConfig> = {
   water: {
@@ -775,6 +823,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
           o('navigation', 'Navigation'),
           o('transport', 'Transport'),
           o('protection', 'Protection'),
+          o(WATER_TREATMENT_SUBTYPE, 'Traitement de l’eau (filtre, pastilles)'),
           o('other', 'Autre'),
         ]),
       },
@@ -791,7 +840,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'measure',
         key: 'capacityValue',
         unitKey: 'capacityUnit',
-        label: 'Autonomie / Capacité',
+        label: 'Autonomie / Capacité (filtre : litres restants)',
         icon: BatteryIcon,
         units: options('capacityUnit', [
           o('Wh', 'Wh'),
@@ -857,6 +906,27 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
       },
       quantity,
       {
+        type: 'select',
+        key: 'fuelUse',
+        label: 'À quoi ça sert',
+        icon: EnergyIcon,
+        options: options('power.fuelUse', [
+          o('heating', 'Chauffage'),
+          o('cooking', 'Cuisson'),
+          o('lighting', 'Éclairage'),
+        ]),
+        visible: IS_FUEL,
+      },
+      {
+        type: 'number',
+        key: 'dailyUse',
+        label: 'Consommation par jour (facultatif)',
+        icon: Hash,
+        placeholder: 'Vide : valeur proposée',
+        visible: v => IS_FUEL(v) && fuelUseOf(v) !== 'lighting',
+        hint: dailyUseHint,
+      },
+      {
         type: 'date',
         key: 'expiry',
         label: 'Date de péremption',
@@ -867,7 +937,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         type: 'measure',
         key: 'capacityValue',
         unitKey: 'capacityUnit',
-        label: 'Capacité',
+        label: 'Capacité par unité (Wh, kg de gaz…)',
         icon: BatteryIcon,
         units: options('power.capacityUnit', [
           o('mAh', 'mAh'),
@@ -975,8 +1045,16 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
     'expiry',
   ],
   tool: ['name', 'quantity', 'condition'],
-  energy: ['name', 'quantity', 'condition'],
-  power: ['name', 'subtype', 'quantity', 'expiry'],
+  energy: ['name', 'subtype', 'quantity', 'capacityValue', 'condition'],
+  power: [
+    'name',
+    'subtype',
+    'quantity',
+    'capacityValue',
+    'fuelUse',
+    'dailyUse',
+    'expiry',
+  ],
 };
 
 /** Saisie rapide : un appui remplit le nom, le type et l'unité usuels. */
@@ -1028,11 +1106,23 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
     pick('Tente', { subtype: 'shelter', unit: 'piece' }),
     pick('Sac de couchage', { subtype: 'sleeping', unit: 'piece' }),
     pick('Radio', { subtype: 'communication', unit: 'piece' }),
+    pick('Filtre à eau', {
+      subtype: WATER_TREATMENT_SUBTYPE,
+      unit: 'piece',
+      capacityUnit: 'L',
+    }),
   ],
   power: [
     pick('Piles AA', { subtype: 'battery', unit: 'lot' }),
     pick('Batterie externe', { subtype: 'powerbank', unit: 'piece' }),
-    pick('Bouteille de gaz', { subtype: 'gas', unit: 'piece' }),
+    pick('Bouteille de gaz', {
+      subtype: 'gas',
+      unit: 'piece',
+      capacityValue: '13',
+      capacityUnit: 'kg',
+    }),
+    pick('Bois de chauffage', { subtype: 'wood', unit: 'kg' }),
+    pick('Charbon de bois', { subtype: 'wood', unit: 'kg' }),
     pick('Jerrican d’essence', { subtype: 'fuel', unit: 'L' }),
     pick('Bougies', { subtype: 'candle', unit: 'package' }),
   ],

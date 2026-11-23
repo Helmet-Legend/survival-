@@ -16,7 +16,13 @@ import type { ItemAttributes } from '../../inventory/attributes';
 import { PET_FOOD_SUBTYPES } from '../../inventory/petFood';
 import { frToIso, isoToFr } from '../../lib/dates';
 import { parseDecimal } from '../format';
-import { FORMS, unitOptionFor, WATER_TREATED, type Values } from './config';
+import {
+  FORMS,
+  IS_FUEL,
+  unitOptionFor,
+  WATER_TREATED,
+  type Values,
+} from './config';
 
 /** Erreur de saisie rattachée à un champ de la fiche. */
 export class FormError extends Error {
@@ -149,6 +155,15 @@ export function toItemDraft(
             'other') as ItemAttributes['capacityUnit'])
         : undefined,
     weightDims: text(values, 'weightDims'),
+    // Combustibles seulement : usage et consommation par jour.
+    fuelUse:
+      category === 'power' && IS_FUEL(values)
+        ? (text(values, 'fuelUse') as ItemAttributes['fuelUse'])
+        : undefined,
+    dailyUse:
+      category === 'power' && IS_FUEL(values)
+        ? number(values, 'dailyUse')
+        : undefined,
   };
   const subtype =
     recordType === 'accessory'
@@ -272,6 +287,8 @@ export function valuesFromItem(item: InventoryItem): Values {
     capacityValue: str(a.capacityValue),
     capacityUnit: a.capacityUnit ?? 'Wh',
     weightDims: a.weightDims ?? '',
+    fuelUse: a.fuelUse ?? '',
+    dailyUse: str(a.dailyUse),
   };
 }
 

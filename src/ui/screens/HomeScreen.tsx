@@ -42,6 +42,12 @@ import {
 } from '../../resilience/resilienceCalculator';
 import type { SqlDatabase } from '../../db/types';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
+import {
+  computeFuels,
+  computeWaterTreatment,
+  type FuelReport,
+  type WaterTreatmentReport,
+} from '../../resilience/reserves';
 import { AlertBanner } from '../components/AlertBanner';
 import { AutonomyGauge } from '../components/AutonomyGauge';
 import { Notice } from '../components/controls';
@@ -115,6 +121,7 @@ export function HomeScreen() {
       bagList,
       plan,
       backup,
+      rawWater,
     ] = await Promise.all([
       getResilienceReport(db, today),
       getExpiryAlerts(db, today),
@@ -126,8 +133,17 @@ export function HomeScreen() {
       bags.list(),
       loadPurchasePlan(db),
       getBackupStatus(db, today),
+      rawWaterLiters(db),
     ]);
     const energy = computeEnergy(items, report.household.members, whPerPerson);
+    // Réserves en plus, à part du chiffre d'autonomie : eau traitable,
+    // chauffage et cuisson.
+    const treatment = computeWaterTreatment(
+      items,
+      rawWater,
+      report.water.dailyNeed,
+    );
+    const fuels = computeFuels(items, report.household.members);
     // Partage du foyer : état de la synchronisation, si un téléphone est associé.
     const [peer] = await listPeers(db);
     const share = peer
@@ -149,6 +165,7 @@ export function HomeScreen() {
       targetDays,
       incompleteFood,
       energy,
+      reserves: reserveLines(treatment, fuels),
       readiness,
       plan,
       share,
@@ -432,6 +449,22 @@ export function HomeScreen() {
             : 'personne'}{' '}
           et par jour, péremptions comprises.
         </Text>
+        {data.reserves.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`En plus : ${data.reserves.join(
+              '. ',
+            )}. Ouvrir le plan`}
+            onPress={() => navigation.open('plan')}
+            style={styles.reserves}
+          >
+            {data.reserves.map(line => (
+              <Text key={line} style={styles.reserveText}>
+                {line}
+              </Text>
+            ))}
+          </Pressable>
+        ) : null}
         {data.share ? (
           <Pressable
             accessibilityRole="button"
@@ -926,6 +959,35 @@ const PHONE_STYLE: Record<BatteryTone, object> = {
   ok: { borderColor: colors.border, backgroundColor: colors.surfaceRaised },
 };
 
+/**
+ * Lignes « en plus » sous la carte d'autonomie, seulement si le stock
+ * contient un filtre ou un combustible : sinon l'accueil ne change pas.
+ */
+export function reserveLines(
+  treatment: WaterTreatmentReport,
+  fuels: FuelReport,
+): string[] {
+  const lines: string[] = [];
+  if (treatment.extraDays > 0) {
+    lines.push(
+      `Eau : + ${treatment.extraDays} j avec le traitement (${formatNumber(
+        treatment.rawLiters,
+      )} L à traiter)`,
+    );
+  }
+  const parts: string[] = [];
+  if (fuels.heatingDays !== null) {
+    parts.push(`chauffage ${fuels.heatingDays} j`);
+  }
+  if (fuels.cookingDays !== null) {
+    parts.push(`cuisson ${fuels.cookingDays} j`);
+  }
+  if (parts.length > 0) {
+    lines.push(`Combustibles : ${parts.join(' · ')}`);
+  }
+  return lines;
+}
+
 const styles = StyleSheet.create({
   // Cible d'au moins 44 px de haut, sans changer la ligne de titre.
   seeAll: { minHeight: 44, justifyContent: 'center', marginVertical: -12 },
@@ -1084,6 +1146,8 @@ const styles = StyleSheet.create({
   statUnit: { color: colors.textMuted, fontSize: 12 },
   statSub: { fontSize: 14, fontWeight: '700' },
   calc: { fontSize: 12 },
+  reserves: { gap: 2, paddingTop: space.xs },
+  reserveText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   share: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   shareDot: {
     width: 8,

@@ -8,6 +8,11 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { localToday } from '../../lib/dates';
 import { computeEnergy, loadEnergyNeed } from '../../resilience/energy';
+import {
+  computeFuels,
+  computeWaterTreatment,
+  type FuelLine,
+} from '../../resilience/reserves';
 import { SCENARIOS } from '../../resilience/scenarios';
 import {
   computeResilience,
@@ -15,6 +20,7 @@ import {
   getResilienceReport,
   loadConsumableLots,
   loadTargetDays,
+  rawWaterLiters,
   saveTargetDays,
   type ResourceAutonomy,
 } from '../../resilience/resilienceCalculator';
@@ -48,16 +54,25 @@ export function PlanScreen() {
   const [scenarioId, setScenarioId] = useState('normal');
   const { data, error, reload } = useLoader(async () => {
     const today = localToday();
-    const [report, alerts, restock, targetDays, lots, items, whPerPerson] =
-      await Promise.all([
-        getResilienceReport(db, today),
-        getExpiryAlerts(db, today),
-        getRestockPlan(db, today),
-        loadTargetDays(db),
-        loadConsumableLots(db),
-        repo.listItems({ bag: 'none' }),
-        loadEnergyNeed(db),
-      ]);
+    const [
+      report,
+      alerts,
+      restock,
+      targetDays,
+      lots,
+      items,
+      whPerPerson,
+      rawWater,
+    ] = await Promise.all([
+      getResilienceReport(db, today),
+      getExpiryAlerts(db, today),
+      getRestockPlan(db, today),
+      loadTargetDays(db),
+      loadConsumableLots(db),
+      repo.listItems({ bag: 'none' }),
+      loadEnergyNeed(db),
+      rawWaterLiters(db),
+    ]);
     return {
       today,
       report,
@@ -67,6 +82,7 @@ export function PlanScreen() {
       lots,
       items,
       whPerPerson,
+      rawWater,
     };
   });
 
@@ -98,6 +114,7 @@ export function PlanScreen() {
     lots,
     items,
     whPerPerson,
+    rawWater,
   } = data;
   const scenario = SCENARIOS.find(s => s.id === scenarioId) ?? SCENARIOS[0];
   const simulated = computeResilience(
@@ -109,6 +126,12 @@ export function PlanScreen() {
     items,
     simulated.household.members,
     whPerPerson * (scenario.energyFactor ?? 1),
+  );
+  const fuels = computeFuels(items, simulated.household.members);
+  const treatment = computeWaterTreatment(
+    items,
+    rawWater,
+    simulated.water.dailyNeed,
   );
   const status = autonomyStatus(report.days, targetDays);
 
@@ -174,6 +197,23 @@ export function PlanScreen() {
           need={`${formatNumber(simulated.water.dailyNeed)} L / jour`}
           limiting={simulated.limitingFactor === 'water'}
         />
+        {treatment.hasTreatment && treatment.rawLiters > 0 ? (
+          <ScenarioRow
+            label="Eau avec traitement (en plus)"
+            color={colors.cyanSoft}
+            days={treatment.extraDays}
+            need={`${formatNumber(
+              treatment.treatableLiters,
+            )} L traitables sur ${formatNumber(
+              treatment.rawLiters,
+            )} L à traiter${
+              treatment.limitedBy === 'capacity'
+                ? ' · limité par le filtre'
+                : ''
+            }`}
+            limiting={false}
+          />
+        ) : null}
         <ScenarioRow
           label="Vivres"
           color={colors.food}
@@ -188,6 +228,24 @@ export function PlanScreen() {
           need={`${formatNumber(energy.dailyNeed, 0)} Wh / jour`}
           limiting={false}
         />
+        {fuels.heatingDays !== null ? (
+          <ScenarioRow
+            label="Chauffage"
+            color={colors.warning}
+            days={fuels.heatingDays}
+            need={fuelNeed(fuels.lines, 'heating')}
+            limiting={false}
+          />
+        ) : null}
+        {fuels.cookingDays !== null ? (
+          <ScenarioRow
+            label="Cuisson"
+            color={colors.warning}
+            days={fuels.cookingDays}
+            need={fuelNeed(fuels.lines, 'cooking')}
+            limiting={false}
+          />
+        ) : null}
         <Text style={text.muted}>
           Autonomie du foyer dans ce scénario : {simulated.days} j (
           {simulated.limitingFactor === 'water' ? 'eau' : 'vivres'} limitante
@@ -206,19 +264,31 @@ export function PlanScreen() {
             fiche.
           </Text>
         ) : null}
-        {energy.fuels.length > 0 ? (
+        {treatment.hasTreatment && treatment.rawLiters === 0 ? (
           <Text style={text.subtle}>
-            Combustibles en stock, non convertis en jours (consommation propre à
-            chaque appareil) :{' '}
-            {energy.fuels
-              .map(
-                f =>
-                  `${f.name} ${formatNumber(f.quantity)} ${
-                    UNIT_LABELS[f.unit]
-                  }`,
-              )
-              .join(', ')}
-            .
+            Filtre ou pastilles en stock, mais aucune eau à traiter (cuve, eau
+            de pluie) : rien à compter en plus.
+          </Text>
+        ) : null}
+        {treatment.unknown.length > 0 ? (
+          <Text style={text.subtle}>
+            Traitement de l’eau sans capacité en litres, non compté :{' '}
+            {treatment.unknown.join(', ')}.
+          </Text>
+        ) : null}
+        {fuels.lines.length > 0 ? (
+          <Text style={text.subtle}>
+            Chauffage et cuisson : consommations de chaque fiche Énergie, ou
+            valeurs prudentes à défaut. Poêle et réchaud dans une pièce aérée,
+            barbecue et charbon dehors uniquement : risque de monoxyde de
+            carbone.
+          </Text>
+        ) : null}
+        {fuels.unknown.length > 0 ? (
+          <Text style={text.subtle}>
+            Quantité non convertible, non comptée : {fuels.unknown.join(', ')}.
+            Indiquez-la en kg ou en litres, ou la capacité par unité (ex. 13 kg
+            par bouteille).
           </Text>
         ) : null}
       </Panel>
@@ -337,6 +407,19 @@ export function PlanScreen() {
       </Text>
     </ScrollView>
   );
+}
+
+/** « Bois 12 kg/j · Gaz 0,3 kg/j » : ce que le foyer brûle par jour. */
+function fuelNeed(lines: readonly FuelLine[], use: FuelLine['use']): string {
+  return lines
+    .filter(l => l.use === use)
+    .map(
+      l =>
+        `${l.name} ${formatNumber(l.perDay)} ${l.base} / jour${
+          l.defaulted ? ' (proposé)' : ''
+        }`,
+    )
+    .join(' · ');
 }
 
 function ScenarioRow(props: {
