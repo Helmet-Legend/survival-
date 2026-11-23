@@ -8,6 +8,7 @@ import {
   Camera,
   Car,
   FileText,
+  FileUp,
   HeartPulse,
   IdCard,
   ImagePlus,
@@ -47,6 +48,7 @@ import {
   StatusChip,
 } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
+import { pdfPagesToKeep } from '../../photo/pdfImport';
 import { frToIso, isoToFr } from '../../lib/dates';
 import { formatDate } from '../format';
 import { useSession } from '../session';
@@ -265,17 +267,29 @@ function DocumentForm(props: {
   // enregistrées avec lui.
   const [pages, setPages] = useState<string[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canAddPages = props.doc === undefined && photoSource.available;
-  const addPages = async (from: 'scan' | 'take' | 'pick') => {
+  const addPages = async (from: 'scan' | 'take' | 'pick' | 'pdf') => {
     setPageError(null);
+    setPageNotice(null);
     setBusy(true);
     try {
       const room = DOCUMENT_PAGES_MAX - pages.length;
-      const images =
-        from === 'scan'
-          ? (await photoSource.scan?.(room)) ?? []
-          : [await photoSource[from]()].filter((b): b is string => b !== null);
+      let images: string[];
+      if (from === 'pdf') {
+        const pdf = await photoSource.pickPdf?.(room);
+        const kept = pdf ? pdfPagesToKeep(pdf, room) : null;
+        images = kept?.pages ?? [];
+        setPageNotice(kept?.notice ?? null);
+      } else {
+        images =
+          from === 'scan'
+            ? (await photoSource.scan?.(room)) ?? []
+            : [await photoSource[from]()].filter(
+                (b): b is string => b !== null,
+              );
+      }
       setPages(current => [...current, ...images].slice(0, DOCUMENT_PAGES_MAX));
     } catch (e) {
       setPageError(e instanceof Error ? e.message : String(e));
@@ -378,6 +392,7 @@ function DocumentForm(props: {
             <Text style={text.subtle}>Touchez une page pour la retirer.</Text>
           ) : null}
           {pageError ? <Text style={styles.error}>{pageError}</Text> : null}
+          {pageNotice ? <Text style={styles.notice}>{pageNotice}</Text> : null}
           {photoSource.scan ? (
             <Button
               variant="primary"
@@ -415,6 +430,23 @@ function DocumentForm(props: {
               }}
             />
           </View>
+          {photoSource.pickPdf ? (
+            <>
+              <Button
+                icon={FileUp}
+                label={busy ? 'Conversion des pages…' : 'Importer un PDF'}
+                accessibilityLabel="Importer un PDF du téléphone"
+                disabled={busy || pages.length >= DOCUMENT_PAGES_MAX}
+                onPress={() => {
+                  void addPages('pdf');
+                }}
+              />
+              <Text style={text.subtle}>
+                Attestation Vitale, avis d’imposition, PDF de la mutuelle… :
+                chaque page devient une image du coffre chiffré, sans internet.
+              </Text>
+            </>
+          ) : null}
         </View>
       ) : null}
       <Field
@@ -521,4 +553,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
   },
   error: { color: colors.danger },
+  notice: { color: colors.warning, fontSize: 14, fontWeight: '600' },
 });
