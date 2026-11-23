@@ -1,5 +1,6 @@
 import { prepareDatabase } from '../../src/db/connection';
 import {
+  latestNewsId,
   loadWhatsNewSeen,
   saveWhatsNewSeen,
   unseenNews,
@@ -23,6 +24,12 @@ describe('Nouveautés', () => {
     expect(unseenNews(5, all)).toEqual([]);
     expect(unseenNews(0, all).map(e => e.id)).toHaveLength(WHATS_NEW_SHOWN_MAX);
     expect(unseenNews(0, all)[0].id).toBe(5);
+  });
+
+  it('donne le numéro le plus récent', () => {
+    expect(latestNewsId([1, 3, 2].map(entry))).toBe(3);
+    expect(latestNewsId([])).toBe(0);
+    expect(latestNewsId()).toBe(WHATS_NEW[0].id);
   });
 
   it('garde le dernier numéro vu dans le coffre', async () => {

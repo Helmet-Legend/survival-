@@ -5,12 +5,17 @@
  *
  * Le dernier numéro vu est gardé dans le coffre (réglage `whats_new_seen`),
  * propre à chaque téléphone, comme les bulles d'aide.
+ *
+ * Un coffre neuf (bulle d'aide de l'accueil pas encore fermée) n'a rien de
+ * « nouveau » à découvrir : la bulle d'aide suffit, et les nouveautés
+ * actuelles sont marquées vues pour ne pas surgir juste après.
  */
 import { Sparkles } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { SqlDatabase } from '../db/types';
+import { useHelp } from './help';
 import { useSession } from './session';
 import { colors, radius, space, text } from './theme';
 
@@ -41,6 +46,13 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
 
 /** Entrées montrées au plus, pour garder la bulle courte. */
 export const WHATS_NEW_SHOWN_MAX = 3;
+
+/** Numéro de la nouveauté la plus récente (0 s'il n'y en a pas). */
+export function latestNewsId(
+  entries: readonly WhatsNewEntry[] = WHATS_NEW,
+): number {
+  return entries.reduce((max, e) => Math.max(max, e.id), 0);
+}
 
 /** Nouveautés pas encore vues, la plus récente en premier. */
 export function unseenNews(
@@ -77,10 +89,20 @@ export async function saveWhatsNewSeen(
 
 export function WhatsNewBubble() {
   const { db } = useSession();
+  const help = useHelp();
+  // Coffre neuf : connu une seule fois, au chargement des bulles d'aide.
+  const newVault = help === null ? null : !help.seen.has('home');
   const [news, setNews] = useState<WhatsNewEntry[]>([]);
 
   useEffect(() => {
+    if (newVault === null) {
+      return undefined;
+    }
     let live = true;
+    if (newVault) {
+      saveWhatsNewSeen(db, latestNewsId()).catch(() => undefined);
+      return undefined;
+    }
     loadWhatsNewSeen(db)
       .then(seen => {
         if (live) {
@@ -91,7 +113,10 @@ export function WhatsNewBubble() {
     return () => {
       live = false;
     };
-  }, [db]);
+    // Décidé une fois par ouverture : fermer l'aide ne fait pas surgir
+    // les nouveautés.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, newVault === null]);
 
   if (news.length === 0) {
     return null;
