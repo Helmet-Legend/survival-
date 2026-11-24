@@ -3061,6 +3061,86 @@ describe('écrans', () => {
   });
 });
 
+describe('bibliothèque', () => {
+  it('ajoute un PDF entier, le lit et reprend à la dernière page', async () => {
+    const file = Buffer.from('%PDF-1.7 guide de survie urbaine');
+    const written = new Map<string, Buffer>();
+    const closed: string[] = [];
+    let n = 0;
+    const pdf: NonNullable<PhotoSource['pdf']> = {
+      open: async () => {
+        written.set('picked', file);
+        return {
+          token: 'picked',
+          name: 'survie_urbaine.pdf',
+          pageCount: 380,
+          bytes: file.length,
+        };
+      },
+      begin: async () => {
+        const token = `t${n++}`;
+        written.set(token, Buffer.alloc(0));
+        return token;
+      },
+      append: async (token, base64) => {
+        written.set(
+          token,
+          Buffer.concat([written.get(token)!, Buffer.from(base64, 'base64')]),
+        );
+      },
+      load: async () => ({ pageCount: 380 }),
+      render: async (_t, from, count) =>
+        Array.from({ length: count }, () => 'QUJD'),
+      read: async (token, offset, length) =>
+        written
+          .get(token)!
+          .subarray(offset, offset + length)
+          .toString('base64'),
+      close: async token => {
+        closed.push(token);
+      },
+    };
+    const ctx = await existingVault();
+    await render(
+      <AppRoot
+        manager={ctx.manager}
+        content={content}
+        photoSource={{
+          available: true,
+          take: async () => null,
+          pick: async () => null,
+          pdf,
+        }}
+      />,
+    );
+    await unlockWith(MASTER);
+    await screen.findByText('Autonomie du foyer');
+    await fireEvent.press(screen.getByRole('tab', { name: 'Fiches' }));
+    await fireEvent.press(
+      await screen.findByLabelText('Bibliothèque, 0 livres'),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter un PDF'));
+    // Le livre ajouté s'ouvre : 380 pages, reconstitué à l'identique.
+    expect(await screen.findByText('1 / 380')).toBeTruthy();
+    expect(screen.getByText('survie urbaine')).toBeTruthy();
+    expect([...written.values()].some(b => b.equals(file) && b !== file)).toBe(
+      true,
+    );
+    await fireEvent.press(screen.getByLabelText('Avancer de 10 pages'));
+    expect(await screen.findByText('11 / 380')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Page suivante'));
+    expect(await screen.findByText('12 / 380')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Retour à la bibliothèque'));
+    expect(
+      await screen.findByText(/380 pages · .* · reprendre p\. 12/),
+    ).toBeTruthy();
+    expect(closed).toContain('picked');
+    await fireEvent.press(screen.getByLabelText(/^survie urbaine,/));
+    expect(await screen.findByText('12 / 380')).toBeTruthy();
+  });
+});
+
 describe('photos et documents', () => {
   const JPEG = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL';
 
@@ -3163,26 +3243,26 @@ describe('photos et documents', () => {
       await screen.findByLabelText('Documents : 0 document'),
     );
     await fireEvent.press(await screen.findByText('Ajouter un document'));
-    expect(screen.getByText('Pages du document (0 / 30)')).toBeTruthy();
+    expect(screen.getByText('Pages du document (0 / 100)')).toBeTruthy();
     await fireEvent.press(screen.getByText('Scanner le document'));
-    expect(await screen.findByText('Pages du document (2 / 30)')).toBeTruthy();
-    expect(scan).toHaveBeenLastCalledWith(30);
+    expect(await screen.findByText('Pages du document (2 / 100)')).toBeTruthy();
+    expect(scan).toHaveBeenLastCalledWith(100);
     // Une page retirée avant l'ajout.
     await fireEvent.press(screen.getByLabelText('Retirer la page 2'));
-    expect(await screen.findByText('Pages du document (1 / 30)')).toBeTruthy();
+    expect(await screen.findByText('Pages du document (1 / 100)')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Passeport' }));
     await fireEvent.press(screen.getByText('Ajouter le document'));
     expect(
       await screen.findByText('« Passeport » ajouté avec 1 page.'),
     ).toBeTruthy();
-    expect(screen.getByText('Pages et photos (1 / 30)')).toBeTruthy();
+    expect(screen.getByText('Pages et photos (1 / 100)')).toBeTruthy();
     expect(screen.getByLabelText('Page 1 de Passeport')).toBeTruthy();
 
     // D'autres pages depuis la fiche : le scanner reçoit la place restante.
     await fireEvent.press(screen.getByText('Scanner d’autres pages'));
     expect(await screen.findByLabelText('Page 3 de Passeport')).toBeTruthy();
-    expect(scan).toHaveBeenLastCalledWith(29);
+    expect(scan).toHaveBeenLastCalledWith(99);
   });
 
   it('enregistre un document et signale son renouvellement', async () => {
@@ -3228,7 +3308,7 @@ describe('photos et documents', () => {
     expect(screen.getByText('N° : 18AB12345')).toBeTruthy();
     await fireEvent.press(screen.getByText('Photographier'));
     expect(await screen.findByLabelText('Page 1 de Passeport')).toBeTruthy();
-    expect(screen.getByText('Pages et photos (1 / 30)')).toBeTruthy();
+    expect(screen.getByText('Pages et photos (1 / 100)')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Tous' }));
     expect(

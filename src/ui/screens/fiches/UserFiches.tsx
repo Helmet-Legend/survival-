@@ -40,6 +40,11 @@ import {
   type UserFicheSummary,
 } from '../../../db/userFiches';
 import { InventoryError } from '../../../inventory/inventoryRepository';
+import {
+  conversionLabel,
+  formatBytes,
+  imagesBytes,
+} from '../../../photo/pdfImport';
 import { isoToFr } from '../../../lib/dates';
 import {
   Button,
@@ -217,6 +222,10 @@ export function UserFicheEditor(props: {
     }
   };
 
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const addPdf = async () => {
     if (photoSource.pickPdf === undefined) {
       return;
@@ -224,7 +233,10 @@ export function UserFicheEditor(props: {
     setErrors({});
     setBusy(true);
     try {
-      const pdf = await photoSource.pickPdf(USER_FICHE_PDF_PAGES_MAX);
+      const pdf = await photoSource.pickPdf(
+        USER_FICHE_PDF_PAGES_MAX,
+        (done, total) => setProgress({ done, total }),
+      );
       if (pdf !== null) {
         if (pdf.pages.length === 0) {
           setErrors({ pdf: 'Aucune page lisible dans ce PDF.' });
@@ -244,6 +256,7 @@ export function UserFicheEditor(props: {
       setErrors({ pdf: message(e) });
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -403,7 +416,11 @@ export function UserFicheEditor(props: {
             </Text>
             <Text style={text.subtle}>
               {pdf.pageCount} page{pdf.pageCount > 1 ? 's' : ''}
-              {pdf.pages ? ' convertie' + (pdf.pageCount > 1 ? 's' : '') : ''}
+              {pdf.pages
+                ? ` convertie${pdf.pageCount > 1 ? 's' : ''} · ${formatBytes(
+                    imagesBytes(pdf.pages),
+                  )}`
+                : ''}
               {pdf.skipped
                 ? ` · ${pdf.skipped} page${
                     pdf.skipped > 1 ? 's' : ''
@@ -433,9 +450,10 @@ export function UserFicheEditor(props: {
         <>
           <Button
             icon={FileText}
-            label={
-              busy ? 'Conversion des pages…' : 'Joindre un PDF du téléphone'
-            }
+            label={conversionLabel(
+              progress,
+              busy ? 'Patientez…' : 'Joindre un PDF du téléphone',
+            )}
             disabled={busy || pdfs.length >= USER_FICHE_PDFS_MAX}
             onPress={() => {
               void addPdf();
@@ -444,7 +462,8 @@ export function UserFicheEditor(props: {
           <Text style={text.subtle}>
             Chaque page est convertie en image sur le téléphone, sans internet,
             puis chiffrée dans le coffre ({USER_FICHE_PDF_PAGES_MAX} pages au
-            plus par PDF).
+            plus par PDF). Pour un long guide ou un livre, utilisez plutôt la
+            Bibliothèque : le PDF y reste entier, sans limite de pages.
           </Text>
         </>
       ) : (

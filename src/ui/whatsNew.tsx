@@ -28,6 +28,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
   {
+    id: 4,
+    title: 'Bibliothèque et PDF plus longs',
+    items: [
+      'Bibliothèque (onglet Fiches) : vos guides et livres PDF gardés entiers, chiffrés et lisibles hors ligne, sans limite de pages. Fenrir retient la page où vous vous êtes arrêté.',
+      'Documents et « Mes fiches » : jusqu’à 100 pages par PDF importé, avec l’avancement affiché pendant la conversion.',
+    ],
+  },
+  {
     id: 3,
     title: 'Filtre à eau, chauffage et cuisson',
     items: [

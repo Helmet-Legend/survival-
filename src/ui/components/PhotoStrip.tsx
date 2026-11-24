@@ -24,7 +24,11 @@ import {
 } from 'react-native';
 
 import { photoLimit, type Photo, type PhotoOwner } from '../../inventory';
-import { pdfPagesToKeep } from '../../photo/pdfImport';
+import {
+  conversionLabel,
+  importSummary,
+  pdfPagesToKeep,
+} from '../../photo/pdfImport';
 import { useSession } from '../session';
 import { colors, radius, space, text } from '../theme';
 import { useLoader } from '../useLoader';
@@ -45,6 +49,10 @@ export function PhotoStrip(props: {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const { data, reload } = useLoader(
     () => photos.list(props.owner, props.ownerId),
@@ -65,10 +73,18 @@ export function PhotoStrip(props: {
       const room = limit - list.length;
       let images: string[];
       if (from === 'pdf') {
-        const pdf = await pickPdf?.(room);
+        const pdf = await pickPdf?.(room, (done, total) =>
+          setProgress({ done, total }),
+        );
         const kept = pdf ? pdfPagesToKeep(pdf, room) : null;
         images = kept?.pages ?? [];
-        setNotice(kept?.notice ?? null);
+        setNotice(
+          kept === null
+            ? null
+            : [kept.notice, images.length > 0 ? importSummary(images) : null]
+                .filter(Boolean)
+                .join('\n') || null,
+        );
       } else {
         images =
           from === 'scan'
@@ -87,6 +103,7 @@ export function PhotoStrip(props: {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -171,7 +188,7 @@ export function PhotoStrip(props: {
               compact
               variant="ghost"
               icon={FileText}
-              label={busy ? 'Conversion…' : 'PDF'}
+              label={conversionLabel(progress, busy ? 'Patientez…' : 'PDF')}
               accessibilityLabel="Importer un PDF du téléphone"
               disabled={busy || full}
               onPress={() => {

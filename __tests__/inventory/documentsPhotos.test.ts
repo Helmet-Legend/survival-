@@ -132,7 +132,7 @@ describe('PhotoRepository', () => {
     });
   });
 
-  it('accepte jusqu’à 30 pages pour un document', async () => {
+  it('accepte jusqu’à 100 pages pour un document', async () => {
     const { docs, photos } = await setup();
     const doc = await docs.create({ kind: 'other', title: 'Acte' });
     expect(photoLimit('document')).toBe(DOCUMENT_PAGES_MAX);
@@ -141,7 +141,7 @@ describe('PhotoRepository', () => {
       await photos.add('document', doc.id, JPEG);
     }
     await expect(photos.add('document', doc.id, JPEG)).rejects.toThrow(
-      '30 pages au maximum',
+      '100 pages au maximum',
     );
   });
 });

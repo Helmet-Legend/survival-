@@ -1283,6 +1283,35 @@ const migration24: Migration = {
   ],
 };
 
+/**
+ * Bibliothèque : PDF gardés entiers (guides, livres), en morceaux base64
+ * dans le coffre chiffré, dessinés page par page à la lecture. Ils restent
+ * sur ce téléphone : pas de partage du foyer (aucun trigger).
+ */
+const migration25: Migration = {
+  version: 25,
+  name: 'bibliothèque',
+  statements: [
+    `CREATE TABLE library_books (
+       id         TEXT PRIMARY KEY NOT NULL,
+       title      TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 200),
+       file_name  TEXT NOT NULL CHECK (length(file_name) BETWEEN 1 AND 200),
+       bytes      INTEGER NOT NULL CHECK (bytes > 0),
+       page_count INTEGER NOT NULL CHECK (page_count > 0),
+       last_page  INTEGER NOT NULL DEFAULT 0 CHECK (last_page >= 0),
+       created_at TEXT NOT NULL DEFAULT ${NOW},
+       updated_at TEXT NOT NULL DEFAULT ${NOW}
+     ) STRICT`,
+    touchTrigger('library_books'),
+    `CREATE TABLE library_chunks (
+       book_id     TEXT NOT NULL REFERENCES library_books (id) ON DELETE CASCADE,
+       seq         INTEGER NOT NULL CHECK (seq >= 0),
+       data_base64 TEXT NOT NULL CHECK (length(data_base64) > 0),
+       PRIMARY KEY (book_id, seq)
+     ) STRICT`,
+  ],
+};
+
 export const MIGRATIONS: readonly Migration[] = [
   migration1,
   migration2,
@@ -1308,6 +1337,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration22,
   migration23,
   migration24,
+  migration25,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
