@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class PhotoPackage : ReactPackage {
   override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
-      listOf(PhotoModule(context))
+      listOf(PhotoModule(context), PdfModule(context))
 
   override fun createViewManagers(
       context: ReactApplicationContext

@@ -94,6 +94,7 @@ import {
   UserFicheRow,
   useUserFiches,
 } from './fiches/UserFiches';
+import { LibraryList, LibraryReader, useLibrary } from './fiches/Library';
 
 interface GuideRow {
   slug: string;
@@ -166,6 +167,17 @@ export function GuidesScreen() {
   useBack(category !== null || query !== '', () =>
     query !== '' ? setQuery('') : setCategory(null),
   );
+  // Bibliothèque : liste, livre ouvert.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [bookId, setBookId] = useState<string | null>(null);
+  useBack(libraryOpen || bookId !== null, () =>
+    bookId !== null ? setBookId(null) : setLibraryOpen(false),
+  );
+  const library = useLibrary();
+  const { data: books, reload: reloadBooks } = useLoader(
+    () => library.list(),
+    [library],
+  );
   // Mes fiches : liste, fiche ouverte, saisie (« new » ou fiche modifiée).
   const [mine, setMine] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -215,6 +227,34 @@ export function GuidesScreen() {
     }));
   }, [query]);
 
+  if (bookId !== null) {
+    return (
+      <LibraryReader
+        key={bookId}
+        id={bookId}
+        onBack={() => {
+          setBookId(null);
+          void reloadBooks();
+        }}
+        onDeleted={() => {
+          setBookId(null);
+          void reloadBooks();
+        }}
+      />
+    );
+  }
+  if (libraryOpen) {
+    return (
+      <LibraryList
+        key={books?.length ?? 0}
+        onBack={() => {
+          setLibraryOpen(false);
+          void reloadBooks();
+        }}
+        onOpen={setBookId}
+      />
+    );
+  }
   if (editing !== null) {
     return (
       <UserFicheEditor
@@ -382,6 +422,24 @@ export function GuidesScreen() {
               {own?.list.length
                 ? fiches(own.list.length)
                 : 'Photos, textes, PDF'}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Bibliothèque, ${books?.length ?? 0} livres`}
+            onPress={() => setLibraryOpen(true)}
+            style={({ pressed }) => [
+              styles.folder,
+              styles.folderMine,
+              pressed && styles.pressed,
+            ]}
+          >
+            <IconTile icon={BookOpen} color={colors.text} />
+            <Text style={styles.folderName}>Bibliothèque</Text>
+            <Text style={styles.count}>
+              {books?.length
+                ? `${books.length} livre${books.length > 1 ? 's' : ''}`
+                : 'Guides et livres PDF'}
             </Text>
           </Pressable>
         </View>

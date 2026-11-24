@@ -20,7 +20,7 @@ export const PHOTO_MAX_BASE64_LENGTH = 8_000_000;
 /** Assez pour un recto, un verso et quelques détails. */
 export const PHOTOS_PER_OWNER_MAX = 6;
 /** Pages d'un document scanné (acte, contrat, dossier médical). */
-export const DOCUMENT_PAGES_MAX = 30;
+export const DOCUMENT_PAGES_MAX = 100;
 
 /** Nombre maximal de photos ou de pages pour ce propriétaire. */
 export function photoLimit(owner: PhotoOwner): number {

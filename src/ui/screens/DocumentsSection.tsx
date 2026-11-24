@@ -48,7 +48,11 @@ import {
   StatusChip,
 } from '../components/controls';
 import { PhotoStrip } from '../components/PhotoStrip';
-import { pdfPagesToKeep } from '../../photo/pdfImport';
+import {
+  conversionLabel,
+  importSummary,
+  pdfPagesToKeep,
+} from '../../photo/pdfImport';
 import { frToIso, isoToFr } from '../../lib/dates';
 import { formatDate } from '../format';
 import { useSession } from '../session';
@@ -268,6 +272,10 @@ function DocumentForm(props: {
   const [pages, setPages] = useState<string[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
   const [pageNotice, setPageNotice] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const canAddPages = props.doc === undefined && photoSource.available;
   const addPages = async (from: 'scan' | 'take' | 'pick' | 'pdf') => {
@@ -278,10 +286,18 @@ function DocumentForm(props: {
       const room = DOCUMENT_PAGES_MAX - pages.length;
       let images: string[];
       if (from === 'pdf') {
-        const pdf = await photoSource.pickPdf?.(room);
+        const pdf = await photoSource.pickPdf?.(room, (done, total) =>
+          setProgress({ done, total }),
+        );
         const kept = pdf ? pdfPagesToKeep(pdf, room) : null;
         images = kept?.pages ?? [];
-        setPageNotice(kept?.notice ?? null);
+        setPageNotice(
+          kept === null
+            ? null
+            : [kept.notice, images.length > 0 ? importSummary(images) : null]
+                .filter(Boolean)
+                .join('\n') || null,
+        );
       } else {
         images =
           from === 'scan'
@@ -295,6 +311,7 @@ function DocumentForm(props: {
       setPageError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
   const [title, setTitle] = useState(props.doc?.title ?? '');
@@ -434,7 +451,10 @@ function DocumentForm(props: {
             <>
               <Button
                 icon={FileUp}
-                label={busy ? 'Conversion des pages…' : 'Importer un PDF'}
+                label={conversionLabel(
+                  progress,
+                  busy ? 'Patientez…' : 'Importer un PDF',
+                )}
                 accessibilityLabel="Importer un PDF du téléphone"
                 disabled={busy || pages.length >= DOCUMENT_PAGES_MAX}
                 onPress={() => {

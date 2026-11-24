@@ -17,7 +17,7 @@ export const USER_FICHE_BODY_MAX = 20000;
 export const USER_FICHE_PHOTOS_MAX = 6;
 export const USER_FICHE_PDFS_MAX = 3;
 /** Pages gardées d'un PDF (les suivantes sont ignorées, et signalées). */
-export const USER_FICHE_PDF_PAGES_MAX = 30;
+export const USER_FICHE_PDF_PAGES_MAX = 100;
 /** Environ 6 Mo d'image : bien au-delà d'une page ou d'une photo réduite. */
 const IMAGE_MAX_BASE64_LENGTH = 8_000_000;
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
