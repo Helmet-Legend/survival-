@@ -142,7 +142,8 @@ jobs:
           --notes "$(git log -1 --pretty=%B | head -1)"
       # Version Google Play (app.fenrir) : paquet .aab à envoyer dans la Play
       # Console, signé avec la clé d'envoi si les secrets sont configurés.
-      # Non publié dans la release GitHub (il ne s'installe pas directement).
+      # Joint aussi à la release GitHub (fichier « Fenrir-play-….aab ») pour
+      # le retrouver facilement ; l'appli ne propose que l'APK en mise à jour.
       - name: Clé d'envoi Google Play
         env:
           KEYSTORE_B64: ${{ secrets.FENRIR_UPLOAD_KEYSTORE_B64 }}
@@ -170,6 +171,13 @@ jobs:
           name: fenrir-play-aab
           path: Fenrir-play-*.aab
           retention-days: 90
+      - name: Ajout du paquet Play à la version publiée
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1' && env.FENRIR_UPLOAD_STORE_FILE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "v$VERSION_NAME" "Fenrir-play-$VERSION_NAME.aab"
+          --repo "$GITHUB_REPOSITORY" --clobber
 
   # Lance l'application finale (code réduit par R8) sur un téléphone Android
   # virtuel x86_64 : un plantage au démarrage (classe retirée à tort, module
