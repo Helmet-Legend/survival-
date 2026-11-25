@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Après une fusion dans `main` : si la pull request fusionnée a déjà été
 # compilée avec succès sur exactement le même code, publie ses APK et IPA
-# au lieu de tout recompiler (≈ 15 minutes de gagnées). Sinon, sortie
+# (et le paquet Play s'il est signé avec la clé d'envoi) au lieu de tout
+# recompiler (≈ 15 minutes de gagnées). Sinon, sortie
 # « reprise=false » et la compilation complète a lieu comme avant.
 set -euo pipefail
 
@@ -39,7 +40,17 @@ apk=$(ls reprise/fenrir-apk/Fenrir-*.apk)
 ipa=$(ls reprise/fenrir-ipa/Fenrir-*.ipa)
 version=$(basename "$apk" .apk)
 version=${version#Fenrir-}
-gh release create "v$version" "$apk" "$ipa" \
+# Paquet Google Play : joint s'il est signé avec la clé d'envoi. Un seul
+# artefact demandé : gh l'extrait directement dans le dossier donné.
+assets=("$apk" "$ipa")
+if gh run download "$run" --repo "$GITHUB_REPOSITORY" --dir reprise/fenrir-play-aab \
+  --name fenrir-play-aab \
+  && [ "$(cat reprise/fenrir-play-aab/play-signed.txt 2>/dev/null)" = 1 ]; then
+  assets+=("reprise/fenrir-play-aab/Fenrir-play-$version.aab")
+else
+  echo "Paquet Play absent ou signé en débogage : non joint à la version."
+fi
+gh release create "v$version" "${assets[@]}" \
   --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
   --title "Fenrir $version" \
   --notes "$(git log -1 --pretty=%B | head -1)"

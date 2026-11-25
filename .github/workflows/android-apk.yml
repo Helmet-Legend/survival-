@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fusion dans `main` : publie directement les APK et IPA de la pull
+  # Fusion dans `main` : publie directement les APK, IPA et AAB de la pull
   # request s'ils ont été compilés sur le même code (voir le script) ; la
   # compilation complète ci-dessous n'a lieu que sinon.
   reprise:
@@ -165,11 +165,16 @@ jobs:
           -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
           -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
       - name: Nommage du paquet Play
-        run: cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "Fenrir-play-$VERSION_NAME.aab"
+        run: |
+          cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "Fenrir-play-$VERSION_NAME.aab"
+          # 1 si signé avec la clé d'envoi (accepté par la Play Console).
+          if [ -n "${FENRIR_UPLOAD_STORE_FILE:-}" ]; then echo 1; else echo 0; fi > play-signed.txt
       - uses: actions/upload-artifact@v5
         with:
           name: fenrir-play-aab
-          path: Fenrir-play-*.aab
+          path: |
+            Fenrir-play-*.aab
+            play-signed.txt
           retention-days: 90
       - name: Ajout du paquet Play à la version publiée
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1' && env.FENRIR_UPLOAD_STORE_FILE != ''
