@@ -66,6 +66,32 @@ export const CAPACITY_UNITS = [
   'other',
 ] as const;
 export const RECORD_TYPES = ['ammo', 'accessory'] as const;
+/**
+ * Armes « manuelles » (sans calibre) : rangées dans la table `weapons`
+ * avec le type `other`, leur nature précise est dans les attributs. Les
+ * versions plus anciennes de l'application (partage du foyer) les voient
+ * ainsi comme des armes « Autre », sans erreur.
+ */
+export const MANUAL_KINDS = [
+  'bow',
+  'crossbow',
+  'slingshot',
+  'blowgun',
+  'blade',
+  'defense',
+  'other',
+] as const;
+export type ManualKind = (typeof MANUAL_KINDS)[number];
+/** Armes manuelles qui tirent des projectiles comptés sur leur fiche. */
+export const PROJECTILE_KINDS: readonly ManualKind[] = [
+  'bow',
+  'crossbow',
+  'slingshot',
+  'blowgun',
+];
+/** Armes manuelles à corde (puissance en livres, cordes de rechange). */
+export const STRING_KINDS: readonly ManualKind[] = ['bow', 'crossbow'];
+
 /** Usage d'un combustible (bois, gaz, carburant). */
 export const FUEL_USES = ['heating', 'cooking', 'lighting'] as const;
 
@@ -113,6 +139,15 @@ export interface WeaponAttributes {
   checkedAt?: string;
   /** Emplacement sécurisé : jamais affiché dans les listes. */
   location?: string;
+  // Armes manuelles (arc, arbalète, arme blanche…), sans calibre.
+  manualKind?: ManualKind;
+  /** Puissance d'un arc ou d'une arbalète, en livres (lb). */
+  drawWeight?: number;
+  /** Longueur de lame, en cm. */
+  bladeLength?: number;
+  /** Flèches, carreaux, billes ou fléchettes restants (sur la fiche). */
+  projectiles?: number;
+  spareStrings?: number;
 }
 
 function invalid(field: string, message: string): InventoryError {
@@ -123,6 +158,8 @@ type Rule =
   | { kind: 'enum'; values: readonly string[] }
   | { kind: 'date' }
   | { kind: 'number' }
+  /** Nombre entier, zéro compris. */
+  | { kind: 'count' }
   | { kind: 'text'; max: number };
 
 const ITEM_RULES: Record<keyof ItemAttributes, Rule> = {
@@ -157,6 +194,11 @@ const WEAPON_RULES: Record<keyof WeaponAttributes, Rule> = {
   condition: { kind: 'enum', values: CONDITIONS },
   checkedAt: { kind: 'date' },
   location: { kind: 'text', max: 120 },
+  manualKind: { kind: 'enum', values: MANUAL_KINDS },
+  drawWeight: { kind: 'number' },
+  bladeLength: { kind: 'number' },
+  projectiles: { kind: 'count' },
+  spareStrings: { kind: 'count' },
 };
 
 function clean<T extends object>(
@@ -187,6 +229,17 @@ function clean<T extends object>(
           throw invalid(key, 'Nombre positif attendu');
         }
         out[key] = Math.round(raw * 1e6) / 1e6;
+        break;
+      case 'count':
+        if (
+          typeof raw !== 'number' ||
+          !Number.isInteger(raw) ||
+          raw < 0 ||
+          raw > 100000
+        ) {
+          throw invalid(key, 'Nombre entier attendu');
+        }
+        out[key] = raw;
         break;
       case 'text': {
         const text = typeof raw === 'string' ? raw.trim() : '';

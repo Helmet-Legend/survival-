@@ -240,7 +240,21 @@ const brandModel = (placeholder: string): Field => ({
 const isWeapon = (v: Values) => v.recordType === 'weapon';
 const isAmmo = (v: Values) => v.recordType === 'ammo';
 const isAccessory = (v: Values) => v.recordType === 'accessory';
-const notWeapon = (v: Values) => !isWeapon(v);
+/** Arme manuelle (arc, arbalète, arme blanche…) : fiche à part. */
+const isManual = (v: Values) => v.recordType === 'manual';
+const notWeapon = (v: Values) => !isWeapon(v) && !isManual(v);
+const manualIs = (kinds: readonly string[]) => (v: Values) =>
+  isManual(v) && kinds.includes(v.manualKind ?? '');
+
+/** Projectiles comptés sur la fiche d'une arme manuelle, par type. */
+export const PROJECTILE_LABELS: Record<string, [string, string]> = {
+  bow: ['flèche', 'flèches'],
+  crossbow: ['carreau', 'carreaux'],
+  slingshot: ['bille', 'billes'],
+  blowgun: ['fléchette', 'fléchettes'],
+};
+const PROJECTILE_HINT =
+  'Compté sur la fiche de l’arme, sans calibre ni lot : rien à voir avec les munitions.';
 
 export const WATER_TREATED = (v: Values) =>
   v.treatment !== undefined &&
@@ -460,6 +474,33 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         placeholder: 'Ex : Glock 17, AR15, 9 mm…',
         required: true,
         maxLength: 120,
+        visible: v => !isManual(v),
+      },
+      {
+        type: 'text',
+        key: 'name',
+        label: 'Nom / Modèle',
+        icon: TagIcon,
+        placeholder: 'Ex : Arc recurve, Machette…',
+        required: true,
+        maxLength: 120,
+        visible: isManual,
+      },
+      {
+        type: 'select',
+        key: 'manualKind',
+        label: 'Type',
+        icon: BoxIcon,
+        visible: isManual,
+        options: options('weapon.manualKind', [
+          o('bow', 'Arc'),
+          o('crossbow', 'Arbalète'),
+          o('slingshot', 'Lance-pierre'),
+          o('blowgun', 'Sarbacane'),
+          o('blade', 'Arme blanche'),
+          o('defense', 'Défense'),
+          o('other', 'Autre'),
+        ]),
       },
       {
         type: 'select',
@@ -521,6 +562,43 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         maxLength: 40,
         visible: isAmmo,
       },
+      {
+        type: 'number',
+        key: 'drawWeight',
+        label: 'Puissance',
+        icon: StateIcon,
+        placeholder: 'Ex : 40',
+        suffix: 'lb',
+        visible: manualIs(['bow', 'crossbow']),
+      },
+      {
+        type: 'number',
+        key: 'bladeLength',
+        label: 'Longueur de lame',
+        icon: StateIcon,
+        placeholder: 'Ex : 12',
+        suffix: 'cm',
+        visible: manualIs(['blade']),
+      },
+      ...Object.entries(PROJECTILE_LABELS).map(
+        ([kind, [, plural]]): Field => ({
+          type: 'number',
+          key: 'projectiles',
+          label: plural[0].toUpperCase() + plural.slice(1),
+          icon: Hash,
+          placeholder: 'Ex : 12',
+          visible: manualIs([kind]),
+          hint: () => PROJECTILE_HINT,
+        }),
+      ),
+      {
+        type: 'number',
+        key: 'spareStrings',
+        label: 'Cordes de rechange',
+        icon: Hash,
+        placeholder: 'Ex : 1',
+        visible: manualIs(['bow', 'crossbow']),
+      },
       { ...quantity, visible: notWeapon },
       {
         type: 'number',
@@ -538,7 +616,7 @@ export const FORMS: Record<ItemCategory, FormConfig> = {
         placeholder: 'Optionnel',
         maxLength: 60,
         sensitive: true,
-        visible: isWeapon,
+        visible: v => isWeapon(v) || isManual(v),
       },
       {
         type: 'select',
@@ -1027,6 +1105,11 @@ export const ESSENTIAL: Record<ItemCategory, readonly string[]> = {
   weapon: [
     'name',
     'kind',
+    'manualKind',
+    'drawWeight',
+    'bladeLength',
+    'projectiles',
+    'spareStrings',
     'accessoryType',
     'caliber',
     'quantity',
@@ -1083,6 +1166,8 @@ export const QUICK_PICKS: Record<ItemCategory, readonly QuickPick[]> = {
     pick('Farine', { subtype: 'cereal', unit: 'kg' }),
     pick('Ration lyophilisée', { subtype: 'freeze_dried', unit: 'portion' }),
   ],
+  // Armes à feu, munitions, accessoires : pas de saisie rapide ; armes
+  // manuelles : voir MANUAL_PICKS.
   weapon: [],
   // Fiche médicale stricte : pas de saisie rapide.
   medical: [],
@@ -1178,3 +1263,27 @@ function petFoodHint(values: Values): string | null {
     ? 'Aucune ration de ce type pour ces animaux : réglez-la dans Mon foyer.'
     : `Autonomie : ${petFoodLabel(days)}`;
 }
+
+/** Saisie rapide de l'onglet « Arme manuelle ». */
+export const MANUAL_PICKS: readonly QuickPick[] = [
+  pick('Arc', {
+    name: 'Arc',
+    manualKind: 'bow',
+    drawWeight: '40',
+    projectiles: '12',
+    spareStrings: '1',
+  }),
+  pick('Arbalète', {
+    manualKind: 'crossbow',
+    drawWeight: '175',
+    projectiles: '12',
+    spareStrings: '1',
+  }),
+  pick('Lance-pierre', { manualKind: 'slingshot', projectiles: '50' }),
+  pick('Sarbacane', { manualKind: 'blowgun', projectiles: '20' }),
+  pick('Couteau', { manualKind: 'blade', bladeLength: '12' }),
+  pick('Machette', { manualKind: 'blade', bladeLength: '45' }),
+  pick('Hachette', { manualKind: 'blade', bladeLength: '9' }),
+  pick('Bâton de défense', { manualKind: 'defense' }),
+  pick('Bombe au poivre', { manualKind: 'defense' }),
+];

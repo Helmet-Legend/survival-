@@ -2723,6 +2723,41 @@ describe('écrans', () => {
     ).toBeTruthy();
   });
 
+  it('enregistre une arme manuelle, fiche séparée, flèches sur la fiche', async () => {
+    await openApp();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Stocks' }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Armement' }),
+    );
+    await fireEvent.press(await screen.findByText('Ajouter une arme'));
+    await fireEvent.press(
+      await screen.findByRole('tab', { name: 'Arme manuelle' }),
+    );
+    // Pas de calibre ni de type d'arme à feu dans cette fiche.
+    expect(screen.queryByLabelText('Calibre, obligatoire')).toBeNull();
+    await fireEvent.press(
+      within(await screen.findByLabelText('Saisie rapide')).getByRole(
+        'button',
+        { name: 'Arbalète' },
+      ),
+    );
+    expect(screen.getByLabelText('Carreaux').props.value).toBe('12');
+    await fireEvent.changeText(screen.getByLabelText('Carreaux'), '7');
+    await fireEvent.press(screen.getByLabelText('Enregistrer le stock'));
+    expect(await screen.findByText('« Arbalète » enregistré.')).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText('Arbalète, Arbalète · 175 lb, 7 carreaux'),
+    );
+    expect(await screen.findByText('Sur la fiche : 7 carreaux')).toBeTruthy();
+    expect(screen.queryByText(/Munitions en/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Retirer 1 (7 carreaux)'));
+    expect(await screen.findByText('Arbalète : 6 carreaux.')).toBeTruthy();
+    // La fiche reste ouverte : un autre appui, et l'alerte apparaît.
+    await fireEvent.press(screen.getByLabelText('Retirer 1 (6 carreaux)'));
+    expect(await screen.findByText('À racheter : 5 carreaux')).toBeTruthy();
+  });
+
   it('ajoute des munitions depuis la fiche d’une arme existante', async () => {
     const ctx = makeManager();
     const db = await createVault(ctx.manager, content, { masterPin: MASTER });

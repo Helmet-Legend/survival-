@@ -11,7 +11,7 @@ import { isPetFood, petFoodDays, petFoodRation } from '../../inventory/petFood';
 import { eatersOf, knownPets } from '../../resilience/pets';
 import { isoToFr } from '../../lib/dates';
 import { formatNumber, UNIT_LABELS, WEAPON_KIND_LABELS } from '../format';
-import { optionLabel } from './config';
+import { optionLabel, PROJECTILE_LABELS } from './config';
 
 type Fact = [string, string];
 
@@ -180,9 +180,52 @@ export function itemFacts(item: InventoryItem, usable?: number): Fact[] {
   return facts;
 }
 
+/** « Arc · 40 lb », « Arme blanche · 12 cm », « Arme de poing · 9 mm ». */
+export function weaponSubtitle(weapon: Weapon): string {
+  const a = weapon.attributes;
+  if (a.manualKind === undefined) {
+    return `${WEAPON_KIND_LABELS[weapon.kind]} · ${weapon.caliber}`;
+  }
+  const detail =
+    a.drawWeight !== undefined
+      ? `${formatNumber(a.drawWeight)} lb`
+      : a.bladeLength !== undefined
+      ? `${formatNumber(a.bladeLength)} cm`
+      : undefined;
+  const kind = optionLabel('weapon.manualKind', a.manualKind) ?? 'Autre';
+  return detail ? `${kind} · ${detail}` : kind;
+}
+
+/** « 12 flèches », « 1 carreau » ; null si l'arme ne tire rien. */
+export function projectileLabel(weapon: Weapon): string | null {
+  const names = PROJECTILE_LABELS[weapon.attributes.manualKind ?? ''];
+  if (!names) {
+    return null;
+  }
+  const n = weapon.attributes.projectiles ?? 0;
+  return `${formatNumber(n, 0)} ${n > 1 ? names[1] : names[0]}`;
+}
+
 export function weaponFacts(weapon: Weapon): Fact[] {
   const a = weapon.attributes;
   const facts: Fact[] = [];
+  if (a.manualKind !== undefined) {
+    push(facts, 'Type', optionLabel('weapon.manualKind', a.manualKind));
+    push(facts, 'Marque / modèle', a.brandModel);
+    if (a.drawWeight !== undefined) {
+      push(facts, 'Puissance', `${formatNumber(a.drawWeight)} lb`);
+    }
+    if (a.bladeLength !== undefined) {
+      push(facts, 'Longueur de lame', `${formatNumber(a.bladeLength)} cm`);
+    }
+    if (a.spareStrings !== undefined) {
+      push(facts, 'Cordes de rechange', formatNumber(a.spareStrings, 0));
+    }
+    push(facts, 'État', optionLabel('weapon.condition', a.condition));
+    push(facts, 'Date de contrôle', date(a.checkedAt));
+    push(facts, 'Notes', weapon.notes);
+    return facts;
+  }
   push(facts, 'Type', WEAPON_KIND_LABELS[weapon.kind]);
   push(facts, 'Marque / modèle', a.brandModel);
   push(facts, 'Calibre', weapon.caliber);

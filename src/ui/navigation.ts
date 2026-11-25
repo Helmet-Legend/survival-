@@ -30,7 +30,7 @@ export type Overlay =
 /** Fiche de stock à ouvrir : création dans une catégorie, ou modification. */
 export interface StockFormTarget {
   category: ItemCategory;
-  recordType?: 'weapon' | 'ammo' | 'accessory';
+  recordType?: 'weapon' | 'ammo' | 'accessory' | 'manual';
   itemId?: string;
   weaponId?: string;
   /** Valeurs préremplies d'une nouvelle fiche (ex. calibre d'une arme). */

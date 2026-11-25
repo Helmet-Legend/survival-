@@ -2,6 +2,8 @@ import { prepareDatabase } from '../../src/db/connection';
 import {
   ArmoryRepository,
   caliberKey,
+  isManualWeapon,
+  MANUAL_CALIBER,
   InventoryError,
   InventoryRepository,
 } from '../../src/inventory';
@@ -174,5 +176,89 @@ describe('ArmoryRepository', () => {
     expect(
       (await repo.updateItem(ammo.id, { category: 'tool' })).caliber,
     ).toBeNull();
+  });
+});
+
+describe('armes manuelles', () => {
+  it('range un arc sans calibre, avec ses flèches sur la fiche', async () => {
+    const { armory } = await setup();
+    const bow = await armory.createWeapon({
+      model: 'Arc recurve',
+      kind: 'handgun',
+      caliber: '',
+      attributes: {
+        manualKind: 'bow',
+        drawWeight: 40,
+        projectiles: 12,
+        spareStrings: 1,
+        // Champ d'un autre type : ignoré.
+        bladeLength: 15,
+      },
+    });
+    expect(bow).toMatchObject({
+      kind: 'other',
+      caliber: MANUAL_CALIBER,
+      attributes: {
+        manualKind: 'bow',
+        drawWeight: 40,
+        projectiles: 12,
+        spareStrings: 1,
+      },
+    });
+    expect(bow.attributes.bladeLength).toBeUndefined();
+    expect(isManualWeapon(bow)).toBe(true);
+
+    expect(
+      (await armory.setProjectiles(bow.id, 0)).attributes.projectiles,
+    ).toBe(0);
+    expect(
+      (await armory.setProjectiles(bow.id, -3)).attributes.projectiles,
+    ).toBe(0);
+    const [summary] = await armory.listWeapons();
+    expect(summary.rounds).toBe(0);
+  });
+
+  it('ne rattache aucune munition et refuse un compteur sans projectile', async () => {
+    const { armory, repo } = await setup();
+    await repo.createItem(
+      {
+        name: 'Munitions —',
+        category: 'weapon',
+        unit: 'unit',
+        caliber: MANUAL_CALIBER,
+      },
+      { quantity: 50 },
+    );
+    const knife = await armory.createWeapon({
+      model: 'Machette',
+      kind: 'other',
+      caliber: '',
+      attributes: { manualKind: 'blade', bladeLength: 45, projectiles: 4 },
+    });
+    expect(knife.attributes).toEqual({ manualKind: 'blade', bladeLength: 45 });
+    expect((await armory.listWeapons())[0].rounds).toBe(0);
+    await expect(armory.setProjectiles(knife.id, 2)).rejects.toThrow(
+      'pas de projectiles',
+    );
+  });
+
+  it('garde le calibre obligatoire pour une arme à feu', async () => {
+    const { armory } = await setup();
+    await expect(
+      armory.createWeapon({
+        model: 'Glock 17',
+        kind: 'handgun',
+        caliber: ' ',
+        attributes: { projectiles: 3 },
+      }),
+    ).rejects.toThrow('Champ obligatoire');
+    const glock = await armory.createWeapon({
+      model: 'Glock 17',
+      kind: 'handgun',
+      caliber: '9 mm',
+      attributes: { projectiles: 3, drawWeight: 10 },
+    });
+    expect(glock.attributes).toEqual({});
+    expect(isManualWeapon(glock)).toBe(false);
   });
 });

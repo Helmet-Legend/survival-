@@ -12,6 +12,7 @@ import type {
   WeaponInput,
   WeaponKind,
 } from '../../inventory';
+import { MANUAL_CALIBER } from '../../inventory/armoryRepository';
 import type { ItemAttributes } from '../../inventory/attributes';
 import { PET_FOOD_SUBTYPES } from '../../inventory/petFood';
 import { frToIso, isoToFr } from '../../lib/dates';
@@ -214,30 +215,63 @@ export function toItemDraft(
   };
 }
 
+/** Nombre entier ≥ 0 (compteurs d'une arme manuelle). */
+function count(values: Values, key: string): number | undefined {
+  const raw = text(values, key);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new FormError(key, 'Nombre entier attendu');
+  }
+  return n;
+}
+
 export function toWeaponInput(values: Values): WeaponInput {
   checkCommon(values);
+  const common = {
+    model: text(values, 'name') ?? '',
+    serialNumber: text(values, 'serial') ?? null,
+    notes: text(values, 'notes') ?? null,
+  };
+  const shared = {
+    brandModel: text(values, 'brandModel'),
+    condition: text(values, 'condition') as Weapon['attributes']['condition'],
+    checkedAt: date(values, 'checkedAt'),
+    location: text(values, 'location'),
+  };
+  if (values.recordType === 'manual') {
+    return {
+      ...common,
+      kind: 'other',
+      caliber: MANUAL_CALIBER,
+      attributes: {
+        ...shared,
+        manualKind: (text(values, 'manualKind') ??
+          'other') as Weapon['attributes']['manualKind'],
+        drawWeight: number(values, 'drawWeight'),
+        bladeLength: number(values, 'bladeLength'),
+        projectiles: count(values, 'projectiles'),
+        spareStrings: count(values, 'spareStrings'),
+      },
+    };
+  }
   if (!text(values, 'caliber')) {
     throw new FormError('caliber', 'Champ obligatoire');
   }
   return {
-    model: text(values, 'name') ?? '',
+    ...common,
     kind: (text(values, 'kind') ?? 'other') as WeaponKind,
     caliber: text(values, 'caliber') ?? '',
-    serialNumber: text(values, 'serial') ?? null,
-    notes: text(values, 'notes') ?? null,
-    attributes: {
-      brandModel: text(values, 'brandModel'),
-      condition: text(values, 'condition') as Weapon['attributes']['condition'],
-      checkedAt: date(values, 'checkedAt'),
-      location: text(values, 'location'),
-    },
+    attributes: shared,
   };
 }
 
 /** Valeurs de départ d'une fiche vide. */
 export function initialValues(
   category: ItemCategory,
-  recordType?: 'weapon' | 'ammo' | 'accessory',
+  recordType?: 'weapon' | 'ammo' | 'accessory' | 'manual',
 ): Values {
   return {
     // Unité à choisir soi-même quand la fiche l'exige (conditionnement).
@@ -294,6 +328,25 @@ export function valuesFromItem(item: InventoryItem): Values {
 
 /** Valeurs d'une fiche à partir d'une arme existante. */
 export function valuesFromWeapon(weapon: Weapon): Values {
+  const a = weapon.attributes;
+  if (a.manualKind !== undefined) {
+    return {
+      recordType: 'manual',
+      unit: 'piece',
+      name: weapon.model,
+      manualKind: a.manualKind,
+      drawWeight: str(a.drawWeight),
+      bladeLength: str(a.bladeLength),
+      projectiles: a.projectiles === undefined ? '' : String(a.projectiles),
+      spareStrings: a.spareStrings === undefined ? '' : String(a.spareStrings),
+      serial: weapon.serialNumber ?? '',
+      notes: weapon.notes ?? '',
+      brandModel: a.brandModel ?? '',
+      condition: a.condition ?? '',
+      checkedAt: fr(a.checkedAt),
+      location: a.location ?? '',
+    };
+  }
   return {
     recordType: 'weapon',
     unit: 'piece',

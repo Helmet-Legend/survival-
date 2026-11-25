@@ -61,6 +61,7 @@ import {
   ESSENTIAL,
   fieldId,
   FORMS,
+  MANUAL_PICKS,
   QUICK_PICKS,
   type Field,
   type Values,
@@ -93,6 +94,7 @@ const RECORD_TYPES = [
   { value: 'weapon', label: 'Arme' },
   { value: 'ammo', label: 'Munition' },
   { value: 'accessory', label: 'Accessoire' },
+  { value: 'manual', label: 'Arme manuelle' },
 ] as const;
 
 export function StockFormScreen({ target }: { target: StockFormTarget }) {
@@ -217,7 +219,11 @@ function StockForm(props: {
   const filledDetails = [...detailKeys].filter(
     k => k !== 'unit' && k !== 'energyBasis' && (values[k] ?? '') !== '',
   ).length;
-  const picks = isEdit ? [] : QUICK_PICKS[category];
+  const picks = isEdit
+    ? []
+    : category === 'weapon' && values.recordType === 'manual'
+    ? MANUAL_PICKS
+    : QUICK_PICKS[category];
   // Récapitulatif médical : le nombre de conditionnements, rien d'autre.
   const stockTotal = (() => {
     const n = Number((values.quantity ?? '').trim());
@@ -281,7 +287,10 @@ function StockForm(props: {
     setSaving(true);
     try {
       let name: string;
-      if (category === 'weapon' && values.recordType === 'weapon') {
+      if (
+        category === 'weapon' &&
+        (values.recordType === 'weapon' || values.recordType === 'manual')
+      ) {
         const input = toWeaponInput(values);
         const weapon = props.weapon
           ? await armory.updateWeapon(props.weapon.id, input)
