@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fusion dans `main` : publie directement les APK et IPA de la pull
+  # Fusion dans `main` : publie directement les APK, IPA et AAB de la pull
   # request s'ils ont été compilés sur le même code (voir le script) ; la
   # compilation complète ci-dessous n'a lieu que sinon.
   reprise:
@@ -142,7 +142,8 @@ jobs:
           --notes "$(git log -1 --pretty=%B | head -1)"
       # Version Google Play (app.fenrir) : paquet .aab à envoyer dans la Play
       # Console, signé avec la clé d'envoi si les secrets sont configurés.
-      # Non publié dans la release GitHub (il ne s'installe pas directement).
+      # Joint aussi à la release GitHub (fichier « Fenrir-play-….aab ») pour
+      # le retrouver facilement ; l'appli ne propose que l'APK en mise à jour.
       - name: Clé d'envoi Google Play
         env:
           KEYSTORE_B64: ${{ secrets.FENRIR_UPLOAD_KEYSTORE_B64 }}
@@ -164,12 +165,24 @@ jobs:
           -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
           -PversionCode=$VERSION_CODE -PversionName=$VERSION_NAME
       - name: Nommage du paquet Play
-        run: cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "Fenrir-play-$VERSION_NAME.aab"
+        run: |
+          cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "Fenrir-play-$VERSION_NAME.aab"
+          # 1 si signé avec la clé d'envoi (accepté par la Play Console).
+          if [ -n "${FENRIR_UPLOAD_STORE_FILE:-}" ]; then echo 1; else echo 0; fi > play-signed.txt
       - uses: actions/upload-artifact@v5
         with:
           name: fenrir-play-aab
-          path: Fenrir-play-*.aab
+          path: |
+            Fenrir-play-*.aab
+            play-signed.txt
           retention-days: 90
+      - name: Ajout du paquet Play à la version publiée
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1' && env.FENRIR_UPLOAD_STORE_FILE != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "v$VERSION_NAME" "Fenrir-play-$VERSION_NAME.aab"
+          --repo "$GITHUB_REPOSITORY" --clobber
 
   # Lance l'application finale (code réduit par R8) sur un téléphone Android
   # virtuel x86_64 : un plantage au démarrage (classe retirée à tort, module
