@@ -10,6 +10,8 @@
 import type { SqlDatabase, SqlRow } from '../db/types';
 import { localToday } from '../lib/dates';
 import {
+  PROJECTILE_KINDS,
+  STRING_KINDS,
   parseAttributes,
   serializeAttributes,
   validateWeaponAttributes,
@@ -20,6 +22,17 @@ import { InventoryError, randomUuid } from './inventoryRepository';
 
 export const WEAPON_KINDS = ['rifle', 'shotgun', 'handgun', 'other'] as const;
 export type WeaponKind = (typeof WEAPON_KINDS)[number];
+
+/**
+ * « Calibre » enregistré pour une arme manuelle (arc, arbalète, arme
+ * blanche…) : la colonne l'exige, mais aucune munition ne s'y rattache.
+ */
+export const MANUAL_CALIBER = '—';
+
+/** Arme manuelle : arc, arbalète, arme blanche… (pas d'arme à feu). */
+export function isManualWeapon(weapon: Pick<Weapon, 'attributes'>): boolean {
+  return weapon.attributes.manualKind !== undefined;
+}
 
 export interface WeaponInput {
   model: string;
@@ -91,13 +104,52 @@ function validate(input: WeaponInput) {
   if (!WEAPON_KINDS.includes(input.kind)) {
     throw invalid('kind', 'Type d’arme inconnu');
   }
+  const attributes = validateWeaponAttributes(input.attributes);
+  const model = text(input.model, 'model', MODEL_MAX, true);
+  const serialNumber = text(
+    input.serialNumber,
+    'serialNumber',
+    SERIAL_MAX,
+    false,
+  );
+  const notes = text(input.notes, 'notes', NOTES_MAX, false);
+  const manual = attributes.manualKind;
+  if (manual !== undefined) {
+    // Arme manuelle : pas de calibre, et seuls les champs de son type.
+    if (!STRING_KINDS.includes(manual)) {
+      delete attributes.drawWeight;
+      delete attributes.spareStrings;
+    }
+    if (!PROJECTILE_KINDS.includes(manual)) {
+      delete attributes.projectiles;
+    }
+    if (manual !== 'blade') {
+      delete attributes.bladeLength;
+    }
+    return {
+      model,
+      kind: 'other' as WeaponKind,
+      caliber: MANUAL_CALIBER,
+      serialNumber,
+      notes,
+      attributes,
+    };
+  }
+  for (const key of [
+    'drawWeight',
+    'bladeLength',
+    'projectiles',
+    'spareStrings',
+  ] as const) {
+    delete attributes[key];
+  }
   return {
-    model: text(input.model, 'model', MODEL_MAX, true),
+    model,
     kind: input.kind,
     caliber: text(input.caliber, 'caliber', CALIBER_MAX, true),
-    serialNumber: text(input.serialNumber, 'serialNumber', SERIAL_MAX, false),
-    notes: text(input.notes, 'notes', NOTES_MAX, false),
-    attributes: validateWeaponAttributes(input.attributes),
+    serialNumber,
+    notes,
+    attributes,
   };
 }
 
@@ -197,7 +249,12 @@ export class ArmoryRepository {
     ]);
     return rows.map(row => {
       const weapon = toWeapon(row);
-      return { ...weapon, rounds: rounds.get(caliberKey(weapon.caliber)) ?? 0 };
+      return {
+        ...weapon,
+        rounds: isManualWeapon(weapon)
+          ? 0
+          : rounds.get(caliberKey(weapon.caliber)) ?? 0,
+      };
     });
   }
 
@@ -239,6 +296,27 @@ export class ArmoryRepository {
         id,
       ],
     );
+    return this.requireWeapon(id);
+  }
+
+  /**
+   * Flèches, carreaux, billes ou fléchettes restants d'une arme manuelle
+   * (compteur de sa fiche).
+   */
+  async setProjectiles(id: string, count: number): Promise<Weapon> {
+    const weapon = await this.requireWeapon(id);
+    const kind = weapon.attributes.manualKind;
+    if (kind === undefined || !PROJECTILE_KINDS.includes(kind)) {
+      throw invalid('projectiles', 'Cette arme n’a pas de projectiles');
+    }
+    const attributes = validateWeaponAttributes({
+      ...weapon.attributes,
+      projectiles: Math.max(0, Math.floor(count)),
+    });
+    await this.db.execute('UPDATE weapons SET attributes = ? WHERE id = ?', [
+      serializeAttributes(attributes),
+      id,
+    ]);
     return this.requireWeapon(id);
   }
 

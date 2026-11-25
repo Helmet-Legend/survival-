@@ -1,6 +1,8 @@
 export {
   ArmoryRepository,
   caliberKey,
+  isManualWeapon,
+  MANUAL_CALIBER,
   roundCount,
   WEAPON_KINDS,
   type Weapon,

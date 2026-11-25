@@ -28,6 +28,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
   {
+    id: 5,
+    title: 'Arc, arbalète et armes blanches',
+    items: [
+      'Stocks → Armement → « Ajouter une arme » : nouvel onglet « Arme manuelle » (arc, arbalète, lance-pierre, sarbacane, couteau, machette, défense), séparé de la fiche des armes à feu.',
+      'Flèches, carreaux et billes se comptent sur la fiche de l’arme, avec − et + : rien à voir avec les munitions.',
+    ],
+  },
+  {
     id: 4,
     title: 'Bibliothèque et PDF plus longs',
     items: [
